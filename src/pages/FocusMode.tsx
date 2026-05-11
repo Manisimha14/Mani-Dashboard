@@ -58,6 +58,7 @@ export default function FocusMode() {
   const [growthProgress, setGrowthProgress] = useState(0);
   const [sessionFailed, setSessionFailed]   = useState(false);
   const [volume, setVolume]             = useState(pomodoroSettings.ambienceVolume);
+  const [isZen, setIsZen]               = useState(false);
 
   const intervalRef   = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef  = useRef<number | null>(null);
@@ -80,6 +81,17 @@ export default function FocusMode() {
   }, [mode, pomodoroSettings.focusDuration, pomodoroSettings.shortBreakDuration, pomodoroSettings.longBreakDuration]);
 
   /* ── tick ── */
+  /* ── keyboard shortcuts ── */
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === 'z' && !showTaskPrompt && !showReflection && !showSettings) {
+        setIsZen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [showTaskPrompt, showReflection, showSettings]);
+
   useEffect(() => {
     if (isRunning) {
       intervalRef.current = setInterval(() => {
@@ -199,42 +211,73 @@ export default function FocusMode() {
     >
       {showConfetti && <Confetti recycle={false} numberOfPieces={300} />}
 
+      <AnimatePresence>
+        {!isZen && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="w-full flex items-start justify-between mb-8"
+          >
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">Forest Mode</h1>
+              <p className="text-white/40 mt-1 text-sm">Deep work powered by Pomodoro</p>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setIsZen(true)}
+                className="btn-ghost px-3 py-2 flex items-center gap-2 text-sm text-violet-400 border-violet-500/20">
+                <Leaf size={14} /> Zen Mode <kbd className="text-[10px] opacity-40 ml-1">Z</kbd>
+              </button>
+              <button onClick={() => setShowSettings(true)}
+                className="btn-ghost px-3 py-2 flex items-center gap-2 text-sm">
+                <Settings size={14} /> Settings
+              </button>
+              <button onClick={() => setIsFullscreen(true)}
+                className="btn-ghost px-3 py-2 flex items-center gap-2 text-sm">
+                <Maximize2 size={14} /> Immersive
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Fullscreen ambient particles */}
-      {isFullscreen && (
+      {(isFullscreen || isZen) && (
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          {Array.from({ length: 18 }).map((_, i) => (
-            <div key={i} className="particle w-1.5 h-1.5 rounded-full"
+          {Array.from({ length: 24 }).map((_, i) => (
+            <motion.div 
+              key={i} 
+              className="particle w-1.5 h-1.5 rounded-full"
+              animate={{
+                y: [-20, 100, -20],
+                x: [0, Math.random() * 20 - 10, 0],
+                opacity: [0.1, 0.4, 0.1]
+              }}
+              transition={{
+                duration: 5 + Math.random() * 10,
+                repeat: Infinity,
+                ease: "linear"
+              }}
               style={{
                 background: i % 3 === 0 ? '#8b5cf6' : i % 3 === 1 ? '#ec4899' : '#06b6d4',
-                opacity: 0.25,
                 left: `${Math.random() * 100}%`,
                 top: `${Math.random() * 100}%`,
-                animationDuration: `${4 + Math.random() * 7}s`,
-                animationDelay: `${Math.random() * 5}s`,
               }}
             />
           ))}
         </div>
       )}
 
-      {/* Header (non-fullscreen) */}
-      {!isFullscreen && (
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Forest Mode</h1>
-            <p className="text-white/40 mt-1 text-sm">Deep work powered by Pomodoro</p>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={() => setShowSettings(true)}
-              className="btn-ghost px-3 py-2 flex items-center gap-2 text-sm">
-              <Settings size={14} /> Settings
-            </button>
-            <button onClick={() => setIsFullscreen(true)}
-              className="btn-ghost px-3 py-2 flex items-center gap-2 text-sm">
-              <Maximize2 size={14} /> Immersive
-            </button>
-          </div>
-        </div>
+      {isZen && (
+        <motion.button 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 0.2 }}
+          whileHover={{ opacity: 1 }}
+          onClick={() => setIsZen(false)}
+          className="absolute top-8 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full border border-white/10 text-[10px] font-black uppercase tracking-widest text-white/50 hover:text-white transition-all z-50"
+        >
+          Exit Zen Mode <kbd className="ml-2 border border-white/20 px-1 rounded">Z</kbd>
+        </motion.button>
       )}
 
       {/* Exit fullscreen */}
@@ -272,8 +315,16 @@ export default function FocusMode() {
             <motion.circle cx="140" cy="140" r="120" fill="none"
               stroke={`url(#timerGrad-${mode})`} strokeWidth="8" strokeLinecap="round"
               strokeDasharray={circumference}
-              animate={{ strokeDashoffset }}
-              transition={{ duration: 0.5, ease: 'linear' }}
+              animate={{ 
+                strokeDashoffset,
+                strokeWidth: isRunning ? [8, 10, 8] : 8,
+                opacity: isRunning ? [0.8, 1, 0.8] : 1
+              }}
+              transition={{ 
+                strokeDashoffset: { duration: 0.5, ease: 'linear' },
+                strokeWidth: { duration: 2, repeat: Infinity, ease: "easeInOut" },
+                opacity: { duration: 2, repeat: Infinity, ease: "easeInOut" }
+              }}
             />
             <defs>
               <linearGradient id={`timerGrad-${mode}`} x1="0%" y1="0%" x2="100%" y2="0%">
@@ -304,64 +355,82 @@ export default function FocusMode() {
         </div>
 
         {/* Controls */}
-        <div className="flex items-center gap-3">
-          {isRunning && currentSession && (
-            <button onClick={handleGiveUp}
-              className="px-4 py-2 text-sm text-red-400 border border-red-500/25 rounded-lg hover:bg-red-500/10 transition-all">
-              Give Up
-            </button>
-          )}
+        <AnimatePresence>
+          {!isZen && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              className="flex items-center gap-3"
+            >
+              {isRunning && currentSession && (
+                <button onClick={handleGiveUp}
+                  className="px-4 py-2 text-sm text-red-400 border border-red-500/25 rounded-lg hover:bg-red-500/10 transition-all">
+                  Give Up
+                </button>
+              )}
 
-          <motion.button
-            whileTap={{ scale: 0.94 }}
-            onClick={isRunning ? () => setIsRunning(false) : handleStart}
-            className="btn-glow px-10 py-3 flex items-center gap-3 text-base font-semibold rounded-xl"
-            style={isRunning ? { background: 'linear-gradient(135deg,#ea580c,#dc2626)' } : undefined}
-          >
-            {isRunning ? <Pause size={18} /> : <Play size={18} />}
-            {isRunning ? 'Pause' : currentSession ? 'Resume' : 'Start'}
-          </motion.button>
+              <motion.button
+                whileTap={{ scale: 0.94 }}
+                onClick={isRunning ? () => setIsRunning(false) : handleStart}
+                className="btn-glow px-10 py-3 flex items-center gap-3 text-base font-semibold rounded-xl"
+                style={isRunning ? { background: 'linear-gradient(135deg,#ea580c,#dc2626)' } : undefined}
+              >
+                {isRunning ? <Pause size={18} /> : <Play size={18} />}
+                {isRunning ? 'Pause' : currentSession ? 'Resume' : 'Start'}
+              </motion.button>
 
-          {!isRunning && (
-            <button onClick={() => { setTimeLeft(totalDuration); setGrowthProgress(0); setCurrentSession(null); }}
-              className="btn-ghost p-2.5 rounded-lg">
-              <RotateCcw size={16} />
-            </button>
+              {!isRunning && (
+                <button onClick={() => { setTimeLeft(totalDuration); setGrowthProgress(0); setCurrentSession(null); }}
+                  className="btn-ghost p-2.5 rounded-lg">
+                  <RotateCcw size={16} />
+                </button>
+              )}
+              {mode !== 'focus' && (
+                <button onClick={() => { setMode('focus'); setTimeLeft(pomodoroSettings.focusDuration * 60); setIsRunning(false); }}
+                  className="btn-ghost px-4 py-2 text-sm flex items-center gap-2">
+                  <SkipForward size={14} /> Skip
+                </button>
+              )}
+            </motion.div>
           )}
-          {mode !== 'focus' && (
-            <button onClick={() => { setMode('focus'); setTimeLeft(pomodoroSettings.focusDuration * 60); setIsRunning(false); }}
-              className="btn-ghost px-4 py-2 text-sm flex items-center gap-2">
-              <SkipForward size={14} /> Skip
-            </button>
-          )}
-        </div>
+        </AnimatePresence>
 
         {/* Ambience strip */}
-        <div className="flex flex-col items-center gap-3 w-full">
-          <div className="flex gap-1.5 flex-wrap justify-center">
-            {AMBIENCE_OPTIONS.map(a => (
-              <button key={a.type}
-                onClick={() => updatePomodoroSettings({ ambience: a.type })}
-                className={`px-2.5 py-1 rounded-lg text-xs transition-all ${
-                  pomodoroSettings.ambience === a.type
-                    ? 'bg-white/12 text-white border border-white/20'
-                    : 'text-white/30 hover:text-white/60'
-                }`}
-              >
-                {a.emoji} {a.label}
-              </button>
-            ))}
-          </div>
-          {pomodoroSettings.ambience !== 'none' && (
-            <div className="flex items-center gap-3 text-xs text-white/40">
-              <Volume2 size={12} />
-              <input type="range" min="0" max="1" step="0.05" value={volume}
-                onChange={e => { setVolume(+e.target.value); updatePomodoroSettings({ ambienceVolume: +e.target.value }); }}
-                className="w-24 accent-violet-500" />
-              <span>{Math.round(volume * 100)}%</span>
-            </div>
+        <AnimatePresence>
+          {!isZen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex flex-col items-center gap-3 w-full"
+            >
+              <div className="flex gap-1.5 flex-wrap justify-center">
+                {AMBIENCE_OPTIONS.map(a => (
+                  <button key={a.type}
+                    onClick={() => updatePomodoroSettings({ ambience: a.type })}
+                    className={`px-2.5 py-1 rounded-lg text-xs transition-all ${
+                      pomodoroSettings.ambience === a.type
+                        ? 'bg-white/12 text-white border border-white/20'
+                        : 'text-white/30 hover:text-white/60'
+                    }`}
+                  >
+                    {a.emoji} {a.label}
+                  </button>
+                ))}
+              </div>
+              {pomodoroSettings.ambience !== 'none' && (
+                <div className="flex items-center gap-3 text-xs text-white/40">
+                  <Volume2 size={12} />
+                  <input type="range" min="0" max="1" step="0.05" value={volume}
+                    onChange={e => { setVolume(+e.target.value); updatePomodoroSettings({ ambienceVolume: +e.target.value }); }}
+                    className="w-24 accent-violet-500" />
+                  <span>{Math.round(volume * 100)}%</span>
+                </div>
+              )}
+            </motion.div>
           )}
-        </div>
+        </AnimatePresence>
       </div>
 
       {/* Today stats (non-fullscreen) */}

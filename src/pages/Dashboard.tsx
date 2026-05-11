@@ -14,6 +14,9 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { PRODUCTIVITY_QUOTES } from '../lib/data';
 import TiltCard from '../components/TiltCard';
+import ProductivityInsights from '../components/ProductivityInsights';
+import Skeleton, { StatCardSkeleton, InsightSkeleton } from '../components/Skeleton';
+import MissionControl from '../components/MissionControl';
 
 const stagger: Variants = {
   hidden: { opacity: 0 },
@@ -46,6 +49,12 @@ export default function Dashboard() {
     achievements, dailyActivity, userSettings, trackers
   } = useAppStore();
   const navigate = useNavigate();
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 800);
+    return () => clearTimeout(timer);
+  }, []);
 
   const today = todayString();
   const todayActivity = dailyActivity.find(a => a.date === today);
@@ -165,31 +174,59 @@ export default function Dashboard() {
         </TiltCard>
       </motion.div>
 
+      {/* Productivity Insights */}
+      <motion.div variants={item}>
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <InsightSkeleton />
+            <InsightSkeleton />
+          </div>
+        ) : (
+          <ProductivityInsights />
+        )}
+      </motion.div>
+
       {/* Streak Row */}
       <motion.div variants={item} className="grid grid-cols-3 gap-6">
-        <TiltCard><StreakCard label="Reading Streak" streak={readingStreak.currentStreak} longest={readingStreak.longestStreak} color="violet" icon={<BookOpen size={20} />} /></TiltCard>
-        <TiltCard><StreakCard label="Coding Streak" streak={codingStreak.currentStreak} longest={codingStreak.longestStreak} color="cyan" icon={<Code2 size={20} />} /></TiltCard>
-        <TiltCard><StreakCard label="Focus Streak" streak={focusStreak.currentStreak} longest={focusStreak.longestStreak} color="emerald" icon={<Timer size={20} />} /></TiltCard>
+        {loading ? (
+          <>
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+          </>
+        ) : (
+          <>
+            <TiltCard><StreakCard label="Reading Streak" streak={readingStreak.currentStreak} longest={readingStreak.longestStreak} color="violet" icon={<BookOpen size={20} />} /></TiltCard>
+            <TiltCard><StreakCard label="Coding Streak" streak={codingStreak.currentStreak} longest={codingStreak.longestStreak} color="cyan" icon={<Code2 size={20} />} /></TiltCard>
+            <TiltCard><StreakCard label="Focus Streak" streak={focusStreak.currentStreak} longest={focusStreak.longestStreak} color="emerald" icon={<Timer size={20} />} /></TiltCard>
+          </>
+        )}
       </motion.div>
 
       {/* Dynamic Trackers Grid */}
       <motion.div variants={item} className="grid grid-cols-4 gap-6">
-        {trackers.slice(0, 3).map(t => (
-          <TiltCard key={t.id}>
-            <StatCard 
-              label={t.title} 
-              value={t.type === 'progress' ? `${t.items.filter(i => i.status === 'completed').length}/${t.target}` : t.items.length}
-              sub={t.unit || 'entries'} 
-              icon={<span className="text-2xl">{t.icon}</span>}
-              color="violet" 
-              onClick={() => navigate('/trackers')} 
-              customColor={t.color}
-            />
-          </TiltCard>
-        ))}
-        <TiltCard>
-          <StatCard label="Focus Hours" value={formatDuration(totalFocusMin)} sub={`${completedSessions} sessions`} icon={<Timer size={20} />} color="emerald" onClick={() => navigate('/focus')} />
-        </TiltCard>
+        {loading ? (
+          Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)
+        ) : (
+          <>
+            {trackers.slice(0, 3).map(t => (
+              <TiltCard key={t.id}>
+                <StatCard 
+                  label={t.title} 
+                  value={t.type === 'progress' ? `${t.items.filter(i => i.status === 'completed').length}/${t.target}` : t.items.length}
+                  sub={t.unit || 'entries'} 
+                  icon={<span className="text-2xl">{t.icon}</span>}
+                  color="violet" 
+                  onClick={() => navigate('/trackers')} 
+                  customColor={t.color}
+                />
+              </TiltCard>
+            ))}
+            <TiltCard>
+              <StatCard label="Focus Hours" value={formatDuration(totalFocusMin)} sub={`${completedSessions} sessions`} icon={<Timer size={20} />} color="emerald" onClick={() => navigate('/focus')} />
+            </TiltCard>
+          </>
+        )}
       </motion.div>
 
       {/* Two-column: Chart + Next Actions */}
@@ -218,45 +255,9 @@ export default function Dashboard() {
 
         {/* Right column */}
         <div className="col-span-2 flex flex-col gap-4">
-          {/* Upcoming Intelligence (Reminders) */}
-          <motion.div variants={item} className="glass-card p-5 flex-1 border-violet-500/10">
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-xs text-white/40 uppercase tracking-widest">Operational Intel</div>
-              <Sparkles size={14} className="text-violet-400 animate-pulse" />
-            </div>
-            <div className="space-y-3">
-              {useAppStore.getState().reminders.filter(r => r.enabled && !r.completed).length === 0 ? (
-                <div className="text-center py-8 opacity-20">
-                  <Clock size={24} className="mx-auto mb-2" />
-                  <p className="text-[10px] uppercase font-black tracking-widest">No Active Intelligence</p>
-                </div>
-              ) : (
-                useAppStore.getState().reminders
-                  .filter(r => r.enabled && !r.completed)
-                  .sort((a, b) => parseISO(a.scheduledAt).getTime() - parseISO(b.scheduledAt).getTime())
-                  .slice(0, 3)
-                  .map(r => (
-                    <div key={r.id} className="p-3 rounded-xl bg-white/[0.03] border border-white/5 flex items-center justify-between group hover:bg-white/[0.06] transition-all">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center text-violet-400">
-                           <Clock size={14} />
-                        </div>
-                        <div>
-                          <div className="text-xs font-bold text-white/80 group-hover:text-white">{r.title}</div>
-                          <div className="text-[9px] text-white/20 uppercase font-black">{format(parseISO(r.scheduledAt), 'HH:mm • MMM d')}</div>
-                        </div>
-                      </div>
-                      <div className="text-[10px] text-violet-400 font-black italic opacity-0 group-hover:opacity-100 transition-opacity">Active</div>
-                    </div>
-                  ))
-              )}
-            </div>
-            <button 
-              onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'R', ctrlKey: true, shiftKey: true }))}
-              className="w-full mt-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-[10px] font-black uppercase tracking-widest text-white/40 hover:text-white transition-all border border-transparent hover:border-white/5"
-            >
-              + Schedule Intel
-            </button>
+          {/* Mission Control (Goal Console) */}
+          <motion.div variants={item}>
+            <MissionControl />
           </motion.div>
 
           {/* Recent achievements */}
@@ -338,7 +339,16 @@ function StreakCard({ label, streak, longest, color, icon }: { label: string; st
         <span className="text-white/30 mb-1 text-xs font-bold uppercase">days</span>
       </div>
       <div className="flex items-center gap-1 mt-1">
-        <Flame size={12} className="text-orange-400" />
+        <motion.div
+          animate={{ 
+            scale: [1, 1.2, 1],
+            rotate: [-5, 5, -5],
+            filter: ['drop-shadow(0 0 5px #f97316)', 'drop-shadow(0 0 10px #f97316)', 'drop-shadow(0 0 5px #f97316)']
+          }}
+          transition={{ duration: 1.5, repeat: Infinity }}
+        >
+          <Flame size={12} className="text-orange-500" />
+        </motion.div>
         <span className="text-xs text-white/30 font-medium tracking-tight">Personal Best: {longest}d</span>
       </div>
     </div>

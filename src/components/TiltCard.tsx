@@ -42,10 +42,24 @@ export default function TiltCard({ children, className = "" }: TiltCardProps) {
         rotateY,
         transformStyle: "preserve-3d",
       }}
-      className={`relative ${className}`}
+      className={`relative group ${className}`}
     >
-      <div style={{ transform: "translateZ(20px)" }} className="h-full w-full">
+      <div 
+        style={{ transform: "translateZ(20px)" }} 
+        className="h-full w-full relative overflow-hidden rounded-[inherit]"
+      >
         {children}
+        
+        {/* Gloss Shine Overlay */}
+        <motion.div
+          className="absolute inset-0 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+          style={{
+            background: useTransform(
+              [mouseXSpring, mouseYSpring],
+              ([x, y]: any) => `radial-gradient(circle at ${50 + (x as number) * 100}% ${50 + (y as number) * 100}%, rgba(255,255,255,0.08) 0%, transparent 60%)`
+            )
+          }}
+        />
       </div>
     </motion.div>
   );

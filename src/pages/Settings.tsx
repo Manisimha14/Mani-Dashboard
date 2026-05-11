@@ -1,40 +1,12 @@
 import React, { useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useAppStore } from '../store/useAppStore';
-import { exportToJSON, importFromJSON } from '../lib/utils';
-import { Download, Upload, Trash2, Moon, Sun, Palette, Sliders, User, Shield, Zap } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { Download, Sun, Palette, Sliders, User, Shield, Zap } from 'lucide-react';
 import type { AppTheme } from '../types';
+import BackupManager from '../components/BackupManager';
 
 export default function Settings() {
-  const { userSettings, updateUserSettings, pomodoroSettings, exportData, importData, resetData } = useAppStore();
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  const handleExport = () => {
-    const data = exportData();
-    exportToJSON(data, `dashboard-backup-${new Date().toISOString().split('T')[0]}.json`);
-    toast.success('Data exported!');
-  };
-
-  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const data = await importFromJSON(file);
-      importData(data);
-      toast.success('Data imported successfully!');
-    } catch {
-      toast.error('Invalid backup file');
-    }
-  };
-
-  const handleReset = () => {
-    if (window.confirm('Reset ALL data? This cannot be undone.')) {
-      resetData();
-      toast.success('Data reset. Fresh start! 🌱');
-    }
-  };
-
+  const { userSettings, updateUserSettings } = useAppStore();
   const accentColors = [
     { id: 'violet', label: 'Violet', color: '#8b5cf6' },
     { id: 'cyan', label: 'Cyan', color: '#06b6d4' },
@@ -182,28 +154,12 @@ export default function Settings() {
         </div>
       </Section>
 
+import BackupManager from '../components/BackupManager';
+
+// Inside Settings component...
       {/* Data Management */}
-      <Section title="Data Management" icon={<Shield size={16} />}>
-        <div className="space-y-3">
-          <div className="flex gap-3">
-            <button onClick={handleExport} className="btn-ghost flex-1 py-2 text-sm flex items-center justify-center gap-2">
-              <Download size={14} /> Export JSON
-            </button>
-            <button onClick={() => fileRef.current?.click()} className="btn-ghost flex-1 py-2 text-sm flex items-center justify-center gap-2">
-              <Upload size={14} /> Import Backup
-            </button>
-          </div>
-          <input ref={fileRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
-          <div className="border-t border-white/5 pt-3">
-            <button
-              onClick={handleReset}
-              className="w-full py-2 text-sm text-red-400 border border-red-500/20 rounded-lg hover:bg-red-500/10 transition-colors flex items-center justify-center gap-2"
-            >
-              <Trash2 size={14} /> Reset All Data
-            </button>
-            <p className="text-xs text-white/20 text-center mt-2">This will permanently delete all your progress</p>
-          </div>
-        </div>
+      <Section title="Data & Vault" icon={<Shield size={16} />}>
+        <BackupManager />
       </Section>
 
       {/* About */}

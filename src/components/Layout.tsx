@@ -1,39 +1,37 @@
 import React, { useState, useCallback } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import Sidebar from './Sidebar';
 import CommandPalette from './CommandPalette';
 import TopHeader from './TopHeader';
+import InteractiveGrid from './InteractiveGrid';
+import GlobalStatusBar from './GlobalStatusBar';
 import { useAppStore } from '../store/useAppStore';
-import { useSpotlightCursor } from '../hooks/useSpotlight';
 import { useRipple } from '../hooks/useRipple';
 import { useSoundFX } from '../hooks/useSoundFX';
 import { useWeather } from '../hooks/useWeather';
 import WeatherOverlay from './WeatherOverlay';
-import Soundscape from './Soundscape';
+import SoundscapeMixer from './SoundscapeMixer';
 import ProductivityPet from './ProductivityPet';
 import { getProductivityScore, todayString } from '../lib/utils';
 import { useReminderEngine } from '../hooks/useReminderEngine';
 import NotificationCenter from './NotificationCenter';
 import ReminderModal from './ReminderModal';
+import ShortcutsHelp from './ShortcutsHelp';
 
 export default function Layout() {
   const [cmdOpen, setCmdOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [remModalOpen, setRemModalOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   
   const { requestPermission } = useReminderEngine();
   const weather = useWeather();
   const location = useLocation();
   const { play } = useSoundFX();
-
-  useSpotlightCursor();
   useRipple();
 
-  React.useEffect(() => {
-    play('click', 0.1);
-  }, [location.pathname, play]);
 
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -45,10 +43,13 @@ export default function Layout() {
         e.preventDefault();
         setRemModalOpen(prev => !prev);
       }
+      if (e.key === '?' && !cmdOpen && !remModalOpen) {
+        setShortcutsOpen(prev => !prev);
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, []);
+  }, [cmdOpen, remModalOpen]);
 
   const { dailyActivity, userSettings } = useAppStore();
 
@@ -73,8 +74,10 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen relative overflow-x-hidden" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+      <GlobalStatusBar />
+      <InteractiveGrid />
       <WeatherOverlay type={weather.type} />
-      <Soundscape type={weather.type} />
+      <SoundscapeMixer />
       
       {/* Ambient background blobs - Now reactive */}
       <motion.div 
@@ -105,28 +108,32 @@ export default function Layout() {
         transition={{ duration: 12, repeat: Infinity, ease: "easeInOut", delay: 5 }}
         className="ambient-blob w-[600px] h-[600px] blur-[150px] rounded-full fixed bottom-[-10%] left-[20%] bg-fuchsia-900 pointer-events-none z-0" 
       />
-
+ 
       <Sidebar />
-
-      <main className="main-content flex flex-col min-h-screen">
+ 
+      <main className="main-content flex flex-col min-h-screen relative z-10">
         <TopHeader />
         <div className="p-8 pt-4 flex-1">
-          <motion.div
-            key={location.pathname}
-            initial={{ opacity: 0, y: 12, scale: 0.99 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ 
-              duration: 0.4, 
-              ease: [0.22, 1, 0.36, 1] 
-            }}
-          >
-            <Outlet />
-          </motion.div>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={location.pathname}
+              initial={{ opacity: 0, x: 20, filter: 'blur(10px)' }}
+              animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+              exit={{ opacity: 0, x: -20, filter: 'blur(10px)' }}
+              transition={{ 
+                duration: 0.3, 
+                ease: [0.22, 1, 0.36, 1] 
+              }}
+            >
+              <Outlet />
+            </motion.div>
+          </AnimatePresence>
         </div>
       </main>
 
       <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
       <ReminderModal open={remModalOpen} onClose={() => setRemModalOpen(false)} />
+      <ShortcutsHelp isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
 
       <Toaster
         position="bottom-right"

@@ -9,6 +9,7 @@ import type { Reminder, AppNotification, ReminderSettings } from '../types/remin
 import { DEFAULT_ACHIEVEMENTS, BOOK_CHAPTERS } from '../lib/data';
 import { todayString, calculateStreak, generateId } from '../lib/utils';
 import { format } from 'date-fns';
+import { showAchievementToast } from '../lib/toasts';
 
 interface AppStore {
   // State
@@ -423,6 +424,12 @@ export const useAppStore = create<AppStore>()(
 
           return { ...ach, progress };
         });
+
+        if (newlyUnlocked.length > 0) {
+          newlyUnlocked.forEach(ach => {
+            showAchievementToast(ach.title, ach.icon);
+          });
+        }
 
         set({ achievements });
         return newlyUnlocked;

@@ -3,10 +3,11 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, BookOpen, Code2, Timer, BarChart3,
-  Trophy, Settings, Zap, ChevronRight, Flame, Target
+  Trophy, Settings, Zap, ChevronRight, Flame, Target, Sparkles
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { todayString, getProductivityScore } from '../lib/utils';
+import { useSoundFX } from '../hooks/useSoundFX';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
@@ -22,19 +23,21 @@ const navItems = [
 export default function Sidebar() {
   const { readingStreak, codingStreak, focusStreak, book, problems, focusSessions, dailyActivity } = useAppStore();
   const location = useLocation();
+  const { play } = useSoundFX();
+  const today = todayString();
+  const todayActivity = dailyActivity.find(a => a.date === today);
+  const prodScore = getProductivityScore(
+    todayActivity?.chaptersRead || 0,
+    todayActivity?.problemsSolved || 0,
+    todayActivity?.focusMinutes || 0
+  );
+  const isElite = prodScore >= 80;
 
   const completedChapters = book.chapters.filter(c => c.completed).length;
   const solvedProblems = problems.filter(p => p.completed).length;
   const completedSessions = focusSessions.filter(s => s.completed).length;
   const maxStreak = Math.max(readingStreak.currentStreak, codingStreak.currentStreak, focusStreak.currentStreak);
 
-  const todayActivity = dailyActivity.find(a => a.date === todayString());
-  const prodScore = getProductivityScore(
-    todayActivity?.chaptersRead || 0,
-    todayActivity?.problemsSolved || 0,
-    todayActivity?.focusMinutes || 0
-  );
-  
   const circumference = 2 * Math.PI * 36;
   const strokeDashoffset = circumference * (1 - Math.min(prodScore, 100) / 100);
 
@@ -43,8 +46,8 @@ export default function Sidebar() {
       {/* Logo */}
       <div className="p-5 border-b border-white/5">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-purple-700 flex items-center justify-center shadow-glow-sm">
-            <Zap size={16} className="text-white" />
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-purple-700 flex items-center justify-center shadow-glow-sm p-1.5">
+            <img src="/favicon.svg" alt="Logo" className="w-full h-full object-contain" />
           </div>
           <div>
             <div className="font-bold text-sm tracking-tight text-white">Dashboard</div>
@@ -66,7 +69,30 @@ export default function Sidebar() {
       )}
 
       {/* Navigation */}
-      <nav className="flex-1 p-3 mt-2 space-y-1.5">
+      {/* Elite Badge */}
+      <AnimatePresence>
+        {isElite && (
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="mx-3 mt-6 mb-2 p-3 rounded-2xl bg-gradient-to-br from-violet-600/20 to-fuchsia-600/10 border border-violet-500/20 relative overflow-hidden group"
+          >
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(139,92,246,0.3),transparent_70%)] opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+            <div className="flex items-center gap-3 relative z-10">
+              <div className="w-8 h-8 rounded-lg bg-violet-600 flex items-center justify-center shadow-[0_0_15px_rgba(139,92,246,0.5)]">
+                <Sparkles size={16} className="text-white animate-pulse" />
+              </div>
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-widest text-violet-400">Elite Status</div>
+                <div className="text-xs font-bold text-white">System Optimized</div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <nav className="flex-1 px-3 space-y-1.5">
         {navItems.map(({ to, icon: Icon, label, end }) => (
           <NavLink
             key={to}
@@ -76,27 +102,27 @@ export default function Sidebar() {
           >
             {({ isActive }) => (
               <motion.div
-                whileHover={{ x: 4, backgroundColor: 'rgba(255,255,255,0.05)' }}
-                whileTap={{ scale: 0.98 }}
+                whileHover={{ x: 6, backgroundColor: 'rgba(255,255,255,0.06)' }}
+                whileTap={{ scale: 0.96 }}
                 className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-300 ${
                   isActive 
-                    ? 'text-violet-400 bg-violet-600/10' 
+                    ? 'text-violet-400 bg-violet-600/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]' 
                     : 'text-white/40 hover:text-white'
                 }`}
               >
-                <div className="transition-transform duration-300">
+                <div className={`transition-transform duration-300 ${isActive ? 'scale-110 drop-shadow-[0_0_8px_rgba(139,92,246,0.5)]' : ''}`}>
                   <Icon size={18} />
                 </div>
-                <span className="flex-1 text-sm font-medium tracking-tight">{label}</span>
+                <span className={`flex-1 text-sm font-medium tracking-tight ${isActive ? 'font-bold' : ''}`}>{label}</span>
                 
                 {isActive && (
                   <>
                     <motion.div
                       layoutId="nav-indicator"
-                      className="w-1 h-5 rounded-full bg-violet-400 shadow-[0_0_10px_rgba(139,92,246,0.5)]"
+                      className="w-1 h-5 rounded-full bg-violet-400 shadow-[0_0_15px_rgba(139,92,246,0.8)]"
                       initial={false}
                     />
-                    <div className="absolute left-0 w-1 h-5 bg-violet-500 blur-sm opacity-50" />
+                    <div className="absolute left-0 w-1 h-5 bg-violet-500 blur-sm opacity-60" />
                   </>
                 )}
               </motion.div>

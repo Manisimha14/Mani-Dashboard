@@ -17,7 +17,15 @@ export default function TopHeader() {
   const unreadCount = notifications.filter(n => !n.read).length;
   const hour = new Date().getHours();
   
-  const greeting = hour < 12 ? 'Good Morning' : hour < 18 ? 'Good Afternoon' : 'Good Evening';
+  const baseGreeting = hour < 12 ? 'Good Morning' : hour < 18 ? 'Good Afternoon' : 'Good Evening';
+  const moodGreetings: Record<string, string> = {
+    focused: 'Stay Sharp',
+    grind: 'Keep Hustling',
+    chill: 'Enjoy the Flow',
+    zen: 'Peaceful Mind',
+    creative: 'Unleash Ideas'
+  };
+  const greeting = `${moodGreetings[userSettings.mood || 'focused']}, ${userSettings.name || 'Champion'}`;
 
   const handleSearchClick = () => {
     play('click');
@@ -38,7 +46,7 @@ export default function TopHeader() {
               {hour < 12 ? '🌅' : hour < 18 ? '☀️' : '🌙'}
             </span>
             <h2 className="text-white font-bold text-lg tracking-tight">
-              {greeting}, <span className="text-violet-400">{userSettings.name || 'Champion'}</span>
+              {greeting}
             </h2>
           </motion.div>
           <p className="text-[10px] text-white/30 uppercase tracking-[0.2em] font-bold mt-1">

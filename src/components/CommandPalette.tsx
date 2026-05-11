@@ -104,11 +104,9 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       setSelected(s => (s + 1) % filtered.length);
-      play('tick');
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setSelected(s => (s - 1 + filtered.length) % filtered.length);
-      play('tick');
     } else if (e.key === 'Enter') {
       filtered[selected]?.action();
       play('success');
