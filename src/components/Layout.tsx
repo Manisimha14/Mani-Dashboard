@@ -6,7 +6,6 @@ import Sidebar from './Sidebar';
 import CommandPalette from './CommandPalette';
 import TopHeader from './TopHeader';
 import InteractiveGrid from './InteractiveGrid';
-import GlobalStatusBar from './GlobalStatusBar';
 import { useAppStore } from '../store/useAppStore';
 import { useRipple } from '../hooks/useRipple';
 import { useSoundFX, soundEngine } from '../hooks/useSoundFX';
@@ -91,7 +90,6 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen relative overflow-x-hidden" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
-      <GlobalStatusBar />
       <InteractiveGrid />
       <WeatherOverlay type={weather.type} />
       <SoundscapeMixer />
