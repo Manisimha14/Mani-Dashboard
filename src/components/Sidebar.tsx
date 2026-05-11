@@ -1,0 +1,176 @@
+import React from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  LayoutDashboard, BookOpen, Code2, Timer, BarChart3,
+  Trophy, Settings, Zap, ChevronRight, Flame, Target
+} from 'lucide-react';
+import { useAppStore } from '../store/useAppStore';
+import { todayString, getProductivityScore } from '../lib/utils';
+
+const navItems = [
+  { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
+  { to: '/focus', icon: Timer, label: 'Focus Mode' },
+  { to: '/reading', icon: BookOpen, label: 'Reading' },
+  { to: '/leetcode', icon: Code2, label: 'LeetCode' },
+  { to: '/trackers', icon: Target, label: 'Trackers' },
+  { to: '/analytics', icon: BarChart3, label: 'Analytics' },
+  { to: '/achievements', icon: Trophy, label: 'Achievements' },
+  { to: '/settings', icon: Settings, label: 'Settings' },
+];
+
+export default function Sidebar() {
+  const { readingStreak, codingStreak, focusStreak, book, problems, focusSessions, dailyActivity } = useAppStore();
+  const location = useLocation();
+
+  const completedChapters = book.chapters.filter(c => c.completed).length;
+  const solvedProblems = problems.filter(p => p.completed).length;
+  const completedSessions = focusSessions.filter(s => s.completed).length;
+  const maxStreak = Math.max(readingStreak.currentStreak, codingStreak.currentStreak, focusStreak.currentStreak);
+
+  const todayActivity = dailyActivity.find(a => a.date === todayString());
+  const prodScore = getProductivityScore(
+    todayActivity?.chaptersRead || 0,
+    todayActivity?.problemsSolved || 0,
+    todayActivity?.focusMinutes || 0
+  );
+  
+  const circumference = 2 * Math.PI * 36;
+  const strokeDashoffset = circumference * (1 - Math.min(prodScore, 100) / 100);
+
+  return (
+    <div className="sidebar">
+      {/* Logo */}
+      <div className="p-5 border-b border-white/5">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-purple-700 flex items-center justify-center shadow-glow-sm">
+            <Zap size={16} className="text-white" />
+          </div>
+          <div>
+            <div className="font-bold text-sm tracking-tight text-white">Dashboard</div>
+            <div className="text-xs text-white/40">Premium Productivity</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Streak Banner */}
+      {maxStreak > 0 && (
+        <div className="px-3 pt-4">
+          <div className="glass-card px-3 py-2 flex items-center gap-2">
+            <Flame size={14} className="text-orange-400 animate-pulse" />
+            <span className="text-xs text-white/70">
+              <span className="font-bold text-orange-400">{maxStreak}d</span> streak
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Navigation */}
+      <nav className="flex-1 p-3 mt-2 space-y-1.5">
+        {navItems.map(({ to, icon: Icon, label, end }) => (
+          <NavLink
+            key={to}
+            to={to}
+            end={end}
+            className="group block no-underline"
+          >
+            {({ isActive }) => (
+              <motion.div
+                whileHover={{ x: 4, backgroundColor: 'rgba(255,255,255,0.05)' }}
+                whileTap={{ scale: 0.98 }}
+                className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-300 ${
+                  isActive 
+                    ? 'text-violet-400 bg-violet-600/10' 
+                    : 'text-white/40 hover:text-white'
+                }`}
+              >
+                <div className="transition-transform duration-300">
+                  <Icon size={18} />
+                </div>
+                <span className="flex-1 text-sm font-medium tracking-tight">{label}</span>
+                
+                {isActive && (
+                  <>
+                    <motion.div
+                      layoutId="nav-indicator"
+                      className="w-1 h-5 rounded-full bg-violet-400 shadow-[0_0_10px_rgba(139,92,246,0.5)]"
+                      initial={false}
+                    />
+                    <div className="absolute left-0 w-1 h-5 bg-violet-500 blur-sm opacity-50" />
+                  </>
+                )}
+              </motion.div>
+            )}
+          </NavLink>
+        ))}
+      </nav>
+
+      {/* Live Productivity Momentum - World Class Upgrade */}
+      <div className="p-6 border-t border-white/5 space-y-5 bg-gradient-to-t from-white/[0.02] to-transparent">
+        <div className="flex items-center justify-between">
+          <div className="text-[10px] text-white/20 uppercase font-black tracking-[0.2em]">Momentum</div>
+          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+        </div>
+        
+        <div className="relative w-28 h-28 mx-auto group">
+          {/* Heartbeat Pulse Ring */}
+          <motion.div 
+            animate={{ scale: [1, 1.1, 1], opacity: [0.1, 0.2, 0.1] }}
+            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute inset-0 rounded-full border border-violet-500/30 blur-[2px]"
+          />
+
+          <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+            <defs>
+              <linearGradient id="momentumGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#8b5cf6" />
+                <stop offset="100%" stopColor="#d946ef" />
+              </linearGradient>
+              <filter id="glow">
+                <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
+                <feMerge>
+                    <feMergeNode in="coloredBlur"/>
+                    <feMergeNode in="SourceGraphic"/>
+                </feMerge>
+              </filter>
+            </defs>
+            
+            {/* Background Track */}
+            <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,0.03)" strokeWidth="8" />
+            
+            {/* Progress Stroke */}
+            <motion.circle 
+              cx="50" cy="50" r="42" fill="none" 
+              stroke="url(#momentumGradient)" strokeWidth="8" strokeLinecap="round"
+              strokeDasharray={2 * Math.PI * 42}
+              initial={{ strokeDashoffset: 2 * Math.PI * 42 }}
+              animate={{ strokeDashoffset: 2 * Math.PI * 42 * (1 - Math.min(prodScore, 100) / 100) }}
+              transition={{ duration: 2, ease: "circOut" }}
+              filter="url(#glow)"
+              className="drop-shadow-[0_0_8px_rgba(139,92,246,0.5)]"
+            />
+          </svg>
+
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <motion.span 
+              key={prodScore}
+              initial={{ scale: 0.5, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="text-3xl font-black text-white tracking-tighter"
+            >
+              {prodScore}
+            </motion.span>
+            <span className="text-[10px] font-black text-white/20 uppercase tracking-widest -mt-1">%</span>
+          </div>
+        </div>
+
+        <div className="flex flex-col items-center gap-1">
+          <div className="text-[11px] font-black text-white/80 uppercase tracking-widest text-center">
+            {prodScore >= 70 ? 'God Mode 🔥' : prodScore >= 40 ? 'Velocity High ⚡' : 'Warmup 🔋'}
+          </div>
+          <div className="text-[9px] text-white/20 font-bold uppercase tracking-tighter">System Output: Optimized</div>
+        </div>
+      </div>
+    </div>
+  );
+}
