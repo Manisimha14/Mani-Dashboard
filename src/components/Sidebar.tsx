@@ -98,6 +98,7 @@ export default function Sidebar() {
             key={to}
             to={to}
             end={end}
+            onClick={() => play('click')}
             className="group block no-underline"
           >
             {({ isActive }) => (

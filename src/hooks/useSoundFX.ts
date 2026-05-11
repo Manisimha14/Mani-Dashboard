@@ -1,11 +1,15 @@
 import { useRef, useCallback } from 'react';
+import { useAppStore } from '../store/useAppStore';
 
 // Web Audio API sound engine - no files needed
 class SoundEngine {
   private ctx: AudioContext | null = null;
 
-  private getCtx(): AudioContext {
-    if (!this.ctx) this.ctx = new AudioContext();
+  public getCtx(): AudioContext {
+    if (!this.ctx) this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    if (this.ctx.state === 'suspended') {
+      this.ctx.resume();
+    }
     return this.ctx;
   }
 
@@ -182,9 +186,19 @@ class SoundEngine {
 
 export const soundEngine = new SoundEngine();
 
-export function useSoundFX(enabled = true) {
+export function useSoundFX() {
+  const { pomodoroSettings } = useAppStore();
+  const enabled = pomodoroSettings.soundEnabled;
+
   const play = useCallback((type: keyof SoundEngine, volume?: number) => {
     if (!enabled) return;
+    
+    // Resume context on play if needed
+    const ctx = soundEngine.getCtx();
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
+
     if (typeof (soundEngine as any)[type] === 'function') {
       (soundEngine as any)[type](volume);
     }

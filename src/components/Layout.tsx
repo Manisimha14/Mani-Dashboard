@@ -9,7 +9,7 @@ import InteractiveGrid from './InteractiveGrid';
 import GlobalStatusBar from './GlobalStatusBar';
 import { useAppStore } from '../store/useAppStore';
 import { useRipple } from '../hooks/useRipple';
-import { useSoundFX } from '../hooks/useSoundFX';
+import { useSoundFX, soundEngine } from '../hooks/useSoundFX';
 import { useWeather } from '../hooks/useWeather';
 import WeatherOverlay from './WeatherOverlay';
 import SoundscapeMixer from './SoundscapeMixer';
@@ -32,6 +32,23 @@ export default function Layout() {
   const { play } = useSoundFX();
   useRipple();
 
+  // Unlock audio on first interaction
+  React.useEffect(() => {
+    const unlock = () => {
+      const ctx = soundEngine.getCtx();
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+      window.removeEventListener('mousedown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+    window.addEventListener('mousedown', unlock);
+    window.addEventListener('keydown', unlock);
+    return () => {
+      window.removeEventListener('mousedown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+  }, []);
 
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => {
