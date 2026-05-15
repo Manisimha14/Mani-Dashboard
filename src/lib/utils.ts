@@ -59,6 +59,17 @@ export function calculateStreak(history: Record<string, boolean>): { current: nu
   return { current, longest };
 }
 
+export function updateStreakData(streak: { currentStreak: number; longestStreak: number; history: Record<string, boolean> }): { currentStreak: number; longestStreak: number; lastActivityDate: string; history: Record<string, boolean> } {
+  const history = { ...streak.history, [todayString()]: true };
+  const { current, longest } = calculateStreak(history);
+  return { 
+    currentStreak: current, 
+    longestStreak: Math.max(longest, streak.longestStreak), 
+    lastActivityDate: todayString(), 
+    history 
+  };
+}
+
 export function getProductivityScore(
   chaptersToday: number,
   problemsToday: number,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppStore } from '../store/useAppStore';
 import { BookOpen, Check, Calendar, ChevronDown, ChevronUp, Edit3, X, Flame } from 'lucide-react';
@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { formatDate, todayString } from '../lib/utils';
 import Confetti from 'react-confetti';
 import BookReaderModal from '../components/BookReaderModal';
+import Modal from '../components/Modal';
 
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.04 } } };
 const item = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } };
@@ -18,49 +19,70 @@ export default function Reading() {
   const [expandedChapter, setExpandedChapter] = useState<number | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
   const [showReader, setShowReader] = useState(false);
+  const [windowSize, setWindowSize] = useState({ width: 0, height: 0 });
 
-  const completedChapters = book.chapters.filter(c => c.completed).length;
-  const progressPct = Math.round((completedChapters / 51) * 100);
-  const nextChapter = book.chapters.find(c => !c.completed);
+  // Sync window size for confetti
+  useEffect(() => {
+    const updateSize = () => setWindowSize({ width: window.innerWidth, height: window.innerHeight });
+    updateSize();
+    window.addEventListener('resize', updateSize);
+    return () => window.removeEventListener('resize', updateSize);
+  }, []);
+
+  // Sync edit form state
+  const handleOpenEdit = useCallback(() => {
+    setBookTitle(book.title);
+    setBookAuthor(book.author);
+    setEditingBook(true);
+  }, [book.title, book.author]);
+
+  // Derived Stats
+  const completedChapters = useMemo(() => book.chapters.filter(c => c.completed).length, [book.chapters]);
+  const totalChapters = useMemo(() => book.chapters.length || 1, [book.chapters]);
+  const progressPct = useMemo(() => Math.round((completedChapters / totalChapters) * 100), [completedChapters, totalChapters]);
+  const nextChapter = useMemo(() => book.chapters.find(c => !c.completed), [book.chapters]);
+
+  // Milestone logic via effect to ensure state is settled
+  useEffect(() => {
+    if (completedChapters > 0) {
+      const milestones = [10, 25, 40, totalChapters];
+      if (milestones.includes(completedChapters)) {
+        if (completedChapters === totalChapters) {
+          setShowConfetti(true);
+          setTimeout(() => setShowConfetti(false), 6000);
+          toast.success('🏆 Book Complete! Incredible achievement!', { duration: 5000 });
+        } else {
+          toast.success(`🌟 Milestone: ${completedChapters} chapters done!`, { duration: 4000 });
+        }
+      }
+    }
+  }, [completedChapters, totalChapters]);
 
   const handleToggleChapter = (chapterId: number, completed: boolean) => {
     updateChapter(chapterId, { completed, status: completed ? 'completed' : 'not_started' });
     if (completed) {
       toast.success(`Chapter completed! 🎉`, { icon: '📖' });
-      if (completedChapters + 1 === 51) {
-        setShowConfetti(true);
-        setTimeout(() => setShowConfetti(false), 6000);
-        toast.success('🏆 Book Complete! Incredible achievement!', { duration: 5000 });
-      }
-      // Milestone toasts
-      const milestones = [10, 25, 40, 51];
-      if (milestones.includes(completedChapters + 1)) {
-        toast.success(`🌟 Milestone: ${completedChapters + 1} chapters done!`, { duration: 4000 });
-      }
     }
   };
 
-  const getDifficultyColor = (chapter: typeof book.chapters[0]) => {
-    if (chapter.completed) return 'text-emerald-400';
-    if (chapter.status === 'in_progress') return 'text-yellow-400';
-    return 'text-white/30';
-  };
+  const isTodayDone = !!readingStreak.history[todayString()];
 
   return (
     <div className="max-w-4xl space-y-6">
-      {showConfetti && <Confetti recycle={false} numberOfPieces={300} />}
+      {showConfetti && <Confetti width={windowSize.width} height={windowSize.height} recycle={false} numberOfPieces={300} />}
 
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Reading Tracker</h1>
-          <p className="text-white/40 mt-1 text-sm">Track your journey through 51 chapters</p>
+          <p className="text-white/40 mt-1 text-sm">Track your journey through {totalChapters} chapters</p>
         </div>
         <div className="flex items-center gap-2">
           {readingStreak.currentStreak > 0 && (
-            <div className="glass-card px-3 py-2 flex items-center gap-2">
-              <Flame size={14} className="text-orange-400" />
-              <span className="text-sm font-semibold text-orange-400">{readingStreak.currentStreak}d</span>
+            <div className={`glass-card px-3 py-2 flex items-center gap-2 border ${isTodayDone ? 'border-orange-500/30' : 'border-white/5 opacity-60'}`}>
+              <Flame size={14} className={isTodayDone ? 'text-orange-400' : 'text-white/20'} />
+              <span className={`text-sm font-semibold ${isTodayDone ? 'text-orange-400' : 'text-white/20'}`}>{readingStreak.currentStreak}d</span>
+              {isTodayDone && <div className="w-1 h-1 rounded-full bg-orange-400 animate-pulse" />}
             </div>
           )}
           <button
@@ -71,7 +93,7 @@ export default function Reading() {
             Read Book
           </button>
           <button
-            onClick={() => setEditingBook(true)}
+            onClick={handleOpenEdit}
             className="btn-ghost px-3 py-2 flex items-center gap-2 text-sm"
           >
             <Edit3 size={14} />
@@ -95,7 +117,7 @@ export default function Reading() {
             <h2 className="text-xl font-bold text-white">{book.title}</h2>
             <p className="text-white/40 text-sm mb-3">{book.author}</p>
             <div className="flex items-center gap-4 mb-2">
-              <span className="text-sm text-white/60"><span className="font-bold text-violet-400">{completedChapters}</span> / 51 chapters</span>
+              <span className="text-sm text-white/60"><span className="font-bold text-violet-400">{completedChapters}</span> / {totalChapters} chapters</span>
               <span className="text-sm font-bold text-gradient">{progressPct}%</span>
             </div>
             <div className="progress-bar">
@@ -152,10 +174,18 @@ export default function Reading() {
                 chapter.completed ? 'border-emerald-500/20 bg-emerald-500/5' : ''
               } ${nextChapter?.id === chapter.id ? 'border-violet-500/30 shadow-glow-sm' : ''}`}
             >
-              <div
-                className="flex items-center gap-4 p-4 cursor-pointer"
-                onClick={() => setExpandedChapter(expandedChapter === chapter.id ? null : chapter.id)}
-              >
+            <div
+              role="button"
+              tabIndex={0}
+              onKeyDown={e => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setExpandedChapter(expandedChapter === chapter.id ? null : chapter.id);
+                }
+              }}
+              className="flex items-center gap-4 p-4 cursor-pointer outline-none"
+              onClick={() => setExpandedChapter(expandedChapter === chapter.id ? null : chapter.id)}
+            >
                 {/* Checkbox */}
                 <button
                   onClick={(e) => {
@@ -210,11 +240,14 @@ export default function Reading() {
                     transition={{ duration: 0.2 }}
                     className="overflow-hidden"
                   >
-                    <div className="px-4 pb-4 pt-0 border-t border-white/5">
-                      <div className="flex items-center gap-3 mt-3">
+                    <div className="px-4 pb-4 pt-0 border-t border-white/5 space-y-4">
+                      <div className="flex items-center gap-3 mt-4">
                         <select
                           value={chapter.status}
-                          onChange={e => updateChapter(chapter.id, { status: e.target.value as any })}
+                          onChange={e => {
+                            const status = e.target.value as any;
+                            updateChapter(chapter.id, { status, completed: status === 'completed' });
+                          }}
                           className="input-glass text-sm px-3 py-1.5"
                         >
                           <option value="not_started">Not Started</option>
@@ -228,6 +261,16 @@ export default function Reading() {
                           {chapter.completed ? '✓ Completed' : 'Mark Done'}
                         </button>
                       </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] text-white/20 uppercase font-bold tracking-widest">Key Takeaways & Highlights</label>
+                        <textarea 
+                          className="input-glass w-full px-3 py-2 text-sm min-h-[80px] resize-none"
+                          placeholder="What did you learn from this chapter?"
+                          value={chapter.notes || ''}
+                          onChange={e => updateChapter(chapter.id, { notes: e.target.value })}
+                        />
+                      </div>
                     </div>
                   </motion.div>
                 )}
@@ -238,52 +281,38 @@ export default function Reading() {
       </motion.div>
 
       {/* Edit Book Modal */}
-      <AnimatePresence>
-        {editingBook && (
-          <>
-            <motion.div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setEditingBook(false)} />
-            <motion.div
-              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md"
-              initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+      <Modal open={editingBook} onClose={() => setEditingBook(false)} title="Edit Book Info">
+        <div className="space-y-4">
+          <input className="input-glass w-full px-3 py-2 text-sm" placeholder="Book title" value={bookTitle} onChange={e => setBookTitle(e.target.value)} />
+          <input className="input-glass w-full px-3 py-2 text-sm" placeholder="Author" value={bookAuthor} onChange={e => setBookAuthor(e.target.value)} />
+          <div>
+            <label className="text-xs text-white/40 mb-2 block">Cover Color</label>
+            <div className="flex gap-2">
+              {['#7c3aed', '#0891b2', '#059669', '#dc2626', '#d97706', '#db2777'].map(c => (
+                <button
+                  key={c}
+                  onClick={() => setBookMeta({ coverColor: c })}
+                  className={`w-8 h-8 rounded-lg border-2 transition-all ${book.coverColor === c ? 'border-white scale-110' : 'border-transparent'}`}
+                  style={{ background: c }}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                setBookMeta({ title: bookTitle, author: bookAuthor });
+                setEditingBook(false);
+                toast.success('Book updated!');
+              }}
+              className="btn-glow flex-1 py-2 text-sm"
             >
-              <div className="glass-card p-6 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold text-white">Edit Book Info</h3>
-                  <button onClick={() => setEditingBook(false)} className="text-white/40 hover:text-white"><X size={16} /></button>
-                </div>
-                <input className="input-glass w-full px-3 py-2 text-sm" placeholder="Book title" value={bookTitle} onChange={e => setBookTitle(e.target.value)} />
-                <input className="input-glass w-full px-3 py-2 text-sm" placeholder="Author" value={bookAuthor} onChange={e => setBookAuthor(e.target.value)} />
-                <div>
-                  <label className="text-xs text-white/40 mb-2 block">Cover Color</label>
-                  <div className="flex gap-2">
-                    {['#7c3aed', '#0891b2', '#059669', '#dc2626', '#d97706', '#db2777'].map(c => (
-                      <button
-                        key={c}
-                        onClick={() => setBookMeta({ coverColor: c })}
-                        className={`w-8 h-8 rounded-lg border-2 transition-all ${book.coverColor === c ? 'border-white scale-110' : 'border-transparent'}`}
-                        style={{ background: c }}
-                      />
-                    ))}
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => {
-                      setBookMeta({ title: bookTitle, author: bookAuthor });
-                      setEditingBook(false);
-                      toast.success('Book updated!');
-                    }}
-                    className="btn-glow flex-1 py-2 text-sm"
-                  >
-                    Save Changes
-                  </button>
-                  <button onClick={() => setEditingBook(false)} className="btn-ghost px-4 py-2 text-sm">Cancel</button>
-                </div>
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+              Save Changes
+            </button>
+            <button onClick={() => setEditingBook(false)} className="btn-ghost px-4 py-2 text-sm">Cancel</button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Embedded PDF Reader Modal */}
       <BookReaderModal open={showReader} onClose={() => setShowReader(false)} />

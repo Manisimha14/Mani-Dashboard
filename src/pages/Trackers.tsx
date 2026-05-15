@@ -1,16 +1,20 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Plus, Settings, Target, Book, Dumbbell, Code, CheckCircle, 
   ChevronRight, LayoutGrid, List, Search, Sparkles, Zap, 
-  Brain, Clock, Shield, Palette, Layers, Info, Trash2
+  Brain, Clock, Shield, Palette, Layers, Info, Trash2, Edit3
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import Modal from '../components/Modal';
 import type { Tracker, TrackerType } from '../types';
+import type { ISODateString } from '../types/reminder';
 import { generateId } from '../lib/utils';
-import { format as dfnsFormat, parseISO as dfnsParseISO } from 'date-fns';
+import { format as dfnsFormat, parseISO as dfnsParseISO, isToday, startOfDay, subDays, eachDayOfInterval } from 'date-fns';
 import toast from 'react-hot-toast';
+import { showUndoToast } from '../components/UndoToast';
+
+const todayStr = new Date().toISOString().split('T')[0];
 
 const TRACKER_TYPES: { id: TrackerType; label: string; desc: string; icon: any; color: string }[] = [
   { id: 'progress', label: 'Progress', desc: 'Track progress towards a goal', icon: Target, color: 'text-violet-400' },
@@ -32,14 +36,19 @@ const TEMPLATES = [
 ];
 
 export default function Trackers() {
-  const { trackers, addTracker, deleteTracker, updateTracker } = useAppStore();
+  const { 
+    trackers, addTracker, deleteTracker, updateTracker, 
+    addReminder, reminders, deleteReminder 
+  } = useAppStore();
+  
   const [showCreate, setShowCreate] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [step, setStep] = useState(1);
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  // Form State
-  const [form, setForm] = useState({
+  const defaultForm = {
     title: '',
     description: '',
     icon: '📚',
@@ -51,43 +60,110 @@ export default function Trackers() {
     isPrivate: false,
     reminderEnabled: false,
     reminderTime: '09:00',
-  });
+  };
 
-  const { addReminder } = useAppStore();
+  const [form, setForm] = useState(defaultForm);
+
+  const resetForm = useCallback(() => {
+    setForm(defaultForm);
+    setStep(1);
+    setIsEditing(false);
+    setEditingId(null);
+  }, []);
 
   const handleCreate = () => {
     if (!form.title) { toast.error('Title is required'); return; }
     
-    const trackerId = generateId();
-    addTracker({
-      ...form,
-      items: [],
-      metadata: {
-        reminderEnabled: form.reminderEnabled,
-        reminderTime: form.reminderTime,
-      }
-    });
+    const { frequency, isPrivate, reminderEnabled, reminderTime, ...topLevelFields } = form;
+    const metadata = { 
+      frequency: frequency as 'daily' | 'weekly', 
+      isPrivate, 
+      reminderEnabled, 
+      reminderTime 
+    };
 
-    if (form.reminderEnabled) {
-      addReminder({
-        title: `Mission: ${form.title}`,
-        message: `Time to progress on your ${form.title} tracker! 🎯`,
-        category: 'custom',
-        type: 'task',
-        scheduledAt: new Date(`${todayStr}T${form.reminderTime}`).toISOString(),
-        recurrence: 'daily',
-        enabled: true,
-        completed: false,
+    if (isEditing && editingId) {
+      updateTracker(editingId, {
+        ...topLevelFields,
+        metadata
       });
+      
+      // Update or cleanup reminder
+      const existingReminder = reminders.find(r => r.metadata?.type === 'system' && r.metadata?.source === `tracker-${editingId}`);
+      if (form.reminderEnabled) {
+        if (existingReminder) {
+          // Update logic would go here, but for simplicity we'll just keep it or recreate
+        } else {
+          addReminder({
+            title: `Mission: ${form.title}`,
+            message: `Time to progress on your ${form.title} tracker! 🎯`,
+            domain: 'task',
+            scheduleType: 'recurring',
+            status: 'active',
+            scheduledAt: new Date(`${todayStr}T${form.reminderTime}`).toISOString() as ISODateString,
+            recurrence: 'daily',
+            enabled: true,
+            completed: false,
+            metadata: { type: 'system', source: `tracker-${editingId}` }
+          });
+        }
+      } else if (existingReminder) {
+        deleteReminder(existingReminder.id);
+      }
+      
+      toast.success('Mission Updated! 🛠️');
+    } else {
+      const trackerId = generateId();
+      addTracker({
+        ...topLevelFields,
+        id: trackerId,
+        items: [],
+        metadata
+      });
+
+      if (form.reminderEnabled) {
+        addReminder({
+          title: `Mission: ${form.title}`,
+          message: `Time to progress on your ${form.title} tracker! 🎯`,
+          domain: 'task',
+          scheduleType: 'recurring',
+          status: 'active',
+          scheduledAt: new Date(`${todayStr}T${form.reminderTime}`).toISOString() as ISODateString,
+          recurrence: 'daily',
+          enabled: true,
+          completed: false,
+          metadata: { type: 'system', source: `tracker-${trackerId}` }
+        });
+      }
+      toast.success('Mission Initialized! 🎯');
     }
 
     setShowCreate(false);
-    setStep(1);
-    toast.success('Mission Initialized! 🎯');
+    resetForm();
   };
 
   const applyTemplate = (tpl: typeof TEMPLATES[0]) => {
-    setForm(prev => ({ ...prev, ...tpl }));
+    setForm({ ...defaultForm, ...tpl });
+    setStep(1);
+    setShowCreate(true);
+  };
+
+  const handleEditTracker = (tracker: Tracker) => {
+    setForm({
+      title: tracker.title,
+      description: tracker.description || '',
+      icon: tracker.icon,
+      color: tracker.color,
+      type: tracker.type,
+      target: tracker.target || 10,
+      unit: tracker.unit || 'items',
+      frequency: tracker.metadata?.frequency || 'daily',
+      isPrivate: tracker.metadata?.isPrivate || false,
+      reminderEnabled: tracker.metadata?.reminderEnabled || false,
+      reminderTime: tracker.metadata?.reminderTime || '09:00',
+    });
+    setIsEditing(true);
+    setEditingId(tracker.id);
     setStep(1);
     setShowCreate(true);
   };
@@ -96,18 +172,12 @@ export default function Trackers() {
     return trackers.filter(t => t.title.toLowerCase().includes(query.toLowerCase()));
   }, [trackers, query]);
 
-  const todayStr = useMemo(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  }, []);
-
   const totalEfficiency = useMemo(() => {
     if (trackers.length === 0) return 0;
     const percentages = trackers.map(t => {
-      if (t.type === 'progress' && t.target) {
-        return Math.min(100, (t.items.filter(i => i.status === 'completed').length / t.target) * 100);
-      }
-      return t.items.length > 0 ? 100 : 0; 
+      const target = t.target || 1;
+      const completed = t.items.filter(i => i.status === 'completed').length;
+      return Math.min(100, (completed / target) * 100);
     });
     return Math.round(percentages.reduce((a, b) => a + b, 0) / percentages.length);
   }, [trackers]);
@@ -116,7 +186,7 @@ export default function Trackers() {
     return trackers.reduce((sum, t) => {
       return sum + t.items.filter(i => i.dateCompleted?.startsWith(todayStr)).length;
     }, 0);
-  }, [trackers, todayStr]);
+  }, [trackers]);
 
   return (
     <div className="flex gap-8 max-w-7xl mx-auto pb-20">
@@ -183,13 +253,13 @@ export default function Trackers() {
                     <div className="flex justify-between items-end">
                       <span className="text-[10px] font-black text-white/20 uppercase tracking-widest">Efficiency</span>
                       <span className="text-sm font-black text-white italic font-intel">
-                        {Math.round((t.items.filter(i => i.status === 'completed').length / t.target) * 100)}%
+                        {Math.min(100, Math.round((t.items.filter(i => i.status === 'completed').length / t.target) * 100))}%
                       </span>
                     </div>
                     <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
                       <motion.div 
                         initial={{ width: 0 }}
-                        animate={{ width: `${(t.items.filter(i => i.status === 'completed').length / t.target) * 100}%` }}
+                        animate={{ width: `${Math.min(100, (t.items.filter(i => i.status === 'completed').length / t.target) * 100)}%` }}
                         className="h-full rounded-full"
                         style={{ backgroundColor: t.color }}
                       />
@@ -201,10 +271,19 @@ export default function Trackers() {
                 )}
 
                 {t.type === 'habit' && (
-                   <div className="flex gap-1.5 mt-2">
-                      {[1,2,3,4,5,6,7].map(i => (
-                        <div key={i} className={`h-1.5 flex-1 rounded-full ${i <= 3 ? 'bg-violet-500' : 'bg-white/5'}`} />
-                      ))}
+                   <div className="flex gap-1 mt-2 overflow-hidden">
+                      {Array.from({ length: 14 }).map((_, i) => {
+                        const date = subDays(new Date(), 13 - i);
+                        const dStr = date.toISOString().split('T')[0];
+                        const isDone = t.items.some(item => item.dateCompleted?.startsWith(dStr));
+                        return (
+                          <div 
+                            key={i} 
+                            className={`h-4 flex-1 rounded-sm transition-all ${isDone ? '' : 'bg-white/5'}`} 
+                            style={{ backgroundColor: isDone ? t.color : undefined, opacity: isDone ? (0.3 + (i / 14) * 0.7) : 1 }}
+                          />
+                        );
+                      })}
                    </div>
                 )}
               </motion.div>
@@ -275,7 +354,7 @@ export default function Trackers() {
       </div>
 
       {/* Create Modal: Multi-step */}
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Create New Tracker">
+      <Modal open={showCreate} onClose={() => { setShowCreate(false); resetForm(); }} title={isEditing ? 'Edit Tracker' : 'Create New Tracker'}>
         <div className="space-y-8">
           {/* Stepper */}
           <div className="flex items-center justify-center gap-4">
@@ -430,30 +509,27 @@ export default function Trackers() {
       {/* Tracker Detail Modal */}
       {trackers.find(t => t.id === selectedId) && (
         <Modal open={!!selectedId} onClose={() => setSelectedId(null)} title={trackers.find(t => t.id === selectedId)?.title || ''}>
-          <TrackerDetail tracker={trackers.find(t => t.id === selectedId)!} onClose={() => setSelectedId(null)} />
+          <TrackerDetail 
+            tracker={trackers.find(t => t.id === selectedId)!} 
+            onClose={() => setSelectedId(null)} 
+            onEdit={() => {
+              const tracker = trackers.find(t => t.id === selectedId)!;
+              setSelectedId(null);
+              handleEditTracker(tracker);
+            }}
+          />
         </Modal>
       )}
     </div>
   );
 }
 
-function SuggestionItem({ icon, label, sub }: { icon: any; label: string; sub: string }) {
-  return (
-    <div className="flex items-center gap-4 p-3 rounded-xl hover:bg-white/5 transition-all cursor-pointer group">
-      <div className="p-2 rounded-lg bg-white/5 text-white/40 group-hover:text-violet-400 transition-colors">
-        {icon}
-      </div>
-      <div>
-        <div className="text-xs font-bold text-white group-hover:text-violet-400 transition-colors">{label}</div>
-        <div className="text-[9px] text-white/20 uppercase font-black">{sub}</div>
-      </div>
-      <Plus size={14} className="ml-auto text-white/10 group-hover:text-violet-400" />
-    </div>
-  );
-}
-
-function TrackerDetail({ tracker, onClose }: { tracker: Tracker; onClose: () => void }) {
-  const { deleteTracker, updateTracker } = useAppStore();
+function TrackerDetail({ tracker, onClose, onEdit }: { tracker: Tracker; onClose: () => void; onEdit: () => void }) {
+  const { deleteTracker, updateTracker, reminders, deleteReminder } = useAppStore();
+  const [logValue, setLogValue] = useState<string>('');
+  const [logNote, setLogNote] = useState<string>('');
+  const [showLogForm, setShowLogForm] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   
   return (
     <div className="space-y-6">
@@ -464,13 +540,19 @@ function TrackerDetail({ tracker, onClose }: { tracker: Tracker; onClose: () => 
         <div className="w-20 h-20 rounded-2xl flex items-center justify-center text-4xl shadow-glow-sm" style={{ backgroundColor: `${tracker.color}20`, color: tracker.color, border: `1px solid ${tracker.color}40` }}>
           {tracker.icon}
         </div>
-        <div>
+        <div className="flex-1">
           <div className="px-2.5 py-1 rounded bg-white/5 border border-white/10 text-[9px] font-black uppercase tracking-widest text-white/40 mb-1 inline-block">
             {tracker.type}
           </div>
           <h3 className="text-2xl font-black text-white italic uppercase tracking-tighter">{tracker.title}</h3>
           <p className="text-xs text-white/40 font-medium">{tracker.description || 'System tracking in progress...'}</p>
         </div>
+        <button 
+          onClick={onEdit}
+          className="p-2 rounded-xl bg-white/5 hover:bg-white/10 transition-colors text-white/40 hover:text-white"
+        >
+          <Edit3 size={18} />
+        </button>
       </div>
 
       <div className="space-y-4">
@@ -482,11 +564,17 @@ function TrackerDetail({ tracker, onClose }: { tracker: Tracker; onClose: () => 
                 <p className="text-xs font-bold italic">No data points logged yet.</p>
              </div>
            ) : (
-             tracker.items.map(item => (
-               <div key={item.id} className="p-4 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between">
+             [...tracker.items].reverse().map(item => (
+               <div key={item.id} className="p-4 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between group">
                   <div>
-                    <div className="text-sm font-bold text-white">{item.title}</div>
-                    <div className="text-[10px] text-white/20 font-black uppercase tracking-tighter">Logged: {dfnsFormat(dfnsParseISO(item.dateCompleted!), 'MMM d, HH:mm')}</div>
+                    <div className="text-sm font-bold text-white flex items-center gap-2">
+                      {item.title}
+                      {item.value !== undefined && <span className="px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-400 text-[10px]">{item.value} {tracker.unit}</span>}
+                    </div>
+                    <div className="text-[10px] text-white/20 font-black uppercase tracking-tighter">
+                      {item.dateCompleted ? dfnsFormat(dfnsParseISO(item.dateCompleted), 'MMM d, HH:mm') : 'Unknown date'}
+                    </div>
+                    {item.notes && <p className="text-xs text-white/40 mt-1 italic">{item.notes}</p>}
                   </div>
                   <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400">
                      <CheckCircle size={14} />
@@ -497,29 +585,85 @@ function TrackerDetail({ tracker, onClose }: { tracker: Tracker; onClose: () => 
         </div>
       </div>
 
+      <AnimatePresence>
+        {showLogForm && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="space-y-4 overflow-hidden">
+            <div className="p-4 rounded-2xl bg-violet-500/5 border border-violet-500/20 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[9px] text-white/20 uppercase font-bold block mb-1">Entry Title</label>
+                  <input className="input-glass w-full px-3 py-2 text-xs" placeholder="What happened?" value={logNote} onChange={e => setLogNote(e.target.value)} />
+                </div>
+                {tracker.type === 'quantity' || tracker.type === 'progress' ? (
+                  <div>
+                    <label className="text-[9px] text-white/20 uppercase font-bold block mb-1">Value ({tracker.unit})</label>
+                    <input type="number" className="input-glass w-full px-3 py-2 text-xs" value={logValue} onChange={e => setLogValue(e.target.value)} />
+                  </div>
+                ) : null}
+              </div>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => {
+                    updateTracker(tracker.id, {
+                      items: [...tracker.items, { 
+                        id: generateId(), 
+                        title: logNote || `Operational Entry #${tracker.items.length + 1}`, 
+                        status: 'completed',
+                        value: logValue ? Number(logValue) : undefined,
+                        dateCompleted: new Date().toISOString() 
+                      }]
+                    });
+                    setLogValue('');
+                    setLogNote('');
+                    setShowLogForm(false);
+                    toast.success('Progress Logged! 📈');
+                  }}
+                  className="btn-glow flex-1 py-2 text-xs font-bold uppercase"
+                >
+                  Confirm Log
+                </button>
+                <button onClick={() => setShowLogForm(false)} className="btn-ghost px-4 py-2 text-xs">Cancel</button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="grid grid-cols-2 gap-3 pt-4 border-t border-white/5">
-        <button 
-          onClick={() => {
-            updateTracker(tracker.id, {
-              items: [...tracker.items, { 
-                id: generateId(), 
-                title: `Operational Entry #${tracker.items.length + 1}`, 
-                status: 'completed',
-                dateCompleted: new Date().toISOString() 
-              }]
-            });
-            toast.success('Progress Logged! 📈');
-          }}
-          className="btn-glow py-4 text-sm font-black uppercase tracking-widest"
-        >
-          + Log Progress
-        </button>
-        <button 
-          onClick={() => { if(confirm('Terminate this mission?')) { deleteTracker(tracker.id); onClose(); toast.success('Tracker Deleted'); } }}
-          className="py-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-black uppercase tracking-widest hover:bg-red-500/20 transition-all flex items-center justify-center gap-2"
-        >
-          <Trash2 size={16} /> Terminate
-        </button>
+        {confirmDelete ? (
+          <div className="col-span-2 flex items-center gap-3 bg-red-500/10 p-3 rounded-2xl border border-red-500/20">
+            <span className="text-xs font-bold text-red-400 flex-1">Permanently terminate this mission?</span>
+            <button 
+              onClick={() => {
+                deleteTracker(tracker.id);
+                // Cleanup reminder
+                const reminder = reminders.find(r => r.metadata?.type === 'system' && r.metadata?.source === `tracker-${tracker.id}`);
+                if (reminder) deleteReminder(reminder.id);
+                onClose();
+                toast.success('Tracker Deleted');
+              }}
+              className="px-4 py-2 rounded-xl bg-red-500 text-white text-xs font-black uppercase"
+            >
+              Yes, Terminate
+            </button>
+            <button onClick={() => setConfirmDelete(false)} className="text-white/40 hover:text-white text-xs font-bold">Cancel</button>
+          </div>
+        ) : (
+          <>
+            <button 
+              onClick={() => setShowLogForm(true)}
+              className="btn-glow py-4 text-sm font-black uppercase tracking-widest"
+            >
+              + Log Progress
+            </button>
+            <button 
+              onClick={() => setConfirmDelete(true)}
+              className="py-4 rounded-2xl bg-white/5 border border-white/5 text-white/20 text-xs font-black uppercase tracking-widest hover:bg-red-500/10 hover:text-red-400 transition-all flex items-center justify-center gap-2"
+            >
+              <Trash2 size={16} /> Delete
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

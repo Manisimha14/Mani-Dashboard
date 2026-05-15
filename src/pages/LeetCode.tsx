@@ -1,62 +1,106 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppStore } from '../store/useAppStore';
-import { Plus, X, ExternalLink, Trash2, Check, Filter, Search, Flame, ChevronDown } from 'lucide-react';
+import { 
+  Plus, X, ExternalLink, Trash2, Check, Filter, Search, Flame, 
+  ChevronDown, MessageSquare, AlertCircle, Loader2 
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import Modal from '../components/Modal';
 import { LEETCODE_TOPICS } from '../lib/data';
 import type { LeetCodeProblem, LeetCodeDifficulty, LeetCodeStatus } from '../types';
 import { todayString, generateId } from '../lib/utils';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
 import { showUndoToast } from '../components/UndoToast';
+import { useMemo, useEffect, useCallback, useRef } from 'react';
 
 const DIFFICULTIES: LeetCodeDifficulty[] = ['Easy', 'Medium', 'Hard'];
 const DIFF_COLORS: Record<LeetCodeDifficulty, string> = { Easy: '#34d399', Medium: '#fbbf24', Hard: '#f87171' };
 
 export default function LeetCode() {
-  const { problems, addProblem, deleteProblem, toggleProblem, codingStreak } = useAppStore();
+  const { 
+    problems, addProblem, deleteProblem, toggleProblem, 
+    codingStreak, undoLastAction 
+  } = useAppStore();
   const [showForm, setShowForm] = useState(false);
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [filterDiff, setFilterDiff] = useState<LeetCodeDifficulty | 'All'>('All');
   const [filterStatus, setFilterStatus] = useState<'All' | 'solved' | 'attempted' | 'todo'>('All');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  
   const [form, setForm] = useState({
     name: '', link: '', difficulty: 'Easy' as LeetCodeDifficulty,
     topic: 'Array', status: 'solved' as LeetCodeStatus, notes: '',
     date: todayString(), completed: true,
   });
 
-  const solved = problems.filter(p => p.completed);
-  const easy = solved.filter(p => p.difficulty === 'Easy').length;
-  const medium = solved.filter(p => p.difficulty === 'Medium').length;
-  const hard = solved.filter(p => p.difficulty === 'Hard').length;
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(searchInput), 150);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
-  const filtered = problems.filter(p => {
-    const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.topic.toLowerCase().includes(search.toLowerCase());
-    const matchDiff = filterDiff === 'All' || p.difficulty === filterDiff;
-    const matchStatus = filterStatus === 'All' || p.status === filterStatus;
-    return matchSearch && matchDiff && matchStatus;
-  });
+  // Keyboard shortcut
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'n' && !showForm && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        setShowForm(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showForm]);
+
+  // Stats
+  const solved = useMemo(() => problems.filter(p => p.completed), [problems]);
+  const easy = useMemo(() => solved.filter(p => p.difficulty === 'Easy').length, [solved]);
+  const medium = useMemo(() => solved.filter(p => p.difficulty === 'Medium').length, [solved]);
+  const hard = useMemo(() => solved.filter(p => p.difficulty === 'Hard').length, [solved]);
+
+  const filtered = useMemo(() => {
+    return problems.filter(p => {
+      const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
+        p.topic.toLowerCase().includes(search.toLowerCase());
+      const matchDiff = filterDiff === 'All' || p.difficulty === filterDiff;
+      const matchStatus = filterStatus === 'All' || p.status === filterStatus;
+      return matchSearch && matchDiff && matchStatus;
+    });
+  }, [problems, search, filterDiff, filterStatus]);
 
   // Topic distribution
-  const topicData = LEETCODE_TOPICS
+  const topicData = useMemo(() => LEETCODE_TOPICS
     .map(t => ({ topic: t, count: solved.filter(p => p.topic === t).length }))
     .filter(t => t.count > 0)
     .sort((a, b) => b.count - a.count)
-    .slice(0, 8);
+    .slice(0, 8), [solved]);
 
-  const diffData = [
-    { name: 'Easy', value: easy, color: '#34d399' },
-    { name: 'Medium', value: medium, color: '#fbbf24' },
-    { name: 'Hard', value: hard, color: '#f87171' },
-  ].filter(d => d.value > 0);
+  const diffData = useMemo(() => [
+    { name: 'Easy', value: easy, color: DIFF_COLORS.Easy },
+    { name: 'Medium', value: medium, color: DIFF_COLORS.Medium },
+    { name: 'Hard', value: hard, color: DIFF_COLORS.Hard },
+  ], [easy, medium, hard]);
 
   const handleAdd = () => {
     if (!form.name.trim()) { toast.error('Problem name required'); return; }
+    if (form.link && !form.link.startsWith('https://leetcode.com')) {
+      toast.error('Please enter a valid LeetCode URL');
+      return;
+    }
+    
     addProblem({ ...form, timeSpent: 0 });
     toast.success('Problem logged! 💻');
     setForm({ name: '', link: '', difficulty: 'Easy', topic: 'Array', status: 'solved', notes: '', date: todayString(), completed: true });
     setShowForm(false);
+  };
+
+  const handleDelete = (id: string) => {
+    setDeletingId(id);
+    // Immediate state removal for UI snappiness
+    deleteProblem(id);
+    showUndoToast('Problem deleted', 'LeetCode');
+    setTimeout(() => setDeletingId(null), 500);
   };
 
   return (
@@ -74,7 +118,7 @@ export default function LeetCode() {
               <span className="text-sm font-semibold text-orange-400">{codingStreak.currentStreak}d streak</span>
             </div>
           )}
-          <button onClick={() => setShowForm(true)} className="btn-glow px-4 py-2 flex items-center gap-2 text-sm">
+          <button onClick={() => { setForm(f => ({ ...f, date: todayString() })); setShowForm(true); }} className="btn-glow px-4 py-2 flex items-center gap-2 text-sm">
             <Plus size={16} /> Log Problem
           </button>
         </div>
@@ -100,7 +144,7 @@ export default function LeetCode() {
         {/* Difficulty pie */}
         <div className="glass-card p-5">
           <h3 className="font-semibold text-white mb-4">Difficulty Breakdown</h3>
-          {diffData.length === 0 ? (
+          {solved.length === 0 ? (
             <div className="h-40 flex items-center justify-center text-white/30 text-sm">No data yet</div>
           ) : (
             <ResponsiveContainer width="100%" height={160}>
@@ -114,7 +158,7 @@ export default function LeetCode() {
           )}
           <div className="flex justify-center gap-4 mt-2">
             {diffData.map(d => (
-              <div key={d.name} className="flex items-center gap-1.5 text-xs">
+              <div key={d.name} className={`flex items-center gap-1.5 text-xs transition-opacity ${d.value === 0 ? 'opacity-25' : 'opacity-100'}`}>
                 <span className="w-2 h-2 rounded-full" style={{ background: d.color }} />
                 <span className="text-white/50">{d.name}: {d.value}</span>
               </div>
@@ -147,9 +191,9 @@ export default function LeetCode() {
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
           <input
             className="input-glass w-full pl-9 pr-3 py-2 text-sm"
-            placeholder="Search problems..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
+            placeholder="Search problems or topics... (N for new)"
+            value={searchInput}
+            onChange={e => setSearchInput(e.target.value)}
           />
         </div>
         <select
@@ -209,23 +253,33 @@ export default function LeetCode() {
                     {problem.topic}
                   </span>
                 </div>
-                <div className="text-xs text-white/30 mt-1">{problem.date}</div>
+                <div className="flex items-center gap-3 mt-1">
+                  <div className="text-[10px] text-white/30 uppercase font-bold tracking-widest">{problem.date}</div>
+                  {problem.notes && (
+                    <div className="flex items-center gap-1 text-[10px] text-violet-400/60 font-medium italic">
+                      <MessageSquare size={10} /> Has notes
+                    </div>
+                  )}
+                </div>
+                {problem.notes && !problem.completed && (
+                  <div className="mt-2 p-2 bg-white/5 rounded-lg text-xs text-white/40 border border-white/5 italic">
+                    {problem.notes}
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center gap-2">
                 {problem.link && (
-                  <a href={problem.link} target="_blank" rel="noopener noreferrer" className="text-white/30 hover:text-violet-400 transition-colors">
+                  <a href={problem.link} target="_blank" rel="noopener noreferrer" className="p-2 text-white/30 hover:text-violet-400 transition-colors">
                     <ExternalLink size={14} />
                   </a>
                 )}
                 <button 
-                  onClick={() => { 
-                    deleteProblem(problem.id); 
-                    showUndoToast('Problem deleted', 'LeetCode'); 
-                  }} 
-                  className="text-white/20 hover:text-red-400 transition-colors"
+                  onClick={() => handleDelete(problem.id)} 
+                  disabled={deletingId === problem.id}
+                  className="p-2 text-white/20 hover:text-red-400 transition-colors disabled:opacity-50"
                 >
-                  <Trash2 size={14} />
+                  {deletingId === problem.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
                 </button>
               </div>
             </motion.div>
@@ -268,6 +322,15 @@ export default function LeetCode() {
             <div>
               <label className="text-xs text-white/40 mb-1 block">Date</label>
               <input type="date" className="input-glass w-full px-3 py-2 text-sm" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+            </div>
+            <div className="col-span-2">
+              <label className="text-xs text-white/40 mb-1 block">Notes & Key Learnings</label>
+              <textarea 
+                className="input-glass w-full px-3 py-2 text-sm min-h-[80px]" 
+                placeholder="Key insights, patterns to remember..." 
+                value={form.notes} 
+                onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} 
+              />
             </div>
           </div>
 

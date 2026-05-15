@@ -1,4 +1,5 @@
 export * from './trackers';
+export * from './launcher';
 
 // ─── Book Types ────────────────────────────────────────────────────────────
 export interface Chapter {
@@ -57,6 +58,8 @@ export interface FocusSession {
   growthTheme: GrowthTheme;
   ambience: AmbienceType;
   reflection?: string;
+  mood?: string;
+  productivityScore?: number;
   mode: PomodoroMode;
 }
 
@@ -105,13 +108,41 @@ export interface DailyActivity {
 
 // ─── User Settings ────────────────────────────────────────────────────────────
 export type AppMood = 'focused' | 'chill' | 'grind' | 'zen' | 'creative';
-export type AppTheme = 'dark_pro' | 'oled' | 'cyberpunk' | 'forest' | 'nebula' | 'retro';
+export type ThemeVars = {
+  '--bg-primary': string;
+  '--bg-secondary': string;
+  '--bg-card': string;
+  '--border': string;
+  '--text-primary': string;
+  '--text-secondary': string;
+  '--text-muted': string;
+  '--success': string;
+  '--warning': string;
+  '--danger': string;
+  '--accent-glow': string;
+  '--card-shadow': string;
+  '--radius-card': string;
+  '--font-main': string;
+};
+
+export interface ThemeDefinition {
+  id: AppTheme;
+  name: string;
+  emoji: string;
+  description: string;
+  vars: ThemeVars;
+  previewColors: string[]; // [primary, secondary, accent]
+}
+
+export type AppTheme = 
+  | 'dark_pro' | 'oled' | 'cyberpunk' | 'forest' | 'nebula' 
+  | 'midnight_glass' | 'aurora' | 'hacker' | 'paper_warm' | 'solarized';
 
 export interface UserSettings {
   theme: AppTheme;
-  accentColor: string; // Hex color
+  accentColor: string; 
   mood: AppMood;
-  animationIntensity: 'none' | 'subtle' | 'full';
+  animationIntensity: 'none' | 'subtle' | 'full' | 'system';
   reducedMotion: boolean;
   compactMode: boolean;
   customQuote?: string;
@@ -119,6 +150,7 @@ export interface UserSettings {
   onboardingComplete: boolean;
   dashboardLayout: string[];
   petType: 'bonsai' | 'owl' | 'fox' | 'orb';
+  keyboardShortcuts: boolean;
 }
 
 // ─── App State ────────────────────────────────────────────────────────────────

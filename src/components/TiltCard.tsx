@@ -1,20 +1,21 @@
-import React, { useState, useRef } from 'react';
+import React from 'react';
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 
-interface TiltCardProps {
+interface Props {
   children: React.ReactNode;
   className?: string;
+  style?: React.CSSProperties;
 }
 
-export default function TiltCard({ children, className = "" }: TiltCardProps) {
+export default function TiltCard({ children, className, style }: Props) {
   const x = useMotionValue(0);
   const y = useMotionValue(0);
 
   const mouseXSpring = useSpring(x);
   const mouseYSpring = useSpring(y);
 
-  const rotateX = useTransform(mouseYSpring, [-0.5, 0.5], ["7deg", "-7deg"]);
-  const rotateY = useTransform(mouseXSpring, [-0.5, 0.5], ["-7deg", "7deg"]);
+  const rotateX = useTransform(mouseYSpring, [-0.5, 0.5], ["10deg", "-10deg"]);
+  const rotateY = useTransform(mouseXSpring, [-0.5, 0.5], ["-10deg", "10deg"]);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -41,25 +42,12 @@ export default function TiltCard({ children, className = "" }: TiltCardProps) {
         rotateX,
         rotateY,
         transformStyle: "preserve-3d",
+        ...style
       }}
-      className={`relative group ${className}`}
+      className={className}
     >
-      <div 
-        style={{ transform: "translateZ(20px)" }} 
-        className="h-full w-full relative overflow-hidden rounded-[inherit]"
-      >
+      <div style={{ transform: "translateZ(50px)" }}>
         {children}
-        
-        {/* Gloss Shine Overlay */}
-        <motion.div
-          className="absolute inset-0 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-          style={{
-            background: useTransform(
-              [mouseXSpring, mouseYSpring],
-              ([x, y]: any) => `radial-gradient(circle at ${50 + (x as number) * 100}% ${50 + (y as number) * 100}%, rgba(255,255,255,0.08) 0%, transparent 60%)`
-            )
-          }}
-        />
       </div>
     </motion.div>
   );

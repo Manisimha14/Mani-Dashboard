@@ -1,7 +1,7 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { todayString, generateId } from '../lib/utils';
-import type { Reminder, AppNotification } from '../types/reminder';
+import type { Reminder, AppNotification, ISODateString } from '../types/reminder';
 import { isAfter, parseISO, addMinutes, addDays, addWeeks, addMonths, setHours, setMinutes } from 'date-fns';
 
 export function useReminderEngine() {
@@ -53,11 +53,14 @@ export function useReminderEngine() {
       title: reminder.title,
       message: reminder.message,
       category: 'reminders',
-      metadata: { reminderId: reminder.id }
+      priority: 'normal',
+      createdAt: new Date().toISOString() as ISODateString,
+      updatedAt: new Date().toISOString() as ISODateString,
+      metadata: { type: 'system', source: 'reminder-engine', reminderId: reminder.id }
     });
 
     // 5. Update last triggered
-    updateReminder(reminder.id, { lastTriggeredAt: new Date().toISOString() });
+    updateReminder(reminder.id, { lastTriggeredAt: new Date().toISOString() as ISODateString });
 
     // 6. Handle Recurrence
     if (reminder.recurrence !== 'none') {
@@ -77,7 +80,7 @@ export function useReminderEngine() {
           break;
       }
 
-      updateReminder(reminder.id, { scheduledAt: nextDate.toISOString() });
+      updateReminder(reminder.id, { scheduledAt: nextDate.toISOString() as ISODateString });
     } else {
       updateReminder(reminder.id, { enabled: false, completed: true });
     }
@@ -110,7 +113,10 @@ export function useReminderEngine() {
           addNotification({
             title: 'Neural Engine Idle',
             message: 'No deep work detected today. Want a quick 15m startup session? 🌱',
-            category: 'focus'
+            category: 'focus',
+            priority: 'normal',
+            createdAt: new Date().toISOString() as ISODateString,
+            updatedAt: new Date().toISOString() as ISODateString,
           });
         }
       }
@@ -121,7 +127,10 @@ export function useReminderEngine() {
           addNotification({
             title: 'Library Silence',
             message: 'Your reading streak is waiting. Even one page counts as progress. 📚',
-            category: 'reminders'
+            category: 'reminders',
+            priority: 'normal',
+            createdAt: new Date().toISOString() as ISODateString,
+            updatedAt: new Date().toISOString() as ISODateString,
           });
         }
       }
@@ -132,7 +141,10 @@ export function useReminderEngine() {
           addNotification({
             title: 'Logic Pulse Fading',
             message: 'Your coding streak needs a pulse. Solve one quick problem to keep it alive! 🔥',
-            category: 'streak'
+            category: 'streak',
+            priority: 'normal',
+            createdAt: new Date().toISOString() as ISODateString,
+            updatedAt: new Date().toISOString() as ISODateString,
           });
         }
       }

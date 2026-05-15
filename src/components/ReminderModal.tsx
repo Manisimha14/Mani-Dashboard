@@ -3,7 +3,7 @@ import Modal from './Modal';
 import { useAppStore } from '../store/useAppStore';
 import { todayString, generateId } from '../lib/utils';
 import { Calendar, Clock, Repeat, Tag, Sparkles } from 'lucide-react';
-import type { ReminderRecurrence, ReminderCategory, ReminderType } from '../types/reminder';
+import type { ReminderRecurrence, ReminderDomain, ScheduleType, ISODateString } from '../types/reminder';
 import toast from 'react-hot-toast';
 import { addHours, format, startOfHour, addDays, startOfWeek, nextSunday } from 'date-fns';
 
@@ -12,7 +12,7 @@ interface ReminderModalProps {
   onClose: () => void;
 }
 
-const CATEGORIES: ReminderCategory[] = ['reading', 'coding', 'focus', 'habit', 'goal', 'streak', 'system', 'custom'];
+const DOMAINS: ReminderDomain[] = ['reading', 'leetcode', 'focus', 'habit', 'goal', 'streak', 'task', 'system', 'custom'];
 const RECURRENCES: ReminderRecurrence[] = ['none', 'daily', 'weekly', 'monthly', 'weekdays', 'weekends'];
 
 export default function ReminderModal({ open, onClose }: ReminderModalProps) {
@@ -22,23 +22,24 @@ export default function ReminderModal({ open, onClose }: ReminderModalProps) {
     message: '',
     date: format(new Date(), 'yyyy-MM-dd'),
     time: format(addHours(startOfHour(new Date()), 1), 'HH:mm'),
-    category: 'custom' as ReminderCategory,
+    domain: 'custom' as ReminderDomain,
     recurrence: 'none' as ReminderRecurrence,
-    type: 'task' as ReminderType,
+    scheduleType: 'one-time' as ScheduleType,
   });
 
   const handleCreate = () => {
     if (!form.title.trim()) { toast.error('Title is required'); return; }
     
-    const scheduledAt = new Date(`${form.date}T${form.time}`).toISOString();
+    const scheduledAt = new Date(`${form.date}T${form.time}`).toISOString() as ISODateString;
     
     addReminder({
       title: form.title,
       message: form.message || `Reminder: ${form.title}`,
-      category: form.category,
-      type: form.type,
+      domain: form.domain,
+      scheduleType: form.scheduleType,
       scheduledAt,
       recurrence: form.recurrence,
+      status: 'active',
       enabled: true,
       completed: false,
     });
@@ -50,9 +51,9 @@ export default function ReminderModal({ open, onClose }: ReminderModalProps) {
       message: '',
       date: format(new Date(), 'yyyy-MM-dd'),
       time: format(addHours(startOfHour(new Date()), 1), 'HH:mm'),
-      category: 'custom',
+      domain: 'custom',
       recurrence: 'none',
-      type: 'task',
+      scheduleType: 'one-time',
     });
   };
 
@@ -145,10 +146,10 @@ export default function ReminderModal({ open, onClose }: ReminderModalProps) {
                 <Tag size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20" />
                 <select 
                   className="input-glass w-full pl-10 pr-4 py-2.5 text-sm appearance-none bg-transparent"
-                  value={form.category}
-                  onChange={e => setForm(f => ({ ...f, category: e.target.value as any }))}
+                  value={form.domain}
+                  onChange={e => setForm(f => ({ ...f, domain: e.target.value as any }))}
                 >
-                  {CATEGORIES.map(c => <option key={c} value={c} className="bg-[#1a1b2e]">{c}</option>)}
+                  {DOMAINS.map(c => <option key={c} value={c} className="bg-[#1a1b2e]">{c}</option>)}
                 </select>
               </div>
             </div>

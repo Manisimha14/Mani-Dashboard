@@ -18,6 +18,8 @@ import { useReminderEngine } from '../hooks/useReminderEngine';
 import NotificationCenter from './NotificationCenter';
 import ReminderModal from './ReminderModal';
 import ShortcutsHelp from './ShortcutsHelp';
+import QuickLauncherModal from './QuickLauncherModal';
+import { useShortcuts } from '../hooks/useShortcuts';
 
 export default function Layout() {
   const [cmdOpen, setCmdOpen] = useState(false);
@@ -30,6 +32,7 @@ export default function Layout() {
   const location = useLocation();
   const { play } = useSoundFX();
   useRipple();
+  useShortcuts();
 
   // Unlock audio on first interaction
   React.useEffect(() => {
@@ -51,14 +54,6 @@ export default function Layout() {
 
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-        e.preventDefault();
-        setCmdOpen(prev => !prev);
-      }
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'R') {
-        e.preventDefault();
-        setRemModalOpen(prev => !prev);
-      }
       if (e.key === '?' && !cmdOpen && !remModalOpen) {
         setShortcutsOpen(prev => !prev);
       }
@@ -147,6 +142,7 @@ export default function Layout() {
       </main>
 
       <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
+      <QuickLauncherModal />
       <ReminderModal open={remModalOpen} onClose={() => setRemModalOpen(false)} />
       <ShortcutsHelp isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
 

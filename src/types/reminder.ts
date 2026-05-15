@@ -1,3 +1,23 @@
+/**
+ * Utility types for stricter type safety
+ */
+export type ISODateString = string & { readonly __brand: 'ISODateString' };
+export type HHMMString = string & { readonly __brand: 'HHMMString' }; // Format: "HH:mm"
+
+export type RequireAtLeastOne<T> = {
+  [K in keyof T]-?: Required<Pick<T, K>> & Partial<Pick<T, Exclude<keyof T, K>>>;
+}[keyof T];
+
+export type AppRoute = '/focus' | '/reading' | '/leetcode' | '/analytics' | '/trackers' | '/dashboard';
+
+/**
+ * Audit fields for tracking creation and modification
+ */
+export interface Auditable {
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+}
+
 export type ReminderRecurrence = 
   | 'none' 
   | 'daily' 
@@ -7,67 +27,74 @@ export type ReminderRecurrence =
   | 'weekends' 
   | 'custom';
 
-export type ReminderCategory = 
+export type ReminderDomain = 
   | 'reading' 
-  | 'coding' 
+  | 'leetcode' 
   | 'focus' 
   | 'habit' 
   | 'goal' 
   | 'streak' 
+  | 'task'
   | 'system' 
   | 'custom';
 
-export type ReminderType = 
-  | 'one-time'
-  | 'daily'
-  | 'weekly'
-  | 'monthly'
-  | 'custom'
-  | 'streak-protection'
-  | 'inactivity'
-  | 'deadline'
-  | 'focus'
-  | 'reading'
-  | 'leetcode'
-  | 'task';
+export type ScheduleType = 'one-time' | 'recurring' | 'smart';
 
-export interface Reminder {
+export type ReminderStatus = 'active' | 'snoozed' | 'completed' | 'disabled';
+
+interface BaseReminder extends Auditable {
   id: string;
   title: string;
   message: string;
-  category: ReminderCategory;
-  type: ReminderType;
-  scheduledAt: string; // ISO string
+  domain: ReminderDomain;
+  scheduleType: ScheduleType;
+  scheduledAt: ISODateString;
   recurrence: ReminderRecurrence;
-  enabled: boolean;
-  completed: boolean;
-  snoozedUntil?: string; // ISO string
-  lastTriggeredAt?: string; // ISO string
-  createdAt: string;
-  updatedAt: string;
-  smartRules?: {
-    triggerOnInactivityHours?: number;
-    triggerOnStreakAtRisk?: boolean;
-    triggerOnGoalBehind?: boolean;
+  lastTriggeredAt?: ISODateString;
+  smartRules?: RequireAtLeastOne<{
+    /** Must be a positive integer */
+    triggerOnInactivityHours: number;
+    triggerOnStreakAtRisk: boolean;
+    triggerOnGoalBehind: boolean;
+  }>;
+  metadata?: {
+    type: 'system' | 'custom' | 'goal' | 'task';
+    source?: string;
+    [key: string]: any;
   };
 }
 
-export interface AppNotification {
+export type Reminder = 
+  | (BaseReminder & { status: 'active';    enabled: true;  completed: false; snoozedUntil?: never })
+  | (BaseReminder & { status: 'snoozed';   enabled: true;  completed: false; snoozedUntil: ISODateString })
+  | (BaseReminder & { status: 'completed'; enabled: false; completed: true;  snoozedUntil?: never })
+  | (BaseReminder & { status: 'disabled';  enabled: false; completed: false; snoozedUntil?: never });
+
+export interface AppNotification extends Auditable {
   id: string;
   title: string;
   message: string;
   category: 'reminders' | 'streak' | 'achievements' | 'focus' | 'productivity' | 'goals';
-  timestamp: string;
+  timestamp: ISODateString;
   read: boolean;
-  actionUrl?: string;
-  metadata?: any;
+  actionUrl?: AppRoute;
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  expiresAt?: ISODateString;
+  metadata?: 
+    | { type: 'streak'; count: number; streakType: 'reading' | 'coding' | 'focus' }
+    | { type: 'achievement'; id: string }
+    | { type: 'session'; duration: number; mode: string }
+    | { type: 'goal'; id: string; progress: number }
+    | { type: 'system'; source: string; reminderId?: string };
 }
 
 export interface ReminderSettings {
   quietHours: {
     enabled: boolean;
-    start: string; // "22:00"
-    end: string;   // "07:00"
+    start: HHMMString;
+    end: HHMMString;
+    /** Explicitly marks if the range spans across midnight (e.g., 22:00 to 07:00) */
+    crossesMidnight: boolean;
   };
   muteWeekends: boolean;
   muteDuringFocus: boolean;

@@ -3,13 +3,19 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import type {
   Book, LeetCodeProblem, FocusSession, Achievement,
   PomodoroSettings, UserSettings, StreakData, DailyActivity,
-  Tracker, TrackerItem
+  Tracker, TrackerItem, LeetCodeStatus,
+  AppLink, LauncherState
 } from '../types';
-import type { Reminder, AppNotification, ReminderSettings } from '../types/reminder';
+import type { Reminder, AppNotification, ReminderSettings, ISODateString, HHMMString } from '../types/reminder';
 import { DEFAULT_ACHIEVEMENTS, BOOK_CHAPTERS } from '../lib/data';
-import { todayString, calculateStreak, generateId } from '../lib/utils';
-import { format } from 'date-fns';
+import { todayString, calculateStreak, generateId, updateStreakData } from '../lib/utils';
 import { showAchievementToast } from '../lib/toasts';
+
+type UndoAction =
+  | { type: 'delete_problem'; data: LeetCodeProblem; rollback: () => void }
+  | { type: 'delete_tracker'; data: Tracker; rollback: () => void }
+  | { type: 'delete_session'; data: FocusSession; rollback: () => void }
+  | { type: 'complete_chapter'; data: { id: number; prevStatus: string; prevCompleted: boolean }; rollback: () => void };
 
 interface AppStore {
   // State
@@ -26,7 +32,7 @@ interface AppStore {
   trackers: Tracker[];
 
   // Tracker actions
-  addTracker: (tracker: Omit<Tracker, 'id' | 'createdAt'>) => void;
+  addTracker: (tracker: Omit<Tracker, 'id' | 'createdAt'> & { id?: string }) => void;
   updateTracker: (id: string, updates: Partial<Tracker>) => void;
   deleteTracker: (id: string) => void;
   addTrackerItem: (trackerId: string, item: Omit<TrackerItem, 'id'>) => void;
@@ -73,8 +79,17 @@ interface AppStore {
   markNotificationRead: (id: string) => void;
   clearNotifications: () => void;
 
+  // Launcher actions
+  launcher: LauncherState;
+  addAppLink: (link: Omit<AppLink, 'id' | 'visitCount' | 'isPinned' | 'createdAt' | 'updatedAt'>) => void;
+  updateAppLink: (id: string, updates: Partial<AppLink>) => void;
+  deleteAppLink: (id: string) => void;
+  recordAppVisit: (id: string) => void;
+  toggleAppPin: (id: string) => void;
+  updateLauncher: (updates: Partial<LauncherState>) => void;
+
   // Undo support
-  lastAction: { type: string; data: any; rollback: () => void } | null;
+  lastAction: UndoAction | null;
   undoLastAction: () => void;
 }
 
@@ -115,6 +130,24 @@ const DEFAULT_USER_SETTINGS: UserSettings = {
   onboardingComplete: false,
   dashboardLayout: ['stats', 'focus', 'reading', 'coding', 'achievements'],
   petType: 'owl',
+  keyboardShortcuts: true,
+};
+
+const DEFAULT_APP_LINKS: AppLink[] = [
+  { id: '1', name: 'GitHub', url: 'https://github.com', iconType: 'lucide', iconValue: 'LayoutGrid', category: 'development', visitCount: 0, isPinned: true, color: '#2dba4e', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: '2', name: 'YouTube', url: 'https://youtube.com', iconType: 'lucide', iconValue: 'Play', category: 'entertainment', visitCount: 0, isPinned: false, color: '#ff0000', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: '3', name: 'ChatGPT', url: 'https://chat.openai.com', iconType: 'lucide', iconValue: 'MessageSquare', category: 'utilities', visitCount: 0, isPinned: true, color: '#10a37f', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: '4', name: 'LeetCode', url: 'https://leetcode.com', iconType: 'lucide', iconValue: 'Code2', category: 'learning', visitCount: 0, isPinned: true, color: '#ffa116', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+];
+
+const DEFAULT_LAUNCHER_STATE: LauncherState = {
+  schemaVersion: 2,
+  appLinks: DEFAULT_APP_LINKS,
+  searchQuery: '',
+  layoutMode: 'grid',
+  sortMode: 'manual',
+  showPinnedOnly: false,
+  launcherOpen: false,
 };
 
 export const useAppStore = create<AppStore>()(
@@ -134,50 +167,18 @@ export const useAppStore = create<AppStore>()(
       reminders: [],
       notifications: [],
       reminderSettings: {
-        quietHours: { enabled: false, start: '22:00', end: '07:00' },
+        quietHours: { enabled: false, start: '22:00' as HHMMString, end: '07:00' as HHMMString, crossesMidnight: true },
         muteWeekends: false,
         muteDuringFocus: true,
         soundEnabled: true,
         smartRemindersEnabled: true,
         browserNotificationsEnabled: true,
       },
-      trackers: [
-        {
-          id: 'default-reading',
-          title: 'Reading',
-          icon: '📚',
-          color: '#8b5cf6',
-          type: 'progress',
-          target: 51,
-          unit: 'chapters',
-          items: [],
-          createdAt: new Date().toISOString()
-        },
-        {
-          id: 'default-coding',
-          title: 'Daily Coding',
-          icon: '💻',
-          color: '#06b6d4',
-          type: 'progress',
-          target: 1,
-          unit: 'session',
-          items: [],
-          createdAt: new Date().toISOString()
-        },
-        {
-          id: 'default-gym',
-          title: 'Gym Sessions',
-          icon: '🏋️',
-          color: '#ef4444',
-          type: 'habit',
-          items: [],
-          createdAt: new Date().toISOString()
-        }
-      ],
+      trackers: [],
 
       addTracker: (tracker) => {
         set(state => ({
-          trackers: [...state.trackers, { ...tracker, id: generateId(), createdAt: new Date().toISOString() }]
+          trackers: [...state.trackers, { id: generateId(), ...tracker, createdAt: new Date().toISOString() as ISODateString }]
         }));
       },
       updateTracker: (id, updates) => {
@@ -215,38 +216,84 @@ export const useAppStore = create<AppStore>()(
         }));
       },
 
+      // Launcher actions
+      launcher: DEFAULT_LAUNCHER_STATE,
+      addAppLink: (link) => {
+        set(state => ({
+          launcher: {
+            ...state.launcher,
+            appLinks: [
+              ...state.launcher.appLinks, 
+              { 
+                ...link, 
+                id: generateId(), 
+                visitCount: 0, 
+                isPinned: false, 
+                createdAt: new Date().toISOString(), 
+                updatedAt: new Date().toISOString() 
+              }
+            ]
+          }
+        }));
+      },
+      updateAppLink: (id, updates) => {
+        set(state => ({
+          launcher: {
+            ...state.launcher,
+            appLinks: state.launcher.appLinks.map(l => l.id === id ? { ...l, ...updates, updatedAt: new Date().toISOString() } : l)
+          }
+        }));
+      },
+      deleteAppLink: (id) => {
+        set(state => ({
+          launcher: {
+            ...state.launcher,
+            appLinks: state.launcher.appLinks.filter(l => l.id !== id)
+          }
+        }));
+      },
+      recordAppVisit: (id) => {
+        set(state => ({
+          launcher: {
+            ...state.launcher,
+            appLinks: state.launcher.appLinks.map(l => l.id === id ? { ...l, visitCount: l.visitCount + 1, lastVisited: new Date().toISOString() } : l)
+          }
+        }));
+      },
+      toggleAppPin: (id) => {
+        set(state => ({
+          launcher: {
+            ...state.launcher,
+            appLinks: state.launcher.appLinks.map(l => l.id === id ? { ...l, isPinned: !l.isPinned, updatedAt: new Date().toISOString() } : l)
+          }
+        }));
+      },
+      updateLauncher: (updates) => {
+        set(state => ({
+          launcher: { ...state.launcher, ...updates }
+        }));
+      },
+
       updateChapter: (chapterId, updates) => {
         set(state => {
           const chapters = state.book.chapters.map(ch =>
-            ch.id === chapterId
-              ? {
-                  ...ch,
-                  ...updates,
-                  dateCompleted: updates.completed && !ch.completed ? todayString() : ch.dateCompleted,
-                }
-              : ch
+            ch.id === chapterId ? { ...ch, ...updates, dateCompleted: updates.completed && !ch.completed ? todayString() : ch.dateCompleted } : ch
           );
 
-          // Update reading streak if completing a chapter today
           let readingStreak = state.readingStreak;
           if (updates.completed) {
-            const history = { ...readingStreak.history, [todayString()]: true };
-            const { current, longest } = calculateStreak(history);
-            readingStreak = {
-              currentStreak: current,
-              longestStreak: Math.max(longest, state.readingStreak.longestStreak),
-              lastActivityDate: todayString(),
-              history,
-            };
+            readingStreak = updateStreakData(state.readingStreak);
           }
 
           return {
             book: { ...state.book, chapters },
-            readingStreak,
+            readingStreak
           };
         });
 
-        get().logActivity('reading', 1);
+        if (updates.completed !== undefined) {
+          get().logActivity('reading', updates.completed ? 1 : -1);
+        }
         get().checkAndUnlockAchievements();
       },
 
@@ -257,24 +304,18 @@ export const useAppStore = create<AppStore>()(
       addProblem: (problem) => {
         const newProblem = { ...problem, id: generateId() };
         set(state => {
-          // Update coding streak
           let codingStreak = state.codingStreak;
           if (problem.completed) {
-            const history = { ...codingStreak.history, [todayString()]: true };
-            const { current, longest } = calculateStreak(history);
-            codingStreak = {
-              currentStreak: current,
-              longestStreak: Math.max(longest, state.codingStreak.longestStreak),
-              lastActivityDate: todayString(),
-              history,
-            };
+            codingStreak = updateStreakData(state.codingStreak);
           }
           return {
             problems: [newProblem, ...state.problems],
             codingStreak,
           };
         });
-        get().logActivity('coding', 1);
+        if (problem.completed) {
+          get().logActivity('coding', 1);
+        }
         get().checkAndUnlockAchievements();
       },
 
@@ -289,7 +330,6 @@ export const useAppStore = create<AppStore>()(
         const problem = get().problems.find(p => p.id === id);
         if (!problem) return;
         
-        // Save for undo
         const previousProblems = get().problems;
         const previousActivity = get().dailyActivity;
 
@@ -302,7 +342,6 @@ export const useAppStore = create<AppStore>()(
           }
         }));
 
-        // If it was solved today, decrement today's count
         if (problem.completed) {
           get().logActivity('coding', -1);
         }
@@ -319,25 +358,23 @@ export const useAppStore = create<AppStore>()(
       toggleProblem: (id) => {
         const problem = get().problems.find(p => p.id === id);
         if (!problem) return;
-        get().updateProblem(id, {
-          completed: !problem.completed,
-          status: !problem.completed ? 'solved' : 'attempted',
+        
+        const isCompleting = !problem.completed;
+        
+        set(state => {
+          const problems = state.problems.map(p =>
+            p.id === id ? { ...p, completed: isCompleting, status: (isCompleting ? 'solved' : 'todo') as LeetCodeStatus } : p
+          );
+          
+          let codingStreak = state.codingStreak;
+          if (isCompleting) {
+            codingStreak = updateStreakData(state.codingStreak);
+          }
+
+          return { problems, codingStreak };
         });
-        if (!problem.completed) {
-          get().logActivity('coding', 1);
-          set(state => {
-            const history = { ...state.codingStreak.history, [todayString()]: true };
-            const { current, longest } = calculateStreak(history);
-            return {
-              codingStreak: {
-                currentStreak: current,
-                longestStreak: Math.max(longest, state.codingStreak.longestStreak),
-                lastActivityDate: todayString(),
-                history,
-              },
-            };
-          });
-        }
+
+        get().logActivity('coding', isCompleting ? 1 : -1);
         get().checkAndUnlockAchievements();
       },
 
@@ -346,14 +383,7 @@ export const useAppStore = create<AppStore>()(
         set(state => {
           let focusStreak = state.focusStreak;
           if (session.completed) {
-            const history = { ...focusStreak.history, [todayString()]: true };
-            const { current, longest } = calculateStreak(history);
-            focusStreak = {
-              currentStreak: current,
-              longestStreak: Math.max(longest, state.focusStreak.longestStreak),
-              lastActivityDate: todayString(),
-              history,
-            };
+            focusStreak = updateStreakData(state.focusStreak);
           }
           return {
             focusSessions: [newSession, ...state.focusSessions],
@@ -391,12 +421,9 @@ export const useAppStore = create<AppStore>()(
         const totalFocusMinutes = focusSessions.filter(s => s.completed).reduce((acc, s) => acc + (s.actualDuration || s.duration), 0);
 
         const newlyUnlocked: Achievement[] = [];
-
         const achievements = state.achievements.map(ach => {
-          if (ach.unlocked) return ach;
-
           let progress = ach.progress || 0;
-          let unlocked = false;
+          let unlocked = ach.unlocked;
 
           switch (ach.id) {
             case 'first_chapter': progress = completedChapters; unlocked = completedChapters >= 1; break;
@@ -422,16 +449,20 @@ export const useAppStore = create<AppStore>()(
             return { ...ach, unlocked: true, unlockedAt: todayString(), progress };
           }
 
-          return { ...ach, progress };
+          return { ...ach, progress, unlocked };
         });
+
+        const hasChanges = achievements.some((a, i) => a.progress !== state.achievements[i].progress || a.unlocked !== state.achievements[i].unlocked);
+        
+        if (hasChanges) {
+          set({ achievements });
+        }
 
         if (newlyUnlocked.length > 0) {
           newlyUnlocked.forEach(ach => {
             showAchievementToast(ach.title, ach.icon);
           });
         }
-
-        set({ achievements });
         return newlyUnlocked;
       },
 
@@ -445,9 +476,9 @@ export const useAppStore = create<AppStore>()(
                 a.date === today
                   ? {
                       ...a,
-                      chaptersRead: type === 'reading' ? a.chaptersRead + value : a.chaptersRead,
-                      problemsSolved: type === 'coding' ? a.problemsSolved + value : a.problemsSolved,
-                      focusMinutes: type === 'focus' ? a.focusMinutes + value : a.focusMinutes,
+                      chaptersRead: type === 'reading' ? Math.max(0, a.chaptersRead + value) : a.chaptersRead,
+                      problemsSolved: type === 'coding' ? Math.max(0, a.problemsSolved + value) : a.problemsSolved,
+                      focusMinutes: type === 'focus' ? Math.max(0, a.focusMinutes + value) : a.focusMinutes,
                     }
                   : a
               ),
@@ -458,9 +489,9 @@ export const useAppStore = create<AppStore>()(
                 ...state.dailyActivity,
                 {
                   date: today,
-                  chaptersRead: type === 'reading' ? value : 0,
-                  problemsSolved: type === 'coding' ? value : 0,
-                  focusMinutes: type === 'focus' ? value : 0,
+                  chaptersRead: type === 'reading' ? Math.max(0, value) : 0,
+                  problemsSolved: type === 'coding' ? Math.max(0, value) : 0,
+                  focusMinutes: type === 'focus' ? Math.max(0, value) : 0,
                   productivityScore: 0,
                 },
               ],
@@ -476,15 +507,15 @@ export const useAppStore = create<AppStore>()(
             { 
               ...reminder, 
               id: generateId(), 
-              createdAt: new Date().toISOString(), 
-              updatedAt: new Date().toISOString() 
+              createdAt: new Date().toISOString() as ISODateString, 
+              updatedAt: new Date().toISOString() as ISODateString 
             }
-          ]
+          ] as Reminder[]
         }));
       },
       updateReminder: (id, updates) => {
         set(state => ({
-          reminders: state.reminders.map(r => r.id === id ? { ...r, ...updates, updatedAt: new Date().toISOString() } : r)
+          reminders: state.reminders.map(r => r.id === id ? { ...r, ...updates, updatedAt: new Date().toISOString() as ISODateString } : r) as Reminder[]
         }));
       },
       deleteReminder: (id) => {
@@ -498,11 +529,13 @@ export const useAppStore = create<AppStore>()(
             { 
               ...notification, 
               id: generateId(), 
-              timestamp: new Date().toISOString(), 
+              timestamp: new Date().toISOString() as ISODateString, 
+              createdAt: new Date().toISOString() as ISODateString,
+              updatedAt: new Date().toISOString() as ISODateString,
               read: false 
-            },
+            } as AppNotification,
             ...state.notifications 
-          ].slice(0, 100) // Keep last 100
+          ].slice(0, 100)
         }));
       },
       markNotificationRead: (id) => {
@@ -530,24 +563,40 @@ export const useAppStore = create<AppStore>()(
           userSettings: state.userSettings,
           dailyActivity: state.dailyActivity,
           trackers: state.trackers,
+          reminders: state.reminders,
+          notifications: state.notifications,
+          reminderSettings: state.reminderSettings,
+          launcher: state.launcher
         };
       },
 
       importData: (data: unknown) => {
-        const d = data as Record<string, unknown>;
-        if (!d || typeof d !== 'object') throw new Error('Invalid data');
+        const d = data as any;
+        if (!d || typeof d !== 'object' || d.version !== 1) {
+          throw new Error('Invalid or incompatible export file version');
+        }
+        
+        // Basic shape validation
+        if (!d.book || !Array.isArray(d.book.chapters) || !Array.isArray(d.problems)) {
+          throw new Error('Export file is corrupted or missing required fields');
+        }
+
         set({
-          book: (d.book as Book) || DEFAULT_BOOK,
-          problems: (d.problems as LeetCodeProblem[]) || [],
-          focusSessions: (d.focusSessions as FocusSession[]) || [],
-          achievements: (d.achievements as Achievement[]) || DEFAULT_ACHIEVEMENTS,
-          readingStreak: (d.readingStreak as StreakData) || DEFAULT_STREAK,
-          codingStreak: (d.codingStreak as StreakData) || DEFAULT_STREAK,
-          focusStreak: (d.focusStreak as StreakData) || DEFAULT_STREAK,
-          pomodoroSettings: (d.pomodoroSettings as PomodoroSettings) || DEFAULT_POMODORO,
-          userSettings: (d.userSettings as UserSettings) || DEFAULT_USER_SETTINGS,
-          dailyActivity: (d.dailyActivity as DailyActivity[]) || [],
-          trackers: (d.trackers as Tracker[]) || [],
+          book: d.book || DEFAULT_BOOK,
+          problems: d.problems || [],
+          focusSessions: d.focusSessions || [],
+          achievements: d.achievements || DEFAULT_ACHIEVEMENTS,
+          readingStreak: d.readingStreak || DEFAULT_STREAK,
+          codingStreak: d.codingStreak || DEFAULT_STREAK,
+          focusStreak: d.focusStreak || DEFAULT_STREAK,
+          pomodoroSettings: d.pomodoroSettings || DEFAULT_POMODORO,
+          userSettings: d.userSettings || DEFAULT_USER_SETTINGS,
+          dailyActivity: d.dailyActivity || [],
+          trackers: d.trackers || [],
+          reminders: d.reminders || [],
+          notifications: d.notifications || [],
+          reminderSettings: d.reminderSettings || get().reminderSettings,
+          launcher: d.launcher || DEFAULT_LAUNCHER_STATE
         });
       },
 
@@ -562,12 +611,21 @@ export const useAppStore = create<AppStore>()(
           focusStreak: DEFAULT_STREAK,
           dailyActivity: [],
           trackers: [],
+          reminders: [],
+          notifications: [],
+          pomodoroSettings: DEFAULT_POMODORO,
+          userSettings: DEFAULT_USER_SETTINGS,
+          launcher: DEFAULT_LAUNCHER_STATE
         });
       },
     }),
     {
       name: 'dashboard-storage',
       storage: createJSONStorage(() => localStorage),
+      partialize: (state) => {
+        const { lastAction, ...rest } = state;
+        return rest;
+      }
     }
   )
 );

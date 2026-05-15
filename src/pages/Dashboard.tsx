@@ -3,7 +3,7 @@ import { motion, type Variants } from 'framer-motion';
 import { useAppStore } from '../store/useAppStore';
 import {
   BookOpen, Code2, Timer, Flame, Trophy, TrendingUp,
-  Target, Zap, ChevronRight, Star, CheckCircle2, Clock, Sparkles
+  Target, Zap, ChevronRight, Star, CheckCircle2, Clock, Sparkles, BarChart3
 } from 'lucide-react';
 import { formatDuration, todayString, getProductivityScore } from '../lib/utils';
 import { format, parseISO } from 'date-fns';
@@ -15,8 +15,11 @@ import { useNavigate } from 'react-router-dom';
 import { PRODUCTIVITY_QUOTES } from '../lib/data';
 import TiltCard from '../components/TiltCard';
 import ProductivityInsights from '../components/ProductivityInsights';
+import ContextualAlerts from '../components/ContextualAlerts';
 import Skeleton, { StatCardSkeleton, InsightSkeleton } from '../components/Skeleton';
 import MissionControl from '../components/MissionControl';
+import QuickLauncher from '../components/QuickLauncher';
+import { useMemo } from 'react';
 
 const stagger: Variants = {
   hidden: { opacity: 0 },
@@ -52,7 +55,8 @@ export default function Dashboard() {
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 800);
+    // Immediate load if data is ready, but keep a tiny gap for mount animations
+    const timer = setTimeout(() => setLoading(false), 50);
     return () => clearTimeout(timer);
   }, []);
 
@@ -63,14 +67,19 @@ export default function Dashboard() {
   const completedSessions = focusSessions.filter(s => s.completed).length;
   const totalFocusMin = focusSessions.filter(s => s.completed).reduce((a, s) => a + (s.actualDuration || s.duration), 0);
   const unlockedAchievements = achievements.filter(a => a.unlocked).length;
-  const progressPct = Math.round((completedChapters / 51) * 100);
+  const progressPct = Math.round((completedChapters / Math.max(1, book.chapters.length)) * 100);
   const prodScore = getProductivityScore(
     todayActivity?.chaptersRead || 0,
     todayActivity?.problemsSolved || 0,
     todayActivity?.focusMinutes || 0
   );
   const nextChapter = book.chapters.find(c => !c.completed);
-  const quote = PRODUCTIVITY_QUOTES[new Date().getDay() % PRODUCTIVITY_QUOTES.length];
+  const recentAchievements = useMemo(() => achievements.filter(a => a.unlocked).slice(0, 3), [achievements]);
+  
+  const rawQuote = PRODUCTIVITY_QUOTES[new Date().getDay() % PRODUCTIVITY_QUOTES.length];
+  const [quoteText, quoteAuthor] = rawQuote.includes('—') 
+    ? rawQuote.split('—').map(s => s.trim()) 
+    : [rawQuote, 'Unknown'];
 
   // Last 7 days activity
   const last7 = Array.from({ length: 7 }, (_, i) => {
@@ -112,7 +121,10 @@ export default function Dashboard() {
           <div className="w-8 h-8 rounded-full bg-violet-500/20 flex items-center justify-center shrink-0">
             <Star size={16} className="text-violet-400" />
           </div>
-          <span className="line-clamp-2 leading-relaxed">"{quote.split('—')[0].trim()}"</span>
+          <div className="flex flex-col">
+            <span className="line-clamp-1 leading-relaxed text-sm font-medium">"{quoteText}"</span>
+            <span className="text-[10px] text-white/30 font-bold uppercase tracking-wider">— {quoteAuthor}</span>
+          </div>
         </motion.div>
       </motion.div>
 
@@ -121,14 +133,11 @@ export default function Dashboard() {
         <TiltCard>
           <div className="glass-card p-8 relative overflow-hidden group">
             <motion.div 
-              className="absolute inset-0 bg-gradient-to-r from-violet-600/20 via-fuchsia-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" 
-              animate={{ 
-                x: ['-100%', '100%'],
-              }}
-              transition={{ 
-                duration: 3, 
-                repeat: Infinity,
-                ease: "linear"
+              className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none"
+              initial={{ x: '-100%' }}
+              whileHover={{ 
+                x: '100%',
+                transition: { duration: 0.8, ease: "easeInOut" }
               }}
             />
             <div className="relative flex items-center justify-between">
@@ -165,13 +174,24 @@ export default function Dashboard() {
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-6">
-                <ScorePill icon={<BookOpen size={18} />} label="Library" value={todayActivity?.chaptersRead || 0} color="violet" />
+                <ScorePill 
+                  icon={<BookOpen size={18} />} 
+                  label="Library" 
+                  value={todayActivity?.chaptersRead || 0} 
+                  color="violet" 
+                  subText={`${progressPct}% done`}
+                />
                 <ScorePill icon={<Code2 size={18} />} label="Coding" value={todayActivity?.problemsSolved || 0} color="cyan" />
                 <ScorePill icon={<Timer size={18} />} label="Focus" value={todayActivity?.focusMinutes || 0} color="emerald" />
               </div>
             </div>
           </div>
         </TiltCard>
+      </motion.div>
+
+      {/* Contextual Awareness */}
+      <motion.div variants={item}>
+        <ContextualAlerts />
       </motion.div>
 
       {/* Productivity Insights */}
@@ -204,7 +224,7 @@ export default function Dashboard() {
       </motion.div>
 
       {/* Dynamic Trackers Grid */}
-      <motion.div variants={item} className="grid grid-cols-4 gap-6">
+      <motion.div variants={item} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {loading ? (
           Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)
         ) : (
@@ -222,6 +242,11 @@ export default function Dashboard() {
                 />
               </TiltCard>
             ))}
+            {/* If trackers < 3, add fillers to maintain layout or just let the Focus card be the 4th */}
+            {trackers.length < 1 && <StatPlaceholder icon={<Sparkles size={16} />} label="No Trackers" onClick={() => navigate('/trackers')} />}
+            {trackers.length < 2 && <StatPlaceholder icon={<Sparkles size={16} />} label="Add More" onClick={() => navigate('/trackers')} />}
+            {trackers.length < 3 && <StatPlaceholder icon={<Sparkles size={16} />} label="Customize" onClick={() => navigate('/trackers')} />}
+            
             <TiltCard>
               <StatCard label="Focus Hours" value={formatDuration(totalFocusMin)} sub={`${completedSessions} sessions`} icon={<Timer size={20} />} color="emerald" onClick={() => navigate('/focus')} />
             </TiltCard>
@@ -263,11 +288,11 @@ export default function Dashboard() {
           {/* Recent achievements */}
           <motion.div variants={item} className="glass-card p-5">
             <div className="text-xs text-white/40 uppercase tracking-widest mb-3">Recent Achievements</div>
-            {achievements.filter(a => a.unlocked).slice(0, 3).length === 0 ? (
+            {recentAchievements.length === 0 ? (
               <div className="text-sm text-white/30 text-center py-2">Complete tasks to earn badges!</div>
             ) : (
               <div className="space-y-2">
-                {achievements.filter(a => a.unlocked).slice(0, 3).map(ach => (
+                {recentAchievements.map(ach => (
                   <div key={ach.id} className="flex items-center gap-3">
                     <span className="text-lg">{ach.icon}</span>
                     <div>
@@ -279,15 +304,20 @@ export default function Dashboard() {
               </div>
             )}
           </motion.div>
+
+          {/* Quick Launcher */}
+          <motion.div variants={item} className="glass-card p-5">
+            <QuickLauncher />
+          </motion.div>
         </div>
       </div>
 
       {/* Quick Actions */}
       <motion.div variants={item} className="glass-card p-5">
         <div className="text-xs text-white/40 uppercase tracking-widest mb-4">Quick Actions</div>
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <QuickAction icon={<Timer size={18} />} label="Start Focus" desc="Forest Mode" color="violet" onClick={() => navigate('/focus')} />
-          <QuickAction icon={<BookOpen size={18} />} label="Log Chapter" desc="Reading Tracker" color="purple" onClick={() => navigate('/reading')} />
+          <QuickAction icon={<BookOpen size={18} />} label="Log Chapter" desc={nextChapter ? `Next: Ch ${nextChapter.number}` : "Reading Tracker"} color="purple" onClick={() => navigate('/reading')} />
           <QuickAction icon={<Code2 size={18} />} label="Add Problem" desc="LeetCode Log" color="cyan" onClick={() => navigate('/leetcode')} />
           <QuickAction icon={<BarChart3 size={18} />} label="Analytics" desc="View Insights" color="emerald" onClick={() => navigate('/analytics')} />
         </div>
@@ -296,7 +326,7 @@ export default function Dashboard() {
   );
 }
 
-function ScorePill({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: number; color: string }) {
+function ScorePill({ icon, label, value, color, subText }: { icon: React.ReactNode; label: string; value: number; color: string; subText?: string }) {
   const colors: Record<string, string> = { violet: 'text-violet-400', cyan: 'text-cyan-400', emerald: 'text-emerald-400' };
   return (
     <div className="glass-card px-3 py-2 flex flex-col items-center gap-1 text-center group">
@@ -310,6 +340,7 @@ function ScorePill({ icon, label, value, color }: { icon: React.ReactNode; label
         {value}
       </motion.span>
       <span className="text-xs text-white/30 uppercase tracking-widest font-black text-[8px]">{label}</span>
+      {subText && <span className="text-[8px] text-white/20 font-bold">{subText}</span>}
     </div>
   );
 }
@@ -358,13 +389,20 @@ function StreakCard({ label, streak, longest, color, icon }: { label: string; st
 function StatCard({ label, value, sub, icon, color, onClick, customColor }: {
   label: string; value: string | number; sub: string; icon: React.ReactNode; color: string; onClick: () => void; customColor?: string;
 }) {
-  const colors: Record<string, string> = { violet: 'text-violet-400 bg-violet-500/10', cyan: 'text-cyan-400 bg-cyan-500/10', emerald: 'text-emerald-400 bg-emerald-500/10', amber: 'text-amber-400 bg-amber-500/10' };
-  const [tc, bg] = customColor ? ['', ''] : colors[color].split(' ');
+  const colors: Record<string, string> = { 
+    violet: 'text-violet-400 bg-violet-500/10', 
+    cyan: 'text-cyan-400 bg-cyan-500/10', 
+    emerald: 'text-emerald-400 bg-emerald-500/10', 
+    amber: 'text-amber-400 bg-amber-500/10' 
+  };
+  const colorClass = colors[color] || 'text-white/40 bg-white/5';
+  const [tc, bg] = colorClass.split(' ');
+
   return (
     <button onClick={onClick} className="stat-card text-left glass-card-hover w-full group overflow-hidden relative">
       <div className="absolute inset-0 bg-gradient-to-br from-white/[0.03] to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
       <div 
-        className={`w-10 h-10 rounded-xl flex items-center justify-center mb-2 transition-transform group-hover:scale-110 ${customColor ? '' : `${bg} ${tc}`}`}
+        className={`w-10 h-10 rounded-xl flex items-center justify-center mb-2 transition-transform group-hover:scale-110 ${bg} ${tc}`}
         style={customColor ? { backgroundColor: `${customColor}20`, color: customColor } : undefined}
       >
         {icon}
@@ -383,8 +421,16 @@ function StatCard({ label, value, sub, icon, color, onClick, customColor }: {
   );
 }
 
-function BarChart3({ size }: { size: number }) {
-  return <TrendingUp size={size} />;
+function StatPlaceholder({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="stat-card text-left glass-card border border-dashed border-white/10 w-full group opacity-50 hover:opacity-100 transition-all">
+      <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-2 bg-white/5 text-white/20">
+        {icon}
+      </div>
+      <div className="text-sm font-bold text-white/20 uppercase tracking-widest">{label}</div>
+      <div className="text-[10px] text-white/10 font-bold mt-0.5">Click to add tracker</div>
+    </button>
+  );
 }
 
 function QuickAction({ icon, label, desc, color, onClick }: { icon: React.ReactNode; label: string; desc: string; color: string; onClick: () => void }) {

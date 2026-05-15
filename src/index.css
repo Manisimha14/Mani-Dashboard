@@ -79,6 +79,10 @@
     box-shadow: 0 4px 24px rgba(0,0,0,0.4), 0 1px 4px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.05);
   }
 
+  @supports not (backdrop-filter: blur(1px)) {
+    .glass-card { background: rgba(18, 20, 32, 0.97); }
+  }
+
   .glass-card-hover {
     @apply glass-card transition-all duration-300;
   }
@@ -511,8 +515,19 @@
 /* Premium Interactions */
 /* World Class Animations */
 @keyframes shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes blob {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%       { transform: translate(30px, -50px) scale(1.1); }
+  66%       { transform: translate(-20px, 20px) scale(0.9); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes spectrum {
@@ -546,7 +561,7 @@
   animation: leave 0.2s ease-in forwards;
 }
 
-button {
+button.ripple-btn {
   position: relative;
   overflow: hidden;
 }
