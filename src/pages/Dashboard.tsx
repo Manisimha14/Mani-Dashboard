@@ -1,9 +1,19 @@
 import React from 'react';
 import { motion, type Variants } from 'framer-motion';
 import { useAppStore } from '../store/useAppStore';
+import { useBook } from '../hooks/useBookQuery';
+import { useProblems } from '../hooks/useLeetCodeQuery';
+import { useFocusSessions } from '../hooks/useFocusQuery';
+import { useProfile } from '../hooks/useProfileQuery';
+import { useAchievements } from '../hooks/useAchievementQuery';
+import { useDailyActivity } from '../hooks/useActivityQuery';
+import { useTrackers } from '../hooks/useTrackerQuery';
+import { useTodayHealthData, useHealthGoals, useAddWater, useAddWorkout } from '../hooks/useHealthQuery';
+import { useSoundFX } from '../hooks/useSoundFX';
 import {
   BookOpen, Code2, Timer, Flame, Trophy, TrendingUp,
-  Target, Zap, ChevronRight, Star, CheckCircle2, Clock, Sparkles, BarChart3
+  Target, Zap, ChevronRight, Star, CheckCircle2, Clock, Sparkles, BarChart3,
+  Heart, Droplets, Dumbbell, Moon, Plus
 } from 'lucide-react';
 import { formatDuration, todayString, getProductivityScore } from '../lib/utils';
 import { format, parseISO } from 'date-fns';
@@ -47,10 +57,24 @@ const item: Variants = {
 };
 
 export default function Dashboard() {
-  const {
-    book, problems, focusSessions, readingStreak, codingStreak, focusStreak,
-    achievements, dailyActivity, userSettings, trackers
-  } = useAppStore();
+  const { data: book = { id: 'main-book', title: 'My Book', author: 'Author', chapters: [], startDate: todayString(), coverColor: '#7c3aed' } } = useBook();
+  const { data: problems = [] } = useProblems();
+  const { data: focusSessions = [] } = useFocusSessions();
+  const { data: profile } = useProfile();
+  const { data: achievements = [] } = useAchievements();
+  const { data: dailyActivity = [] } = useDailyActivity();
+  const { data: trackers = [] } = useTrackers();
+
+  const todayHealth = useTodayHealthData();
+  const { data: healthGoals = [] } = useHealthGoals();
+  const addWater = useAddWater();
+  const addWorkout = useAddWorkout();
+  const { play } = useSoundFX();
+
+  const readingStreak = profile?.readingStreak ?? { currentStreak: 0, longestStreak: 0, history: {} };
+  const codingStreak = profile?.codingStreak ?? { currentStreak: 0, longestStreak: 0, history: {} };
+  const focusStreak = profile?.focusStreak ?? { currentStreak: 0, longestStreak: 0, history: {} };
+  const userSettings = profile?.settings ?? { name: '', theme: 'dark', accentColor: '#7c3aed' };
   const navigate = useNavigate();
   const [loading, setLoading] = React.useState(true);
 
@@ -61,18 +85,39 @@ export default function Dashboard() {
   }, []);
 
   const today = todayString();
-  const todayActivity = dailyActivity.find(a => a.date === today);
-  const completedChapters = book.chapters.filter(c => c.completed).length;
-  const solvedProblems = problems.filter(p => p.completed).length;
-  const completedSessions = focusSessions.filter(s => s.completed).length;
-  const totalFocusMin = focusSessions.filter(s => s.completed).reduce((a, s) => a + (s.actualDuration || s.duration), 0);
-  const unlockedAchievements = achievements.filter(a => a.unlocked).length;
-  const progressPct = Math.round((completedChapters / Math.max(1, book.chapters.length)) * 100);
-  const prodScore = getProductivityScore(
-    todayActivity?.chaptersRead || 0,
-    todayActivity?.problemsSolved || 0,
-    todayActivity?.focusMinutes || 0
-  );
+  
+  const {
+    chaptersToday,
+    problemsToday,
+    focusMinutesToday,
+    completedChapters,
+    completedSessions,
+    totalFocusMin,
+    progressPct,
+    prodScore
+  } = useMemo(() => {
+    const chaptersToday = book.chapters.filter(c => c.completed && c.dateCompleted === today).length;
+    const problemsToday = problems.filter(p => p.completed && p.date === today).length;
+    const focusMinutesToday = focusSessions.filter(s => s.completed && s.date === today).reduce((acc, s) => acc + (s.actualDuration || s.duration), 0);
+
+    const completedChapters = book.chapters.filter(c => c.completed).length;
+    const completedSessions = focusSessions.filter(s => s.completed).length;
+    const totalFocusMin = focusSessions.filter(s => s.completed).reduce((a, s) => a + (s.actualDuration || s.duration), 0);
+    const progressPct = Math.round((completedChapters / Math.max(1, book.chapters.length)) * 100);
+    const prodScore = getProductivityScore(chaptersToday, problemsToday, focusMinutesToday);
+
+    return {
+      chaptersToday,
+      problemsToday,
+      focusMinutesToday,
+      completedChapters,
+      completedSessions,
+      totalFocusMin,
+      progressPct,
+      prodScore
+    };
+  }, [book.chapters, problems, focusSessions, today]);
+
   const nextChapter = book.chapters.find(c => !c.completed);
   const recentAchievements = useMemo(() => achievements.filter(a => a.unlocked).slice(0, 3), [achievements]);
   
@@ -177,12 +222,12 @@ export default function Dashboard() {
                 <ScorePill 
                   icon={<BookOpen size={18} />} 
                   label="Library" 
-                  value={todayActivity?.chaptersRead || 0} 
+                  value={chaptersToday} 
                   color="violet" 
                   subText={`${progressPct}% done`}
                 />
-                <ScorePill icon={<Code2 size={18} />} label="Coding" value={todayActivity?.problemsSolved || 0} color="cyan" />
-                <ScorePill icon={<Timer size={18} />} label="Focus" value={todayActivity?.focusMinutes || 0} color="emerald" />
+                <ScorePill icon={<Code2 size={18} />} label="Coding" value={problemsToday} color="cyan" />
+                <ScorePill icon={<Timer size={18} />} label="Focus" value={focusMinutesToday} color="emerald" />
               </div>
             </div>
           </div>
@@ -223,13 +268,164 @@ export default function Dashboard() {
         )}
       </motion.div>
 
+      {/* Immersive Health Vitals Console */}
+      <motion.div variants={item} className="glass-card p-6 relative overflow-hidden group">
+        <div className="absolute inset-0 bg-gradient-to-br from-rose-500/[0.03] via-transparent to-cyan-500/[0.03] pointer-events-none" />
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-rose-500/10 text-rose-400">
+              <Heart size={20} className="animate-pulse" />
+            </div>
+            <div>
+              <h3 className="font-bold text-white text-lg">Health Overview</h3>
+              <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest mt-0.5">Today's health overview</p>
+            </div>
+          </div>
+          <button onClick={() => navigate('/health')} className="btn-ghost px-3 py-1.5 text-xs font-bold flex items-center gap-1 hover:bg-white/5">
+            Log Vitals <ChevronRight size={14} />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* Calorie Card */}
+          <div className="relative p-4 rounded-2xl bg-white/[0.02] border border-white/5 flex flex-col justify-between min-h-[140px] group/card hover:border-rose-500/30 transition-all duration-300">
+            <div className="flex items-start justify-between">
+              <div className="p-2 rounded-lg bg-rose-500/10 text-rose-400">
+                <Flame size={16} />
+              </div>
+              <span className="text-[10px] font-black text-rose-400 uppercase tracking-wider bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20">Calories</span>
+            </div>
+            <div className="mt-4">
+              <div className="flex items-baseline gap-1">
+                <span className="text-2xl font-black text-white">{todayHealth.totalCalories}</span>
+                <span className="text-xs text-white/40">/ {healthGoals.find(g => g.type === 'calories')?.targetValue ?? 2100} kcal</span>
+              </div>
+              <div className="mt-2 h-1.5 bg-white/5 rounded-full overflow-hidden">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${Math.min((todayHealth.totalCalories / (healthGoals.find(g => g.type === 'calories')?.targetValue ?? 2100)) * 100, 100)}%` }}
+                  className="h-full bg-gradient-to-r from-rose-500 to-pink-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Hydration Card */}
+          <div className="relative p-4 rounded-2xl bg-white/[0.02] border border-white/5 flex flex-col justify-between min-h-[140px] group/card hover:border-cyan-500/30 transition-all duration-300">
+            <div className="flex items-start justify-between">
+              <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-400">
+                <Droplets size={16} />
+              </div>
+              <span className="text-[10px] font-black text-cyan-400 uppercase tracking-wider bg-cyan-500/10 px-2 py-0.5 rounded-full border border-cyan-500/20">Hydration</span>
+            </div>
+            <div>
+              <div className="flex items-baseline gap-1 mt-4">
+                <span className="text-2xl font-black text-white">{(todayHealth.totalWaterMl / 1000).toFixed(1)}L</span>
+                <span className="text-xs text-white/40">/ {(healthGoals.find(g => g.type === 'water')?.targetValue ?? 3500) / 1000}L</span>
+              </div>
+              <div className="mt-2 h-1.5 bg-white/5 rounded-full overflow-hidden">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${Math.min((todayHealth.totalWaterMl / (healthGoals.find(g => g.type === 'water')?.targetValue ?? 3500)) * 100, 100)}%` }}
+                  className="h-full bg-gradient-to-r from-cyan-400 to-sky-500"
+                />
+              </div>
+            </div>
+            <div className="mt-3 flex gap-2">
+              <button 
+                onClick={() => {
+                  play('success');
+                  addWater.mutate({ date: today, time: new Date().toTimeString().slice(0, 5), amount: 250 });
+                }}
+                className="flex-1 py-1 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-[10px] font-bold text-cyan-400 hover:bg-cyan-500/20 transition-all active:scale-95"
+              >
+                +250ml
+              </button>
+              <button 
+                onClick={() => {
+                  play('success');
+                  addWater.mutate({ date: today, time: new Date().toTimeString().slice(0, 5), amount: 500 });
+                }}
+                className="flex-1 py-1 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-[10px] font-bold text-cyan-400 hover:bg-cyan-500/20 transition-all active:scale-95"
+              >
+                +500ml
+              </button>
+            </div>
+          </div>
+
+          {/* Workout Card */}
+          <div className="relative p-4 rounded-2xl bg-white/[0.02] border border-white/5 flex flex-col justify-between min-h-[140px] group/card hover:border-violet-500/30 transition-all duration-300">
+            <div className="flex items-start justify-between">
+              <div className="p-2 rounded-lg bg-violet-500/10 text-violet-400">
+                <Dumbbell size={16} />
+              </div>
+              <span className="text-[10px] font-black text-violet-400 uppercase tracking-wider bg-violet-500/10 px-2 py-0.5 rounded-full border border-violet-500/20">Workouts</span>
+            </div>
+            <div>
+              <div className="flex items-baseline gap-1 mt-4">
+                <span className="text-2xl font-black text-white">{todayHealth.totalWorkoutMinutes}m</span>
+                <span className="text-xs text-white/40">/ {healthGoals.find(g => g.type === 'workouts_per_week')?.targetValue ?? 45} min</span>
+              </div>
+              <div className="mt-2 h-1.5 bg-white/5 rounded-full overflow-hidden">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${Math.min((todayHealth.totalWorkoutMinutes / (healthGoals.find(g => g.type === 'workouts_per_week')?.targetValue ?? 45)) * 100, 100)}%` }}
+                  className="h-full bg-gradient-to-r from-violet-500 to-fuchsia-500"
+                />
+              </div>
+            </div>
+            <div className="mt-3">
+              <button 
+                onClick={() => {
+                  play('success');
+                  addWorkout.mutate({ 
+                    date: today, 
+                    type: 'cardio', 
+                    name: 'Quick Cardio Session',
+                    durationMinutes: 15, 
+                    caloriesBurned: 100,
+                    startTime: new Date().toTimeString().slice(0, 5)
+                  });
+                }}
+                className="w-full py-1 rounded-lg bg-violet-500/10 border border-violet-500/20 text-[10px] font-bold text-violet-400 hover:bg-violet-500/20 transition-all active:scale-95"
+              >
+                +15m Activity
+              </button>
+            </div>
+          </div>
+
+          {/* Sleep Card */}
+          <div className="relative p-4 rounded-2xl bg-white/[0.02] border border-white/5 flex flex-col justify-between min-h-[140px] group/card hover:border-indigo-500/30 transition-all duration-300">
+            <div className="flex items-start justify-between">
+              <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400">
+                <Moon size={16} />
+              </div>
+              <span className="text-[10px] font-black text-indigo-400 uppercase tracking-wider bg-indigo-500/10 px-2 py-0.5 rounded-full border border-indigo-500/20">Sleep</span>
+            </div>
+            <div className="mt-4">
+              <div className="flex items-baseline gap-1">
+                <span className="text-2xl font-black text-white">{todayHealth.sleepEntry?.totalMinutes ? Math.round(todayHealth.sleepEntry.totalMinutes / 60) : 0}h</span>
+                <span className="text-xs text-white/40">/ {healthGoals.find(g => g.type === 'sleep_hours')?.targetValue ?? 8} hrs</span>
+              </div>
+              <div className="mt-2 h-1.5 bg-white/5 rounded-full overflow-hidden">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${Math.min(((todayHealth.sleepEntry?.totalMinutes ? (todayHealth.sleepEntry.totalMinutes / 60) : 0) / (healthGoals.find(g => g.type === 'sleep_hours')?.targetValue ?? 8)) * 100, 100)}%` }}
+                  className="h-full bg-gradient-to-r from-indigo-500 to-purple-500"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
       {/* Dynamic Trackers Grid */}
       <motion.div variants={item} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {loading ? (
           Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)
         ) : (
           <>
-            {trackers.slice(0, 3).map(t => (
+            {trackers.map(t => (
               <TiltCard key={t.id}>
                 <StatCard 
                   label={t.title} 
@@ -326,7 +522,7 @@ export default function Dashboard() {
   );
 }
 
-function ScorePill({ icon, label, value, color, subText }: { icon: React.ReactNode; label: string; value: number; color: string; subText?: string }) {
+const ScorePill = React.memo(function ScorePill({ icon, label, value, color, subText }: { icon: React.ReactNode; label: string; value: number; color: string; subText?: string }) {
   const colors: Record<string, string> = { violet: 'text-violet-400', cyan: 'text-cyan-400', emerald: 'text-emerald-400' };
   return (
     <div className="glass-card px-3 py-2 flex flex-col items-center gap-1 text-center group">
@@ -343,9 +539,9 @@ function ScorePill({ icon, label, value, color, subText }: { icon: React.ReactNo
       {subText && <span className="text-[8px] text-white/20 font-bold">{subText}</span>}
     </div>
   );
-}
+});
 
-function StreakCard({ label, streak, longest, color, icon }: { label: string; streak: number; longest: number; color: string; icon: React.ReactNode }) {
+const StreakCard = React.memo(function StreakCard({ label, streak, longest, color, icon }: { label: string; streak: number; longest: number; color: string; icon: React.ReactNode }) {
   const gradients: Record<string, string> = {
     violet: 'from-violet-600/20 to-purple-600/5',
     cyan: 'from-cyan-600/20 to-blue-600/5',
@@ -372,11 +568,11 @@ function StreakCard({ label, streak, longest, color, icon }: { label: string; st
       <div className="flex items-center gap-1 mt-1">
         <motion.div
           animate={{ 
-            scale: [1, 1.2, 1],
-            rotate: [-5, 5, -5],
-            filter: ['drop-shadow(0 0 5px #f97316)', 'drop-shadow(0 0 10px #f97316)', 'drop-shadow(0 0 5px #f97316)']
+            scale: [1, 1.15, 1],
+            rotate: [-4, 4, -4]
           }}
-          transition={{ duration: 1.5, repeat: Infinity }}
+          transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+          className="filter drop-shadow-[0_0_6px_rgba(249,115,22,0.6)]"
         >
           <Flame size={12} className="text-orange-500" />
         </motion.div>
@@ -384,9 +580,9 @@ function StreakCard({ label, streak, longest, color, icon }: { label: string; st
       </div>
     </div>
   );
-}
+});
 
-function StatCard({ label, value, sub, icon, color, onClick, customColor }: {
+const StatCard = React.memo(function StatCard({ label, value, sub, icon, color, onClick, customColor }: {
   label: string; value: string | number; sub: string; icon: React.ReactNode; color: string; onClick: () => void; customColor?: string;
 }) {
   const colors: Record<string, string> = { 
@@ -419,9 +615,9 @@ function StatCard({ label, value, sub, icon, color, onClick, customColor }: {
       <div className="text-[10px] text-white/40 font-bold mt-0.5">{sub}</div>
     </button>
   );
-}
+});
 
-function StatPlaceholder({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick: () => void }) {
+const StatPlaceholder = React.memo(function StatPlaceholder({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick: () => void }) {
   return (
     <button onClick={onClick} className="stat-card text-left glass-card border border-dashed border-white/10 w-full group opacity-50 hover:opacity-100 transition-all">
       <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-2 bg-white/5 text-white/20">
@@ -431,9 +627,9 @@ function StatPlaceholder({ icon, label, onClick }: { icon: React.ReactNode; labe
       <div className="text-[10px] text-white/10 font-bold mt-0.5">Click to add tracker</div>
     </button>
   );
-}
+});
 
-function QuickAction({ icon, label, desc, color, onClick }: { icon: React.ReactNode; label: string; desc: string; color: string; onClick: () => void }) {
+const QuickAction = React.memo(function QuickAction({ icon, label, desc, color, onClick }: { icon: React.ReactNode; label: string; desc: string; color: string; onClick: () => void }) {
   const gradients: Record<string, string> = {
     violet: 'from-violet-600/20 to-violet-800/5 border-violet-500/20 hover:border-violet-500/40',
     purple: 'from-purple-600/20 to-purple-800/5 border-purple-500/20 hover:border-purple-500/40',
@@ -451,4 +647,4 @@ function QuickAction({ icon, label, desc, color, onClick }: { icon: React.ReactN
       <div className="text-xs text-white/30">{desc}</div>
     </button>
   );
-}
+});

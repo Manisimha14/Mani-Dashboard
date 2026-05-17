@@ -101,6 +101,13 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
   }, [query]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      onClose();
+      return;
+    }
+
+    if (filtered.length === 0) return;
+
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       setSelected(s => (s + 1) % filtered.length);
@@ -110,8 +117,6 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
     } else if (e.key === 'Enter') {
       filtered[selected]?.action();
       play('success');
-      onClose();
-    } else if (e.key === 'Escape') {
       onClose();
     }
   };

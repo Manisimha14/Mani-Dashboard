@@ -30,6 +30,7 @@ interface AppStore {
   userSettings: UserSettings;
   dailyActivity: DailyActivity[];
   trackers: Tracker[];
+  celebratingAchievement: Achievement | null;
 
   // Tracker actions
   addTracker: (tracker: Omit<Tracker, 'id' | 'createdAt'> & { id?: string }) => void;
@@ -59,6 +60,7 @@ interface AppStore {
 
   // Achievements
   checkAndUnlockAchievements: () => Achievement[];
+  updateAchievement: (id: string, updates: Partial<Pick<Achievement, 'unlocked' | 'unlockedAt' | 'progress'>>) => void;
 
   // Data management
   exportData: () => object;
@@ -175,6 +177,7 @@ export const useAppStore = create<AppStore>()(
         browserNotificationsEnabled: true,
       },
       trackers: [],
+      celebratingAchievement: null,
 
       addTracker: (tracker) => {
         set(state => ({
@@ -464,6 +467,12 @@ export const useAppStore = create<AppStore>()(
           });
         }
         return newlyUnlocked;
+      },
+
+      updateAchievement: (id, updates) => {
+        set(state => ({
+          achievements: state.achievements.map(a => a.id === id ? { ...a, ...updates } : a)
+        }));
       },
 
       logActivity: (type, value) => {

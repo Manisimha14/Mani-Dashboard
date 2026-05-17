@@ -6,8 +6,9 @@ import {
   Brain, Clock, Shield, Palette, Layers, Info, Trash2, Edit3
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
+import { useTrackers, useAddTracker, useUpdateTracker, useDeleteTracker, useAddTrackerItem } from '../hooks/useTrackerQuery';
 import Modal from '../components/Modal';
-import type { Tracker, TrackerType } from '../types';
+import type { Tracker, TrackerType, TrackerItem } from '../types';
 import type { ISODateString } from '../types/reminder';
 import { generateId } from '../lib/utils';
 import { format as dfnsFormat, parseISO as dfnsParseISO, isToday, startOfDay, subDays, eachDayOfInterval } from 'date-fns';
@@ -37,9 +38,13 @@ const TEMPLATES = [
 
 export default function Trackers() {
   const { 
-    trackers, addTracker, deleteTracker, updateTracker, 
     addReminder, reminders, deleteReminder 
   } = useAppStore();
+  
+  const { data: trackers = [] } = useTrackers();
+  const { mutate: addTracker } = useAddTracker();
+  const { mutate: deleteTracker } = useDeleteTracker();
+  const { mutate: updateTracker } = useUpdateTracker();
   
   const [showCreate, setShowCreate] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -83,9 +88,12 @@ export default function Trackers() {
     };
 
     if (isEditing && editingId) {
-      updateTracker(editingId, {
-        ...topLevelFields,
-        metadata
+      updateTracker({
+        id: editingId,
+        updates: {
+          ...topLevelFields,
+          metadata
+        }
       });
       
       // Update or cleanup reminder
@@ -525,7 +533,10 @@ export default function Trackers() {
 }
 
 function TrackerDetail({ tracker, onClose, onEdit }: { tracker: Tracker; onClose: () => void; onEdit: () => void }) {
-  const { deleteTracker, updateTracker, reminders, deleteReminder } = useAppStore();
+  const { reminders, deleteReminder } = useAppStore();
+  const { mutate: deleteTracker } = useDeleteTracker();
+  const { mutate: addTrackerItem } = useAddTrackerItem();
+  
   const [logValue, setLogValue] = useState<string>('');
   const [logNote, setLogNote] = useState<string>('');
   const [showLogForm, setShowLogForm] = useState(false);
@@ -604,14 +615,14 @@ function TrackerDetail({ tracker, onClose, onEdit }: { tracker: Tracker; onClose
               <div className="flex gap-2">
                 <button 
                   onClick={() => {
-                    updateTracker(tracker.id, {
-                      items: [...tracker.items, { 
-                        id: generateId(), 
+                    addTrackerItem({
+                      trackerId: tracker.id,
+                      item: { 
                         title: logNote || `Operational Entry #${tracker.items.length + 1}`, 
                         status: 'completed',
                         value: logValue ? Number(logValue) : undefined,
                         dateCompleted: new Date().toISOString() 
-                      }]
+                      }
                     });
                     setLogValue('');
                     setLogNote('');

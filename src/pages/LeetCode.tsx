@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppStore } from '../store/useAppStore';
+import { useProblems, useAddProblem, useDeleteProblem, useToggleProblem } from '../hooks/useLeetCodeQuery';
 import { 
   Plus, X, ExternalLink, Trash2, Check, Filter, Search, Flame, 
   ChevronDown, MessageSquare, AlertCircle, Loader2 
@@ -10,18 +11,22 @@ import Modal from '../components/Modal';
 import { LEETCODE_TOPICS } from '../lib/data';
 import type { LeetCodeProblem, LeetCodeDifficulty, LeetCodeStatus } from '../types';
 import { todayString, generateId } from '../lib/utils';
+import { format } from 'date-fns';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
 import { showUndoToast } from '../components/UndoToast';
 import { useMemo, useEffect, useCallback, useRef } from 'react';
+import { useSoundFX } from '../hooks/useSoundFX';
 
 const DIFFICULTIES: LeetCodeDifficulty[] = ['Easy', 'Medium', 'Hard'];
 const DIFF_COLORS: Record<LeetCodeDifficulty, string> = { Easy: '#34d399', Medium: '#fbbf24', Hard: '#f87171' };
 
 export default function LeetCode() {
-  const { 
-    problems, addProblem, deleteProblem, toggleProblem, 
-    codingStreak, undoLastAction 
-  } = useAppStore();
+  const { codingStreak } = useAppStore();
+  const { data: problems = [] } = useProblems();
+  const addProblemMut = useAddProblem();
+  const deleteProblemMut = useDeleteProblem();
+  const toggleProblemMut = useToggleProblem();
+  const { play } = useSoundFX();
   const [showForm, setShowForm] = useState(false);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
@@ -82,6 +87,30 @@ export default function LeetCode() {
     { name: 'Hard', value: hard, color: DIFF_COLORS.Hard },
   ], [easy, medium, hard]);
 
+  const solvedByDate = useMemo(() => {
+    const counts: Record<string, number> = {};
+    problems.forEach(p => {
+      if (p.completed && p.date) {
+        counts[p.date] = (counts[p.date] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [problems]);
+
+  const last14Days = useMemo(() => {
+    return Array.from({ length: 14 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (13 - i));
+      const key = format(d, 'yyyy-MM-dd');
+      const count = solvedByDate[key] || 0;
+      return {
+        date: key,
+        displayDate: format(d, 'MMM d'),
+        count
+      };
+    });
+  }, [solvedByDate]);
+
   const handleAdd = () => {
     if (!form.name.trim()) { toast.error('Problem name required'); return; }
     if (form.link && !form.link.startsWith('https://leetcode.com')) {
@@ -89,7 +118,8 @@ export default function LeetCode() {
       return;
     }
     
-    addProblem({ ...form, timeSpent: 0 });
+    play('success');
+    addProblemMut.mutate({ ...form, timeSpent: 0 });
     toast.success('Problem logged! 💻');
     setForm({ name: '', link: '', difficulty: 'Easy', topic: 'Array', status: 'solved', notes: '', date: todayString(), completed: true });
     setShowForm(false);
@@ -97,9 +127,10 @@ export default function LeetCode() {
 
   const handleDelete = (id: string) => {
     setDeletingId(id);
+    play('click');
     // Immediate state removal for UI snappiness
-    deleteProblem(id);
-    showUndoToast('Problem deleted', 'LeetCode');
+    deleteProblemMut.mutate(id);
+    toast.success('Problem deleted');
     setTimeout(() => setDeletingId(null), 500);
   };
 
@@ -137,6 +168,46 @@ export default function LeetCode() {
             <div className="text-xs text-white/40 mt-1">{s.label}</div>
           </div>
         ))}
+      </div>
+
+      {/* Coding Consistency Matrix */}
+      <div className="glass-card p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="font-bold text-white text-sm">Coding Consistency Matrix</h3>
+            <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest mt-0.5">Solve momentum over the last 14 days</p>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-white/30">
+            <span>Less</span>
+            <span className="w-3 h-3 rounded bg-white/[0.02] border border-white/5" />
+            <span className="w-3 h-3 rounded bg-emerald-500/20 border border-emerald-500/30" />
+            <span className="w-3 h-3 rounded bg-emerald-500/50 border border-emerald-500/50" />
+            <span className="w-3 h-3 rounded bg-emerald-500/80" />
+            <span>More</span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-7 sm:grid-cols-14 gap-3">
+          {last14Days.map((day) => (
+            <motion.div
+              key={day.date}
+              whileHover={{ scale: 1.08, y: -2 }}
+              className={`p-3 rounded-xl flex flex-col items-center justify-between min-h-[70px] transition-all relative group/cell cursor-pointer ${
+                day.count === 0 ? 'bg-white/[0.02] border border-white/5 hover:bg-white/[0.04]' :
+                day.count === 1 ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400' :
+                day.count === 2 ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300' :
+                'bg-emerald-500/40 border border-emerald-500/60 text-emerald-100'
+              }`}
+            >
+              <span className="text-[9px] font-black uppercase tracking-wider text-white/40">{day.displayDate}</span>
+              <span className="text-lg font-black">{day.count}</span>
+              
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1 rounded bg-[#0f101c] border border-white/10 text-[10px] text-white font-bold whitespace-nowrap opacity-0 pointer-events-none group-hover/cell:opacity-100 transition-opacity z-10 shadow-xl">
+                {day.count} {day.count === 1 ? 'problem' : 'problems'} solved
+              </div>
+            </motion.div>
+          ))}
+        </div>
       </div>
 
       {/* Charts Row */}
@@ -235,7 +306,10 @@ export default function LeetCode() {
               className="glass-card p-4 flex items-center gap-4"
             >
               <button
-                onClick={() => toggleProblem(problem.id)}
+                onClick={() => {
+                  play(problem.completed ? 'click' : 'success');
+                  toggleProblemMut.mutate({ id: problem.id, current: problem.completed, status: problem.status });
+                }}
                 className={`w-6 h-6 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${
                   problem.completed ? 'bg-emerald-500 border-emerald-500' : 'border-white/20 hover:border-violet-400'
                 }`}

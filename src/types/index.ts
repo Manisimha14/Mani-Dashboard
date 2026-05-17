@@ -1,5 +1,6 @@
 export * from './trackers';
 export * from './launcher';
+export type { Database } from './database';
 
 // ─── Book Types ────────────────────────────────────────────────────────────
 export interface Chapter {
@@ -151,6 +152,19 @@ export interface UserSettings {
   dashboardLayout: string[];
   petType: 'bonsai' | 'owl' | 'fox' | 'orb';
   keyboardShortcuts: boolean;
+  calorieCap?: number;
+  calorieCapEnabled?: boolean;
+  sugarCap?: number;
+  sugarCapEnabled?: boolean;
+  caffeineCap?: number;
+  caffeineCapEnabled?: boolean;
+  junkCapEnabled?: boolean;
+  waterAlerts?: boolean;
+  proteinAlerts?: boolean;
+  focusAlerts?: boolean;
+  streakAlerts?: boolean;
+  leetcodeAlerts?: boolean;
+  workoutAlerts?: boolean;
 }
 
 // ─── App State ────────────────────────────────────────────────────────────────

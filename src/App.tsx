@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Reading from './pages/Reading';
@@ -9,7 +9,11 @@ import Analytics from './pages/Analytics';
 import Achievements from './pages/Achievements';
 import Settings from './pages/Settings';
 import Trackers from './pages/Trackers';
+import Health from './pages/Health';
+import Ambient from './pages/Ambient';
+import Login from './pages/Login';
 import Onboarding from './components/Onboarding';
+import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 import { useAppStore } from './store/useAppStore';
 
@@ -34,16 +38,24 @@ export default function App() {
           <Onboarding onComplete={() => setShowOnboarding(false)} />
         ) : (
           <Routes>
-            <Route path="/" element={<Layout />}>
-              <Route index element={<Dashboard />} />
-              <Route path="focus" element={<FocusMode />} />
-              <Route path="reading" element={<Reading />} />
-              <Route path="leetcode" element={<LeetCode />} />
-              <Route path="trackers" element={<Trackers />} />
-              <Route path="analytics" element={<Analytics />} />
-              <Route path="achievements" element={<Achievements />} />
-              <Route path="settings" element={<Settings />} />
-              <Route path="*" element={<div className="p-8 text-white/50 text-center">Page not found</div>} />
+            {/* Public route */}
+            <Route path="/login" element={<Login />} />
+
+            {/* Protected routes (offline-friendly — see ProtectedRoute.tsx) */}
+            <Route element={<ProtectedRoute />}>
+              <Route path="/" element={<Layout />}>
+                <Route index element={<Dashboard />} />
+                <Route path="focus" element={<FocusMode />} />
+                <Route path="reading" element={<Reading />} />
+                <Route path="leetcode" element={<LeetCode />} />
+                <Route path="trackers" element={<Trackers />} />
+                <Route path="health" element={<Health />} />
+                <Route path="ambient" element={<Ambient />} />
+                <Route path="analytics" element={<Analytics />} />
+                <Route path="achievements" element={<Achievements />} />
+                <Route path="settings" element={<Settings />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Route>
             </Route>
           </Routes>
         )}

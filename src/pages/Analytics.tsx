@@ -1,40 +1,134 @@
-import React, { useMemo, useState, Suspense } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useMemo, useState, Suspense, useCallback } from 'react';
+import { motion } from 'framer-motion';
 import { useAppStore } from '../store/useAppStore';
 import {
-  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area, ScatterChart, Scatter, ZAxis,
-  Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis
+  BarChart, Bar, XAxis, YAxis, Tooltip,
+  ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area,
+  RadarChart, PolarGrid, PolarAngleAxis, Radar, CartesianGrid,
 } from 'recharts';
-import { 
-  format, subDays, startOfWeek, addDays, isSameDay, parseISO, 
-  getHours, startOfDay, endOfDay, differenceInDays, getMonth, startOfMonth 
+import {
+  format, subDays, startOfWeek, addDays, parseISO,
 } from 'date-fns';
-import { getHeatmapColor, formatDuration } from '../lib/utils';
-import { 
-  TrendingUp, Target, Zap, BookOpen, Code2, Timer, 
-  Award, Calendar, ArrowUpRight, ArrowDownRight, Clock, Activity,
-  Download, Filter, ChevronDown, Sparkles, Layout, MousePointer2, Layers
+import {
+  useWater, useMeals, useWorkouts, useSleepEntries, useHealthGoals,
+  useHealthRestrictions, useUpdateRestriction, useAddRestriction, useUpdateGoal, useAddGoal,
+} from '../hooks/useHealthQuery';
+import {
+  TrendingUp, Target, Zap, BookOpen, Clock, Activity,
+  Download, Heart, Droplets, Dumbbell, Moon,
 } from 'lucide-react';
-// Lazy load heavy components
-const AnimatedCounter = React.lazy(() => import('../components/AnimatedCounter'));
-const TiltCard = React.lazy(() => import('../components/TiltCard'));
+
+import WeeklyHeatmapMatrix from '../components/analytics/WeeklyHeatmapMatrix';
+import WeeklyPerformance from '../components/analytics/WeeklyPerformance';
+import PerformanceRadar from '../components/analytics/PerformanceRadar';
+import ActivityHeatmap from '../components/analytics/ActivityHeatmap';
+import CognitiveInsights from '../components/analytics/CognitiveInsights';
+import ExecutiveKPIs from '../components/analytics/ExecutiveKPIs';
+import TrendAnalytics from '../components/analytics/TrendAnalytics';
+import FocusIntelligence from '../components/analytics/FocusIntelligence';
+import DeepWorkQuality from '../components/analytics/DeepWorkQuality';
+import HourlyPerformance from '../components/analytics/HourlyPerformance';
+import GoalTracking from '../components/analytics/GoalTracking';
+
 const DrillDownModal = React.lazy(() => import('../components/DrillDownModal'));
-const ReportModal = React.lazy(() => import('../components/ReportModal'));
+const ReportModal    = React.lazy(() => import('../components/ReportModal'));
 
+// ── Animation variants ──────────────────────────────────────────────────────
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.04 } } };
-const item = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } };
+const item    = { hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0 } };
 
+const CHART_TOOLTIP_STYLE = {
+  background: 'rgba(9,10,22,0.95)',
+  border: '1px solid rgba(255,255,255,0.08)',
+  borderRadius: 12,
+  color: 'white',
+  fontSize: 11,
+};
+
+// ── Reusable BioChart sub-component ──────────────────────────────────────────
+function BioChart({
+  title, icon, legend, children,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  legend: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <motion.div variants={item} className="glass-card p-6">
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          {icon}
+          <h3 className="font-bold text-white">{title}</h3>
+        </div>
+        <span className="text-[10px] text-white/30 font-bold uppercase tracking-wider">{legend}</span>
+      </div>
+      <div className="h-[260px]">
+        <ResponsiveContainer width="100%" height="100%">
+          {children as React.ReactElement}
+        </ResponsiveContainer>
+      </div>
+    </motion.div>
+  );
+}
+
+// ── Main Component ───────────────────────────────────────────────────────────
 export default function Analytics() {
-  const { book, problems, focusSessions, dailyActivity, readingStreak, codingStreak, focusStreak } = useAppStore();
-  const [range, setRange] = useState<7 | 30 | 90>(30);
+  const book           = useAppStore(s => s.book);
+  const problems       = useAppStore(s => s.problems);
+  const focusSessions  = useAppStore(s => s.focusSessions);
+  const dailyActivity  = useAppStore(s => s.dailyActivity);
+  const focusStreak    = useAppStore(s => s.focusStreak);
+
+  const [range, setRange]           = useState<7 | 30 | 90>(30);
   const [showReport, setShowReport] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [activeTab, setActiveTab]   = useState<'productivity' | 'biometrics'>('productivity');
 
-  // ── 0. Indexed Maps for O(1) Lookups (BIG Performance Win) ──
+  // ── Health queries ──────────────────────────────────────────────────────
+  const { data: waterLogs   = [] } = useWater();
+  const { data: meals       = [] } = useMeals();
+  const { data: workouts    = [] } = useWorkouts();
+  const { data: sleepLogs   = [] } = useSleepEntries();
+  const { data: healthGoals = [] } = useHealthGoals();
+  const { data: restrictions = [] } = useHealthRestrictions();
+
+  const updateGoalMut = useUpdateGoal();
+  const addGoalMut    = useAddGoal();
+  const updateRestMut = useUpdateRestriction();
+  const addRestMut    = useAddRestriction();
+
+  // ── Goal / restriction helpers ──────────────────────────────────────────
+  const activeCalorieGoalObj = useMemo(() => healthGoals.find(g => g.type === 'calories'), [healthGoals]);
+  const activeCalorieGoal    = activeCalorieGoalObj?.targetValue ?? 2100;
+
+  const activeCalorieCapObj = useMemo(() => restrictions.find(r => r.type === 'calorie_cap'), [restrictions]);
+
+  const activeWaterGoalObj = useMemo(() => healthGoals.find(g => g.type === 'water'), [healthGoals]);
+  const activeWaterGoal    = activeWaterGoalObj?.targetValue ?? 3000;
+
+  const handleCalorieGoalChange = useCallback((v: number) => {
+    activeCalorieGoalObj
+      ? updateGoalMut.mutate({ id: activeCalorieGoalObj.id, updates: { targetValue: v } })
+      : addGoalMut.mutate({ label: 'Daily Calories', type: 'calories', targetValue: v, unit: 'kcal' });
+  }, [activeCalorieGoalObj, updateGoalMut, addGoalMut]);
+
+  const handleCalorieCapChange = useCallback((v: number) => {
+    activeCalorieCapObj
+      ? updateRestMut.mutate({ id: activeCalorieCapObj.id, updates: { limitValue: v } })
+      : addRestMut.mutate({ label: 'Calorie Cap', type: 'calorie_cap', limitValue: v, unit: 'kcal', enabled: true });
+  }, [activeCalorieCapObj, updateRestMut, addRestMut]);
+
+  const handleWaterGoalChange = useCallback((v: number) => {
+    activeWaterGoalObj
+      ? updateGoalMut.mutate({ id: activeWaterGoalObj.id, updates: { targetValue: v } })
+      : addGoalMut.mutate({ label: 'Daily Water', type: 'water', targetValue: v, unit: 'ml' });
+  }, [activeWaterGoalObj, updateGoalMut, addGoalMut]);
+
+  // ── Indexed maps for O(1) lookups ───────────────────────────────────────
   const activityMap = useMemo(() => {
     const map: Record<string, typeof dailyActivity[0]> = {};
-    dailyActivity.forEach(a => map[a.date] = a);
+    dailyActivity.forEach(a => { map[a.date] = a; });
     return map;
   }, [dailyActivity]);
 
@@ -47,129 +141,307 @@ export default function Analytics() {
     return map;
   }, [focusSessions]);
 
-  // ── 1. Weekly Review Intelligence ──
-  const weeklyReview = useMemo(() => {
-    const today = new Date();
-    const startOfThisWeek = startOfWeek(today, { weekStartsOn: 1 });
-    const weekDays = Array.from({ length: 7 }, (_, i) => format(addDays(startOfThisWeek, i), 'yyyy-MM-dd'));
+  // ── Biometric data grouped by date ──────────────────────────────────────
+  const biometricDataByDate = useMemo(() => {
+    const data: Record<string, {
+      water: number; calories: number; protein: number;
+      workoutMin: number; workoutCal: number; sleepMin: number;
+    }> = {};
 
-    let sessionsCount = 0;
-    let solved = 0;
-    let chapters = 0;
-    let bestDay = 'N/A';
-    let maxScore = -1;
+    const ensure = (d: string) => {
+      if (!data[d]) data[d] = { water: 0, calories: 0, protein: 0, workoutMin: 0, workoutCal: 0, sleepMin: 0 };
+    };
+
+    waterLogs.forEach(w => { ensure(w.date); data[w.date].water += w.amount; });
+    meals.forEach(m => {
+      ensure(m.date);
+      data[m.date].calories += m.calories ?? 0;
+      data[m.date].protein  += m.protein  ?? 0;
+    });
+    workouts.forEach(wk => {
+      ensure(wk.date);
+      data[wk.date].workoutMin += wk.durationMinutes  ?? 0;
+      data[wk.date].workoutCal += wk.caloriesBurned   ?? 0;
+    });
+    sleepLogs.forEach(s => { ensure(s.date); data[s.date].sleepMin += s.totalMinutes ?? 0; });
+
+    return data;
+  }, [waterLogs, meals, workouts, sleepLogs]);
+
+  // ── Chart data over selected range ──────────────────────────────────────
+  const activityData = useMemo(() => (
+    Array.from({ length: range }, (_, i) => {
+      const d   = subDays(new Date(), (range - 1) - i);
+      const key = format(d, 'yyyy-MM-dd');
+      const act = activityMap[key];
+      const daySessions  = sessionsByDate[key] ?? [];
+      const completedCnt = daySessions.filter(s => s.completed).length;
+
+      return {
+        date:       key,
+        day:        format(d, 'MMM d'),
+        focus:      act?.focusMinutes    ?? 0,
+        problems:   act?.problemsSolved  ?? 0,
+        chapters:   act?.chaptersRead    ?? 0,
+        efficiency: daySessions.length > 0 ? Math.round((completedCnt / daySessions.length) * 100) : 0,
+        problemsVal: (act?.problemsSolved ?? 0) * 15,
+        chaptersVal: (act?.chaptersRead   ?? 0) * 20,
+      };
+    })
+  ), [activityMap, sessionsByDate, range]);
+
+  const biometricActivityData = useMemo(() => (
+    Array.from({ length: range }, (_, i) => {
+      const d      = subDays(new Date(), (range - 1) - i);
+      const key    = format(d, 'yyyy-MM-dd');
+      const health = biometricDataByDate[key] ?? { water: 0, calories: 0, protein: 0, workoutMin: 0, workoutCal: 0, sleepMin: 0 };
+      return {
+        date:       key,
+        day:        format(d, 'MMM d'),
+        water:      health.water,
+        calories:   health.calories,
+        protein:    health.protein,
+        workoutMin: health.workoutMin,
+        workoutCal: health.workoutCal,
+        sleepHrs:   Math.round((health.sleepMin / 60) * 10) / 10,
+      };
+    })
+  ), [biometricDataByDate, range]);
+
+  // ── Aggregate biometric stats ────────────────────────────────────────────
+  const biometricStats = useMemo(() => {
+    let totalWater = 0, totalCalories = 0, totalWorkoutMin = 0, totalSleepMin = 0;
+    biometricActivityData.forEach(d => {
+      totalWater      += d.water;
+      totalCalories   += d.calories;
+      totalWorkoutMin += d.workoutMin;
+      totalSleepMin   += d.sleepHrs * 60;
+    });
+    const div = Math.max(1, range);
+    const inRangeWorkouts = workouts.filter(w => {
+      try {
+        const d = parseISO(w.date);
+        return !isNaN(d.getTime()) && d >= subDays(new Date(), range);
+      } catch {
+        return false;
+      }
+    });
+
+    return {
+      avgWaterL:    (totalWater      / div / 1000).toFixed(2),
+      avgCalories:  Math.round(totalCalories   / div),
+      avgWorkoutMin: Math.round(totalWorkoutMin / div),
+      avgSleepHrs:  (totalSleepMin  / div / 60).toFixed(1),
+      totalWorkouts: inRangeWorkouts.length,
+    };
+  }, [biometricActivityData, workouts, range]);
+
+  // ── Metabolic flow scores (last 7 days) ─────────────────────────────────
+  const last7DaysScores = useMemo(() => (
+    Array.from({ length: 7 }, (_, i) => {
+      const d      = subDays(new Date(), 6 - i);
+      const key    = format(d, 'yyyy-MM-dd');
+      const health = biometricDataByDate[key] ?? { water: 0, calories: 0, protein: 0, workoutMin: 0, workoutCal: 0, sleepMin: 0 };
+
+      const calScore     = Math.min(health.calories   / Math.max(activeCalorieGoal, 1), 1) * 25;
+      const waterScore   = Math.min(health.water      / Math.max(activeWaterGoal,   1), 1) * 25;
+      const sleepScore   = Math.min(health.sleepMin   / (8 * 60),                      1) * 25;
+      const workoutScore = health.workoutMin >= 30 ? 25 : (health.workoutMin / 30) * 25;
+
+      return {
+        dayLabel: format(d, 'EEE'),
+        score:    Math.max(5, Math.min(100, Math.round(calScore + waterScore + sleepScore + workoutScore))),
+      };
+    })
+  ), [biometricDataByDate, activeCalorieGoal, activeWaterGoal]);
+
+  // ── Cognitive insights ───────────────────────────────────────────────────
+  const cognitiveInsights = useMemo(() => {
+    let focusMinHighSleep = 0, countHighSleep = 0;
+    let focusMinLowSleep  = 0, countLowSleep  = 0;
+    let completeWaterHigh = 0, totalWaterHigh = 0;
+    let completeWaterLow  = 0, totalWaterLow  = 0;
+    const hourCounts = Array.from<number>({ length: 24 }).fill(0);
+
+    focusSessions.forEach(s => {
+      const duration = s.actualDuration || s.duration;
+
+      // Sleep correlation
+      if (s.completed && s.date) {
+        const sleepHrs = (sleepLogs.find(sl => sl.date === s.date)?.totalMinutes ?? 0) / 60;
+        if (sleepHrs > 0) {
+          if (sleepHrs >= 7) { focusMinHighSleep += duration; countHighSleep++; }
+          else               { focusMinLowSleep  += duration; countLowSleep++;  }
+        }
+      }
+
+      // Hydration correlation
+      if (s.date) {
+        const waterOnDay = waterLogs.filter(w => w.date === s.date).reduce((a, w) => a + w.amount, 0);
+        if (waterOnDay > 0) {
+          if (waterOnDay >= 1500) { if (s.completed) completeWaterHigh++; totalWaterHigh++; }
+          else                    { if (s.completed) completeWaterLow++;  totalWaterLow++;  }
+        }
+      }
+
+      // Peak hour
+      if (s.completed && s.startTime) {
+        try {
+          const hr = new Date(s.startTime).getHours();
+          if (!isNaN(hr)) {
+            hourCounts[hr] += duration;
+          }
+        } catch { /* ignore */ }
+      }
+    });
+
+    const hasSleepData = countHighSleep > 0 || countLowSleep > 0;
+    const avgFocusHighSleep  = countHighSleep > 0 ? focusMinHighSleep / countHighSleep : 0;
+    const avgFocusLowSleep   = countLowSleep  > 0 ? focusMinLowSleep  / countLowSleep  : 0;
+    const sleepImprovement   = (hasSleepData && avgFocusLowSleep > 0)
+      ? Math.round(((avgFocusHighSleep - avgFocusLowSleep) / avgFocusLowSleep) * 100) : 0;
+
+    const hasWaterData = totalWaterHigh > 0 || totalWaterLow > 0;
+    const completionHighWater = totalWaterHigh > 0 ? (completeWaterHigh / totalWaterHigh) * 100 : 0;
+    const completionLowWater  = totalWaterLow  > 0 ? (completeWaterLow  / totalWaterLow)  * 100 : 0;
+    const waterCorrelateDrop  = (hasWaterData) ? Math.max(0, Math.round(completionHighWater - completionLowWater)) : 0;
+
+    let peakHour = 20, maxHourMin = 0;
+    hourCounts.forEach((val, hr) => { if (val > maxHourMin) { maxHourMin = val; peakHour = hr; } });
+
+    // Consecutive late nights
+    let consecutiveLateNights = 0, currentStreak = 0;
+    [...new Set(focusSessions.map(s => s.date).filter(Boolean))].sort().forEach(dateStr => {
+      const hasLate = focusSessions.filter(s => s.date === dateStr).some(s => {
+        if (!s.startTime) return false;
+        try {
+          const hr = new Date(s.startTime).getHours();
+          return !isNaN(hr) && hr >= 0 && hr <= 3;
+        } catch {
+          return false;
+        }
+      });
+      if (hasLate) { currentStreak++; consecutiveLateNights = Math.max(consecutiveLateNights, currentStreak); }
+      else         { currentStreak = 0; }
+    });
+
+    return {
+      sleepImprovement:     Math.max(0, sleepImprovement),
+      waterCorrelateDrop:   Math.max(0, waterCorrelateDrop),
+      peakHour,
+      consecutiveLateNights,
+      hasSleepData,
+      hasWaterData,
+    };
+  }, [focusSessions, sleepLogs, waterLogs]);
+
+  // ── Weekly review ────────────────────────────────────────────────────────
+  const weeklyReview = useMemo(() => {
+    const today         = new Date();
+    const startOfThisWeek = startOfWeek(today, { weekStartsOn: 1 });
+    const weekDays      = Array.from({ length: 7 }, (_, i) => format(addDays(startOfThisWeek, i), 'yyyy-MM-dd'));
+
+    let sessionsCount = 0, solved = 0, chapters = 0, bestDay = 'N/A', maxScore = -1;
+    let daysWithActivity = 0;
 
     weekDays.forEach(date => {
-      const act = activityMap[date];
-      const sess = sessionsByDate[date] || [];
-      
+      const act  = activityMap[date];
+      const sess = sessionsByDate[date] ?? [];
+      const health = biometricDataByDate[date];
+
+      const hasSession = sess.some(s => s.completed);
+      const hasCoding  = act && (act.problemsSolved > 0);
+      const hasReading = act && (act.chaptersRead > 0);
+      const hasHealth  = health && (health.water > 0 || health.workoutMin > 0 || health.sleepMin > 0);
+
       if (act) {
-        chapters += act.chaptersRead || 0;
-        solved += act.problemsSolved || 0;
+        chapters += act.chaptersRead   ?? 0;
+        solved   += act.problemsSolved ?? 0;
         const score = (act.focusMinutes / 25) + (act.problemsSolved * 2) + (act.chaptersRead * 1.5);
         if (score > maxScore) {
           maxScore = score;
-          bestDay = format(parseISO(date), 'EEEE');
+          try {
+            bestDay = format(parseISO(date), 'EEEE');
+          } catch {
+            bestDay = 'N/A';
+          }
         }
       }
       sessionsCount += sess.filter(s => s.completed).length;
+
+      if (hasSession || hasCoding || hasReading || hasHealth) {
+        daysWithActivity++;
+      }
     });
 
-    return {
-      sessions: sessionsCount,
-      problems: solved,
-      chapters,
-      bestDay,
-      consistency: 84
-    };
-  }, [activityMap, sessionsByDate]);
+    const consistency = Math.round((daysWithActivity / 7) * 100);
 
-  // ── 2. Performance Radar Data ──
+    return { sessions: sessionsCount, problems: solved, chapters, bestDay, consistency };
+  }, [activityMap, sessionsByDate, biometricDataByDate]);
+
+  // ── Performance radar ────────────────────────────────────────────────────
   const radarData = useMemo(() => [
-    { subject: 'Focus', A: Math.min(100, (focusSessions.filter(s => s.completed).length / (range / 2)) * 100), fullMark: 100 },
-    { subject: 'Coding', A: Math.min(100, (problems.filter(p => p.completed).length / (range / 3)) * 100), fullMark: 100 },
-    { subject: 'Reading', A: Math.min(100, (book.chapters.filter(c => c.completed).length / (book.chapters.length || 1)) * 100), fullMark: 100 },
-    { subject: 'Consistency', A: Math.min(100, (focusStreak.currentStreak / 14) * 100), fullMark: 100 },
-    { subject: 'Efficiency', A: Math.round((focusSessions.filter(s => s.completed).length / (focusSessions.length || 1)) * 100), fullMark: 100 },
+    { subject: 'Focus',       A: Math.min(100, (focusSessions.filter(s => s.completed).length   / Math.max(1, (range / 2))) * 100) },
+    { subject: 'Coding',      A: Math.min(100, (problems.filter(p => p.completed).length        / Math.max(1, (range / 3))) * 100) },
+    { subject: 'Learning',    A: Math.min(100, (book.chapters.filter(c => c.completed).length   / (book.chapters.length || 1)) * 100) },
+    { subject: 'Consistency', A: Math.min(100, (focusStreak.currentStreak / 14) * 100) },
+    { subject: 'Efficiency',  A: Math.round(  (focusSessions.filter(s => s.completed).length    / (focusSessions.length || 1)) * 100) },
   ], [focusSessions, problems, book, focusStreak, range]);
 
-  // ── 3. High-Impact Metrics ──
+  // ── Focus stats for selected range ──────────────────────────────────────
   const stats = useMemo(() => {
-    const now = new Date();
+    const now          = new Date();
     const currentStart = subDays(now, range);
-    const prevStart = subDays(currentStart, range);
+    const prevStart    = subDays(currentStart, range);
 
-    const filterRange = (sessions: any[], start: Date, end: Date) => 
+    const filterRange = (sessions: typeof focusSessions, start: Date, end: Date) =>
       sessions.filter(s => {
-        const d = parseISO(s.endTime || s.startTime);
-        return d >= start && d <= end;
+        const timeStr = s.endTime || s.startTime;
+        if (!timeStr) return false;
+        try {
+          const d = parseISO(timeStr);
+          if (isNaN(d.getTime())) return false;
+          return d >= start && d <= end;
+        } catch {
+          return false;
+        }
       });
 
-    const currSessions = filterRange(focusSessions, currentStart, now);
-    const prevSessions = filterRange(focusSessions, prevStart, currentStart);
-
-    const getStats = (sessions: any[]) => {
+    const getStats = (sessions: typeof focusSessions) => {
       const completed = sessions.filter(s => s.completed);
-      const totalMin = completed.reduce((a, s) => a + (s.actualDuration || s.duration), 0);
+      const totalMin  = completed.reduce((a, s) => a + (s.actualDuration || s.duration), 0);
       return { totalMin, count: completed.length, successRate: sessions.length > 0 ? (completed.length / sessions.length) * 100 : 0 };
     };
 
-    const curr = getStats(currSessions);
-    const prev = getStats(prevSessions);
+    const curr = getStats(filterRange(focusSessions, currentStart, now));
+    const prev = getStats(filterRange(focusSessions, prevStart, currentStart));
+
     const getChange = (c: number, p: number) => p === 0 ? 0 : Math.round(((c - p) / p) * 100);
 
     return {
-      totalMin: curr.totalMin,
-      totalMinChange: getChange(curr.totalMin, prev.totalMin),
-      successRate: Math.round(curr.successRate),
+      totalMin:        curr.totalMin,
+      totalMinChange:  getChange(curr.totalMin, prev.totalMin),
+      successRate:     Math.round(curr.successRate),
       successRateChange: Math.round(curr.successRate - prev.successRate),
-      count: curr.count,
-      countChange: getChange(curr.count, prev.count),
-      avgSession: curr.count > 0 ? Math.round(curr.totalMin / curr.count) : 0
+      count:           curr.count,
+      countChange:     getChange(curr.count, prev.count),
+      avgSession:      curr.count > 0 ? Math.round(curr.totalMin / curr.count) : 0,
     };
   }, [focusSessions, range]);
 
-  // ── 4. Chart Data ──
-  const activityData = useMemo(() => {
-    return Array.from({ length: range }, (_, i) => {
-      const d = subDays(new Date(), (range - 1) - i);
-      const key = format(d, 'yyyy-MM-dd');
-      const act = activityMap[key];
-      const daySessions = sessionsByDate[key] || [];
-      const completedCount = daySessions.filter(s => s.completed).length;
-      const successRate = daySessions.length > 0 ? Math.round((completedCount / daySessions.length) * 100) : 0;
-
-      return {
-        date: key,
-        day: format(d, 'MMM d'),
-        focus: act?.focusMinutes || 0,
-        problems: act?.problemsSolved || 0,
-        chapters: act?.chaptersRead || 0,
-        efficiency: successRate,
-        focusVal: act?.focusMinutes || 0,
-        problemsVal: (act?.problemsSolved || 0) * 15,
-        chaptersVal: (act?.chaptersRead || 0) * 20,
-      };
-    });
-  }, [activityMap, sessionsByDate, range]);
-
+  // ── Heatmap data (12 weeks) ──────────────────────────────────────────────
   const heatmapData = useMemo(() => {
-    const weeks: any[] = [];
-    const today = new Date();
-    let currentDay = startOfWeek(subDays(today, 83), { weekStartsOn: 1 });
-    
+    const weeks: { date: string; value: number; label: string }[][] = [];
+    let currentDay = startOfWeek(subDays(new Date(), 83), { weekStartsOn: 1 });
     for (let w = 0; w < 12; w++) {
       const weekDays = [];
       for (let d = 0; d < 7; d++) {
         const dateKey = format(currentDay, 'yyyy-MM-dd');
-        const act = activityMap[dateKey];
-        const value = (act?.chaptersRead || 0) + (act?.problemsSolved || 0) + Math.floor((act?.focusMinutes || 0) / 25);
-        weekDays.push({ 
-          date: dateKey, 
-          value, 
-          label: format(currentDay, 'MMM d, yyyy'),
-          isMonthStart: currentDay.getDate() === 1 || (w === 0 && d === 0),
-          monthLabel: format(currentDay, 'MMM')
+        const act     = activityMap[dateKey];
+        weekDays.push({
+          date:  dateKey,
+          value: (act?.chaptersRead ?? 0) + (act?.problemsSolved ?? 0) + Math.floor((act?.focusMinutes ?? 0) / 25),
+          label: format(currentDay, 'MMM d'),
         });
         currentDay = addDays(currentDay, 1);
       }
@@ -178,289 +450,304 @@ export default function Analytics() {
     return weeks;
   }, [activityMap]);
 
-  const diffData = useMemo(() => [
-    { name: 'Easy', value: problems.filter(p => p.completed && p.difficulty === 'Easy').length, color: '#34d399' },
-    { name: 'Medium', value: problems.filter(p => p.completed && p.difficulty === 'Medium').length, color: '#fbbf24' },
-    { name: 'Hard', value: problems.filter(p => p.completed && p.difficulty === 'Hard').length, color: '#f87171' },
-  ], [problems]);
+  // ── CSV Exporter ─────────────────────────────────────────────────────────
+  const handleExportCSV = () => {
+    try {
+      const headers = ['Date', 'Focus Minutes', 'Problems Solved', 'Chapters Read', 'Water Intake (ml)', 'Consumed Calories (kcal)', 'Sleep Hours'];
+      const rows = biometricActivityData.map((b, i) => {
+        const act = activityData[i] || { focus: 0, problems: 0, chapters: 0 };
+        return [
+          b.date,
+          act.focus,
+          act.problems,
+          act.chapters,
+          b.water,
+          b.calories,
+          b.sleepHrs
+        ];
+      });
+      
+      const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `productivity_report_${range}d_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (e) {
+      console.warn('CSV Export failed', e);
+    }
+  };
 
-  const readingPct = useMemo(() => {
-    const comp = book.chapters.filter(c => c.completed).length;
-    return Math.round((comp / (book.chapters.length || 1)) * 100);
-  }, [book]);
-
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <motion.div variants={stagger} initial="hidden" animate="show" className="max-w-6xl space-y-8 pb-24">
+    <motion.div variants={stagger} initial="hidden" animate="show" className="max-w-6xl space-y-8 pb-24 relative">
+
       {/* ── Page Header ── */}
-      <motion.div variants={item} className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+      <motion.div variants={item} className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <div className="w-2 h-2 rounded-full bg-violet-500 animate-pulse" />
-            <span className="text-[10px] font-bold text-violet-400 uppercase tracking-[0.2em]">Neural Analytics Engine</span>
+            <span className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] font-mono">Productivity Core Telemetry</span>
           </div>
           <h1 className="text-4xl font-black tracking-tight text-white flex items-center gap-3">
-            Productivity <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-fuchsia-400">Quantum</span>
+            Productivity{' '}
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-fuchsia-400">
+              Analytics
+            </span>
           </h1>
-          <p className="text-white/40 mt-1 text-sm font-medium">Next-gen telemetry for your mental architecture</p>
+          <p className="text-white/40 mt-1 text-sm font-medium font-sans">Enterprise-grade data-dense focus performance reporting dashboard</p>
         </div>
 
         <div className="flex items-center gap-3">
           <div className="bg-white/5 p-1 rounded-2xl border border-white/10 flex backdrop-blur-xl">
             {([7, 30, 90] as const).map(v => (
-              <button key={v} onClick={() => setRange(v)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all duration-300 ${range === v ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/20' : 'text-white/40 hover:text-white/70 hover:bg-white/5'}`}>
+              <button
+                key={v}
+                onClick={() => setRange(v)}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all duration-300 ${
+                  range === v
+                    ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/20'
+                    : 'text-white/40 hover:text-white/70 hover:bg-white/5'
+                }`}
+              >
                 {v}D
               </button>
             ))}
           </div>
-          <button onClick={() => setShowReport(true)} className="btn-glow px-5 py-2.5 flex items-center gap-2 text-sm font-bold">
-            <Download size={16} /> Export
+          <button
+            onClick={handleExportCSV}
+            className="px-5 py-2.5 rounded-xl border border-white/10 text-white/70 hover:text-white hover:bg-white/5 text-sm font-bold flex items-center gap-2 transition-all"
+          >
+            <Download size={16} /> Export CSV
           </button>
         </div>
       </motion.div>
 
-      {/* ── Top Row: Weekly Review & Radar ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Weekly Review Dashboard */}
-        <motion.div variants={item} className="lg:col-span-2 glass-card p-8 relative overflow-hidden group">
-          <div className="absolute inset-0 bg-gradient-to-br from-violet-600/10 via-transparent to-emerald-600/10 pointer-events-none" />
-          <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
-            <Award size={120} />
-          </div>
-          
-          <div className="relative z-10">
-            <div className="flex items-center gap-2 mb-6">
-              <Zap className="text-amber-400" size={18} />
-              <h3 className="text-lg font-black text-white uppercase tracking-wider">Weekly Performance Review</h3>
-            </div>
-            
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-              <div>
-                <div className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">Focus Flow</div>
-                <div className="flex items-baseline gap-2">
-                  <Suspense fallback={<div className="h-9 w-12 bg-white/5 animate-pulse rounded" />}>
-                    <div className="text-3xl font-black text-white"><AnimatedCounter value={weeklyReview.sessions} /></div>
-                  </Suspense>
-                  <div className="text-xs font-bold text-emerald-400">Sessions</div>
-                </div>
-                <div className="text-[9px] text-white/20 mt-1">This Week</div>
-              </div>
-              <div>
-                <div className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">Logic Forge</div>
-                <div className="flex items-baseline gap-2">
-                  <Suspense fallback={<div className="h-9 w-12 bg-white/5 animate-pulse rounded" />}>
-                    <div className="text-3xl font-black text-white"><AnimatedCounter value={weeklyReview.problems} /></div>
-                  </Suspense>
-                  <div className="text-xs font-bold text-cyan-400">Problems</div>
-                </div>
-                <div className="text-[9px] text-white/20 mt-1">This Week</div>
-              </div>
-              <div>
-                <div className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">Knowledge Hub</div>
-                <div className="flex items-baseline gap-2">
-                  <Suspense fallback={<div className="h-9 w-12 bg-white/5 animate-pulse rounded" />}>
-                    <div className="text-3xl font-black text-white"><AnimatedCounter value={weeklyReview.chapters} /></div>
-                  </Suspense>
-                  <div className="text-xs font-bold text-violet-400">Chapters</div>
-                </div>
-                <div className="text-[9px] text-white/20 mt-1">This Week</div>
-              </div>
-              <div>
-                <div className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">Best Day</div>
-                <div className="text-2xl font-black text-white truncate">{weeklyReview.bestDay}</div>
-                <div className="text-[9px] text-white/20 mt-1">Peak Performance</div>
-              </div>
-            </div>
-
-            <div className="mt-10 pt-8 border-t border-white/5 flex items-center justify-between">
-              <div className="flex items-center gap-6">
-                <div>
-                  <div className="text-[9px] font-bold text-white/40 uppercase mb-2 tracking-tighter">Consistency Score</div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-32 h-2 bg-white/5 rounded-full overflow-hidden">
-                      <motion.div initial={{ width: 0 }} animate={{ width: `${weeklyReview.consistency}%` }} className="h-full bg-gradient-to-r from-violet-500 to-fuchsia-500" />
-                    </div>
-                    <span className="text-sm font-black text-white">{weeklyReview.consistency}%</span>
-                  </div>
-                </div>
-                <div className="hidden md:block w-[1px] h-10 bg-white/10" />
-                <div className="hidden md:block">
-                  <div className="text-[9px] font-bold text-white/40 uppercase mb-1">Trend Analysis</div>
-                  <div className="flex items-center gap-2 text-emerald-400 font-bold text-sm">
-                    <TrendingUp size={14} /> Outperforming avg
-                  </div>
-                </div>
-              </div>
-              <button className="btn-ghost px-4 py-2 text-xs flex items-center gap-2 font-bold group-hover:bg-white/5">
-                Full Summary <ArrowUpRight size={14} />
-              </button>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Capability Radar */}
-        <motion.div variants={item} className="glass-card p-6 flex flex-col items-center">
-          <h3 className="font-bold text-white mb-4 text-xs uppercase tracking-widest self-start">Capability Radar</h3>
-          <div className="h-[220px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
-                <PolarGrid stroke="rgba(255,255,255,0.05)" />
-                <PolarAngleAxis dataKey="subject" tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: 700 }} />
-                <Radar name="Performance" dataKey="A" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.3} />
-              </RadarChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="mt-4 flex gap-3 flex-wrap justify-center">
-            {radarData.map(d => (
-              <div key={d.subject} className="flex items-center gap-1">
-                <div className="w-1.5 h-1.5 rounded-full bg-violet-500" />
-                <span className="text-[9px] font-bold text-white/30 uppercase">{d.subject}</span>
-              </div>
-            ))}
-          </div>
-        </motion.div>
+      {/* ── Activity Heatmap Matrix ── */}
+      <div className="relative z-10">
+        <WeeklyHeatmapMatrix
+          focusSessions={focusSessions}
+          problems={problems}
+          waterLogs={waterLogs}
+          meals={meals}
+          dailyActivity={dailyActivity}
+          focusStreak={focusStreak}
+        />
       </div>
 
-      {/* ── Activity Calendar & Drill-downs ── */}
-      <motion.div variants={item} className="glass-card p-8">
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-violet-500/10 text-violet-400"><Calendar size={20} /></div>
-            <div>
-              <h3 className="font-bold text-white">Productivity Calendar</h3>
-              <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest mt-1">Click any cell for a deep-dive analysis</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-4 text-[10px] font-black text-white/30 uppercase tracking-widest">
-            <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-violet-500/5" /> Low</div>
-            <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-violet-500/50" /> Med</div>
-            <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-violet-500" /> High</div>
-          </div>
-        </div>
-        
-        <div className="overflow-x-auto pb-4 custom-scrollbar">
-          <div className="flex gap-2 min-w-[800px]">
-            <div className="flex flex-col gap-2 pr-4 text-[10px] text-white/20 font-black uppercase justify-between py-1 border-r border-white/5">
-              <span>M</span>
-              <span>W</span>
-              <span>F</span>
-              <span>S</span>
-            </div>
-            <div className="flex gap-2 flex-1">
-              {heatmapData.map((week, w) => (
-                <div key={w} className="flex flex-col gap-2 flex-1 relative">
-                  {week[0].isMonthStart && (
-                    <div className="absolute -top-6 left-0 text-[10px] font-black text-white/20 uppercase tracking-widest">
-                      {week[0].monthLabel}
-                    </div>
-                  )}
-                  {week.map((day: any) => (
-                    <motion.div
-                      key={day.date}
-                      whileHover={{ scale: 1.15, zIndex: 10 }}
-                      onClick={() => setSelectedDate(day.date)}
-                      className="aspect-square w-full rounded-[4px] cursor-pointer group relative border border-white/5 transition-colors hover:border-white/20"
-                      style={{ background: getHeatmapColor(day.value) }}
-                    >
-                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-zinc-900 text-[10px] text-white rounded-xl opacity-0 group-hover:opacity-100 transition-all pointer-events-none whitespace-nowrap z-50 border border-white/10 shadow-2xl backdrop-blur-md">
-                        <div className="font-black mb-1">{day.label}</div>
-                        <div className="text-white/40 flex items-center gap-1.5">
-                          <Activity size={10} className="text-violet-400" />
-                          {day.value} Productivity Units
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+      {/* ── Tab bar ── */}
+      <motion.div variants={item} className="flex border-b border-white/5 pb-1 gap-2 relative z-10">
+        {(['productivity', 'biometrics'] as const).map(tab => {
+          const active = activeTab === tab;
+          const activeColorClass = tab === 'productivity' ? 'text-violet-400 font-black' : 'text-rose-400 font-black';
+          const underlineBgClass = tab === 'productivity' ? 'bg-gradient-to-r from-violet-500 to-fuchsia-500' : 'bg-gradient-to-r from-rose-500 to-pink-500';
+          return (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`pb-4 px-6 text-sm font-bold tracking-wider uppercase relative transition-all duration-300 ${
+                active ? activeColorClass : 'text-white/40 hover:text-white/70'
+              }`}
+            >
+              {tab === 'productivity' ? 'Productivity' : 'Health'}
+              {active && (
+                <motion.div
+                  layoutId="activeTabUnderline"
+                  className={`absolute bottom-0 left-0 right-0 h-0.5 ${underlineBgClass}`}
+                />
+              )}
+            </button>
+          );
+        })}
       </motion.div>
 
-      {/* ── Advanced Visual Variety ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Stacked Growth Area */}
-        <motion.div variants={item} className="glass-card p-6">
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400"><Layers size={18} /></div>
-              <h3 className="font-bold text-white">Compound Output Analysis</h3>
-            </div>
-            <div className="flex gap-3 text-[10px] font-black text-white/20 uppercase tracking-widest">
-              <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-[#8b5cf6]" /> Focus</div>
-              <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-[#06b6d4]" /> Code</div>
-              <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-[#10b981]" /> Read</div>
-            </div>
-          </div>
-          <div className="h-[280px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={activityData} margin={{ left: -20 }}>
-                <defs>
-                  <linearGradient id="stack1" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.4}/><stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/></linearGradient>
-                  <linearGradient id="stack2" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#06b6d4" stopOpacity={0.4}/><stop offset="95%" stopColor="#06b6d4" stopOpacity={0}/></linearGradient>
-                  <linearGradient id="stack3" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/><stop offset="95%" stopColor="#10b981" stopOpacity={0}/></linearGradient>
-                </defs>
-                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.2)', fontSize: 10, fontWeight: 700 }} interval={range === 30 ? 6 : range === 7 ? 1 : 14} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.2)', fontSize: 10, fontWeight: 700 }} />
-                <Tooltip contentStyle={{ background: '#090a16', border: '1px solid #1e1b4b', borderRadius: 12, fontSize: 11 }} />
-                <Area type="monotone" dataKey="focusVal" stackId="1" stroke="#8b5cf6" fill="url(#stack1)" strokeWidth={2} />
-                <Area type="monotone" dataKey="problemsVal" stackId="1" stroke="#06b6d4" fill="url(#stack2)" strokeWidth={2} />
-                <Area type="monotone" dataKey="chaptersVal" stackId="1" stroke="#10b981" fill="url(#stack3)" strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.div>
+      {/* ═══════════════════════════════════════ PRODUCTIVITY TAB ══════════════════════════════════════ */}
+      {activeTab === 'productivity' && (
+        <div className="space-y-6 relative z-10">
+          
+          {/* Executive KPI Overview */}
+          <motion.div variants={item}>
+            <ExecutiveKPIs
+              stats={stats}
+              problems={problems}
+              book={book}
+              focusStreak={focusStreak}
+              weeklyReview={weeklyReview}
+            />
+          </motion.div>
 
-        {/* Productivity vs Efficiency Scatter */}
-        <motion.div variants={item} className="glass-card p-6">
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-400"><MousePointer2 size={18} /></div>
-              <h3 className="font-bold text-white">Efficiency Matrix (Scatter)</h3>
+          {/* Time Series trends + Goal forecasts */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <TrendAnalytics activityData={activityData} />
             </div>
-            <p className="text-[10px] text-white/20 font-bold uppercase">Volume vs Precision</p>
+            <GoalTracking
+              stats={stats}
+              problems={problems}
+              book={book}
+              biometricStats={biometricStats}
+            />
           </div>
-          <div className="h-[280px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <ScatterChart margin={{ top: 20, right: 20, bottom: 0, left: -20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
-                <XAxis type="number" dataKey="focus" name="Minutes" unit="m" tick={{ fill: 'rgba(255,255,255,0.2)', fontSize: 10 }} axisLine={false} />
-                <YAxis type="number" dataKey="efficiency" name="Efficiency" unit="%" tick={{ fill: 'rgba(255,255,255,0.2)', fontSize: 10 }} axisLine={false} />
-                <ZAxis type="number" dataKey="problems" range={[50, 400]} />
-                <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ background: '#090a16', borderRadius: 12, border: 'none' }} />
-                <Scatter name="Days" data={activityData} fill="#8b5cf6">
-                  {activityData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.efficiency > 70 ? '#10b981' : entry.efficiency > 40 ? '#8b5cf6' : '#ef4444'} />
+
+          {/* Focus Intelligence + Deep Work Quality */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <FocusIntelligence focusSessions={focusSessions} />
+            <DeepWorkQuality focusSessions={focusSessions} />
+          </div>
+
+          {/* Weekly summary reports + performance radar */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <WeeklyPerformance weeklyReview={weeklyReview} itemAnim={item} />
+            </div>
+            <PerformanceRadar radarData={radarData} itemAnim={item} />
+          </div>
+
+          {/* Pearson Correlation Engine */}
+          <div className="w-full">
+            <HourlyPerformance focusSessions={focusSessions} />
+          </div>
+
+          {/* Contribution Heatmap Grid */}
+          <ActivityHeatmap
+            heatmapData={heatmapData}
+            setSelectedDate={setSelectedDate}
+            itemAnim={item}
+          />
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════ HEALTH TAB ════════════════════════════════════════════ */}
+      {activeTab === 'biometrics' && (
+        <div className="space-y-8 relative z-10">
+          {/* Health overview + radar */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <motion.div variants={item} className="lg:col-span-2 glass-card p-8 relative overflow-hidden group">
+              <div className="absolute inset-0 bg-gradient-to-br from-rose-500/10 via-transparent to-cyan-500/10 pointer-events-none" />
+              <div className="relative z-10">
+                <div className="flex items-center gap-2 mb-6">
+                  <Heart className="text-rose-500 animate-pulse" size={18} />
+                  <h3 className="text-lg font-black text-white uppercase tracking-wider">Health Overview</h3>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+                  {[
+                    { label: 'Calories',  value: biometricStats.avgCalories,  unit: 'kcal/day', color: 'text-rose-400'   },
+                    { label: 'Water',     value: biometricStats.avgWaterL,     unit: 'L/day',    color: 'text-cyan-400'   },
+                    { label: 'Workout',   value: biometricStats.avgWorkoutMin, unit: 'min/day',  color: 'text-violet-400' },
+                    { label: 'Sleep',     value: `${biometricStats.avgSleepHrs}h`, unit: '/ night', color: 'text-indigo-400' },
+                  ].map(m => (
+                    <div key={m.label}>
+                      <div className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">{m.label}</div>
+                      <div className="flex items-baseline gap-2">
+                        <div className="text-3xl font-black text-white">{m.value}</div>
+                        <div className={`text-xs font-bold ${m.color}`}>{m.unit}</div>
+                      </div>
+                    </div>
                   ))}
-                </Scatter>
-              </ScatterChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.div>
-      </div>
+                </div>
 
-      {/* ── Bottom Section: Drill-down Ready Cards ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {[
-          { label: 'Avg Pulse', value: stats.avgSession, unit: 'min', icon: <Clock />, color: 'violet' },
-          { label: 'Peak Capacity', value: stats.count, unit: 'units', icon: <Zap />, color: 'amber' },
-          { label: 'Flow Index', value: stats.successRate, unit: '%', icon: <Activity />, color: 'emerald' },
-          { label: 'Knowledge Cap', value: book.chapters.filter(c => c.completed).length, unit: 'ch', icon: <BookOpen />, color: 'cyan' },
-        ].map(m => (
-          <Suspense key={m.label} fallback={<div className="h-24 bg-white/5 animate-pulse rounded-2xl" />}>
-            <TiltCard className="glass-card p-6 cursor-pointer">
-              <div className={`text-${m.color}-400 mb-4`}>{m.icon}</div>
-              <div className="text-3xl font-black text-white flex items-baseline gap-1">
-                <AnimatedCounter value={m.value} />
-                <span className="text-sm font-bold text-white/30 uppercase">{m.unit}</span>
+                {/* Metabolic flow score strip */}
+                <div className="mt-8 pt-6 border-t border-white/5">
+                  <div className="text-[9px] font-bold text-white/30 uppercase tracking-widest mb-3">7-Day Metabolic Flow Score</div>
+                  <div className="flex items-end gap-2 h-14">
+                    {last7DaysScores.map(d => (
+                      <div key={d.dayLabel} className="flex-1 flex flex-col items-center gap-1">
+                        <div
+                          className="w-full rounded-t-sm bg-gradient-to-t from-rose-500/60 to-pink-400/60 transition-all duration-700"
+                          style={{ height: `${d.score}%` }}
+                          title={`${d.dayLabel}: ${d.score}/100`}
+                        />
+                        <span className="text-[9px] text-white/30 font-bold">{d.dayLabel}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
-              <div className="text-[11px] font-bold text-white/40 uppercase tracking-widest mt-1">{m.label}</div>
-            </TiltCard>
-          </Suspense>
-        ))}
-      </div>
+            </motion.div>
 
+            <motion.div variants={item} className="glass-card p-6 flex flex-col items-center">
+              <h3 className="font-bold text-white mb-4 text-xs uppercase tracking-widest self-start">Health Breakdown</h3>
+              <div className="h-[220px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <RadarChart cx="50%" cy="50%" outerRadius="80%" data={[
+                    { subject: 'Calories',  A: Math.min(100, (biometricStats.avgCalories    / 2100) * 100) },
+                    { subject: 'Water',     A: Math.min(100, (Number(biometricStats.avgWaterL) / 3.5) * 100) },
+                    { subject: 'Exercise',  A: Math.min(100, (biometricStats.avgWorkoutMin   / 45)  * 100) },
+                    { subject: 'Sleep',     A: Math.min(100, (Number(biometricStats.avgSleepHrs) / 8) * 100) },
+                    { subject: 'Workouts',  A: Math.min(100, (biometricStats.totalWorkouts   / 4)   * 100) },
+                  ]}>
+                    <PolarGrid stroke="rgba(255,255,255,0.05)" />
+                    <PolarAngleAxis dataKey="subject" tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 9, fontWeight: 700 }} />
+                    <Radar name="Wellness" dataKey="A" stroke="#f43f5e" fill="#f43f5e" fillOpacity={0.3} />
+                  </RadarChart>
+                </ResponsiveContainer>
+              </div>
+            </motion.div>
+          </div>
+
+          {/* Cognitive insights */}
+          <CognitiveInsights
+            cognitiveInsights={cognitiveInsights}
+            itemAnim={item}
+          />
+
+          {/* Biometric charts */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <BioChart title="Water Intake" icon={<div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-400"><Droplets size={18} /></div>} legend="Logged Water (ml)">
+              <AreaChart data={biometricActivityData} margin={{ left: -20 }}>
+                <defs>
+                  <linearGradient id="gWaterIntake" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%"  stopColor="#06b6d4" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#06b6d4" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.2)', fontSize: 10 }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.2)', fontSize: 10 }} />
+                <Tooltip contentStyle={{ ...CHART_TOOLTIP_STYLE, border: '1px solid #0891b2' }} />
+                <Area type="monotone" dataKey="water" stroke="#06b6d4" fill="url(#gWaterIntake)" strokeWidth={2} />
+              </AreaChart>
+            </BioChart>
+
+            <BioChart title="Calories" icon={<div className="p-2 rounded-lg bg-rose-500/10 text-rose-400"><Heart size={18} /></div>} legend="Consumed (kcal)">
+              <BarChart data={biometricActivityData} margin={{ left: -20 }}>
+                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.2)', fontSize: 10 }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.2)', fontSize: 10 }} />
+                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
+                <Bar dataKey="calories" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </BioChart>
+
+            <BioChart title="Workouts" icon={<div className="p-2 rounded-lg bg-violet-500/10 text-violet-400"><Dumbbell size={18} /></div>} legend="Active Mins">
+              <AreaChart data={biometricActivityData} margin={{ left: -20 }}>
+                <defs>
+                  <linearGradient id="gWorkoutActive" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%"  stopColor="#8b5cf6" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.2)', fontSize: 10 }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.2)', fontSize: 10 }} />
+                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
+                <Area type="monotone" dataKey="workoutMin" stroke="#8b5cf6" fill="url(#gWorkoutActive)" strokeWidth={2} />
+              </AreaChart>
+            </BioChart>
+
+            <BioChart title="Sleep" icon={<div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400"><Moon size={18} /></div>} legend="Hours">
+              <BarChart data={biometricActivityData} margin={{ left: -20 }}>
+                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.2)', fontSize: 10 }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.2)', fontSize: 10 }} />
+                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
+                <Bar dataKey="sleepHrs" fill="#6366f1" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </BioChart>
+          </div>
+        </div>
+      )}
+
+      {/* Modals */}
       <Suspense fallback={null}>
         {showReport && <ReportModal open={showReport} onClose={() => setShowReport(false)} />}
         <DrillDownModal date={selectedDate} onClose={() => setSelectedDate(null)} />

@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { useAppStore } from '../store/useAppStore';
+import { useAchievements } from '../hooks/useAchievementQuery';
 import type { Achievement } from '../types';
 
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.05 } } };
@@ -16,7 +17,7 @@ const RARITY_STYLES: Record<Achievement['rarity'], { border: string; glow: strin
 const CATEGORY_LABELS = { reading: '📖 Reading', coding: '💻 Coding', focus: '🌳 Focus', streak: '🔥 Streak', general: '⚡ General' };
 
 export default function Achievements() {
-  const { achievements } = useAppStore();
+  const { data: achievements = [] } = useAchievements();
   const unlocked = achievements.filter(a => a.unlocked);
   const locked = achievements.filter(a => !a.unlocked);
 

@@ -3,21 +3,67 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAppStore } from '../store/useAppStore';
 import { 
   Palette, User, Shield, Zap, Search, 
-  Keyboard, Beaker, MousePointer2, ChevronRight, Globe,
-  Download, Upload, Trash2, Check, AlertCircle,
-  Layout, Monitor, Activity, Bell, Smartphone, RefreshCw
+  Keyboard, Beaker, MousePointer2, Globe,
+  Trash2, Check, AlertCircle, Cloud, LogIn, LogOut,
+  Layout, Monitor, Activity, Bell, RefreshCw, Loader2
 } from 'lucide-react';
 import type { AppTheme, AppMood } from '../types';
 import BackupManager from '../components/BackupManager';
+import { useAuth } from '../contexts/AuthContext';
+import { migrateLocalStorageToSupabase, isMigrationDone, markMigrationComplete } from '../lib/migration';
+import { useProfile, useUpdateProfile } from '../hooks/useProfileQuery';
 
 type SettingsTab = 'general' | 'appearance' | 'controls' | 'notifications' | 'privacy' | 'labs';
 
 import { THEMES } from '../lib/themes';
 
 export default function Settings() {
-  const { userSettings, updateUserSettings } = useAppStore();
+  const { data: profile } = useProfile();
+  const { mutate: updateProfile } = useUpdateProfile();
+
+  const userSettings = profile?.settings ?? { name: '', theme: 'dark', accentColor: '#7c3aed', mood: 'focused', customQuote: '', onboardingComplete: false, compactMode: false, keyboardShortcuts: true, reducedMotion: false, animationIntensity: 'full' } as any;
+
+  const updateUserSettings = (updates: any) => {
+    updateProfile({ settings: { ...userSettings, ...updates } });
+  };
+
+  const { user, signInWithGoogle, signOut, authError } = useAuth();
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
   const [search, setSearch] = useState('');
+  const [migrating, setMigrating] = useState(false);
+  const [migrateResult, setMigrateResult] = useState<string | null>(null);
+
+  const [draftName, setDraftName] = useState(userSettings.name || '');
+  const [draftQuote, setDraftQuote] = useState(userSettings.customQuote || '');
+
+  React.useEffect(() => {
+    setDraftName(userSettings.name || '');
+  }, [userSettings.name]);
+
+  React.useEffect(() => {
+    setDraftQuote(userSettings.customQuote || '');
+  }, [userSettings.customQuote]);
+
+  const alreadyMigrated = user ? isMigrationDone(user.id) : false;
+
+  const handleMigrate = async () => {
+    if (!user) return;
+    setMigrating(true);
+    setMigrateResult(null);
+    const result = await migrateLocalStorageToSupabase(user.id);
+    const d = result.details;
+    const errKeys = Object.keys(result.errors);
+    if (errKeys.length === 0) {
+      markMigrationComplete(user.id);
+      setMigrateResult(`✅ Synced: ${Object.entries(d).filter(([,v]) => v > 0).map(([k,v]) => `${v} ${k}`).join(', ') || 'nothing to migrate (localStorage was empty)'}`);
+    } else {
+      // Partial success — some domains failed
+      const synced = Object.entries(d).filter(([,v]) => v > 0).map(([k,v]) => `${v} ${k}`).join(', ');
+      const errs = errKeys.map(k => `${k}: ${result.errors[k]}`).join(' | ');
+      setMigrateResult(`⚠️ Partial: ${synced || 'nothing synced'} — Errors → ${errs}`);
+    }
+    setMigrating(false);
+  };
 
   const filteredThemes = useMemo(() => 
     THEMES.filter(t => t.name.toLowerCase().includes(search.toLowerCase())),
@@ -116,8 +162,18 @@ export default function Settings() {
                       <input
                         className="input-glass w-full px-4 py-3 text-sm focus:ring-1 focus:ring-violet-500/50"
                         placeholder="Your name..."
-                        value={userSettings.name || ''}
-                        onChange={e => updateUserSettings({ name: e.target.value })}
+                        value={draftName}
+                        onChange={e => setDraftName(e.target.value)}
+                        onBlur={() => {
+                          if (draftName !== userSettings.name) {
+                            updateUserSettings({ name: draftName });
+                          }
+                        }}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            (e.target as HTMLInputElement).blur();
+                          }
+                        }}
                       />
                     </div>
                     <div className="space-y-2">
@@ -138,8 +194,13 @@ export default function Settings() {
                     <textarea
                       className="input-glass w-full px-4 py-3 text-sm resize-none h-24"
                       placeholder="Enter a quote that anchors your focus..."
-                      value={userSettings.customQuote || ''}
-                      onChange={e => updateUserSettings({ customQuote: e.target.value })}
+                      value={draftQuote}
+                      onChange={e => setDraftQuote(e.target.value)}
+                      onBlur={() => {
+                        if (draftQuote !== userSettings.customQuote) {
+                          updateUserSettings({ customQuote: draftQuote });
+                        }
+                      }}
                     />
                   </div>
                 </Section>
@@ -292,6 +353,70 @@ export default function Settings() {
 
             {activeTab === 'privacy' && (
               <div className="space-y-6">
+                <Section title="Cloud Sync" icon={<Cloud size={16} />} description="Backup your data to the cloud and sync across devices via Supabase.">
+                  {user ? (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                        <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                          <Check size={14} className="text-emerald-400" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-bold text-emerald-400">Signed in</div>
+                          <div className="text-[10px] text-white/40 truncate max-w-[240px]">{user.email}</div>
+                        </div>
+                        <button
+                          onClick={() => signOut()}
+                          className="ml-auto flex items-center gap-1.5 text-[10px] text-white/30 hover:text-rose-400 transition-colors"
+                        >
+                          <LogOut size={12} /> Sign out
+                        </button>
+                      </div>
+
+                      <button
+                        id="settings-import-cloud"
+                        onClick={handleMigrate}
+                        disabled={migrating || alreadyMigrated}
+                        className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-violet-600/20 border border-violet-500/30 hover:bg-violet-600/30 text-white font-semibold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {migrating ? (
+                          <><Loader2 size={15} className="animate-spin" /> Importing…</>
+                        ) : alreadyMigrated ? (
+                          <><Check size={15} className="text-emerald-400" /> Already imported to cloud</>
+                        ) : (
+                          <><Cloud size={15} /> Import local data to cloud</>
+                        )}
+                      </button>
+
+                      {migrateResult && (
+                        <motion.p
+                          initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
+                          className={`text-xs leading-relaxed ${
+                            migrateResult.startsWith('✅') ? 'text-emerald-400' : 'text-rose-400'
+                          }`}
+                        >
+                          {migrateResult}
+                        </motion.p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-4 py-4">
+                      {authError && (
+                        <div className="p-3 w-full rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs leading-relaxed text-center mb-2">
+                          <span className="font-bold block mb-0.5">⚠ Sign-in failed</span>
+                          {authError}
+                        </div>
+                      )}
+                      <p className="text-sm text-white/40 text-center">Sign in to enable cloud backup and cross-device sync.</p>
+                      <button
+                        onClick={() => signInWithGoogle()}
+                        className="flex items-center gap-2 py-2.5 px-5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-white text-sm font-semibold transition-all"
+                      >
+                        <LogIn size={15} /> Sign in with Google
+                      </button>
+                    </div>
+                  )}
+                </Section>
+
                 <Section title="Data Crypt" icon={<Shield size={16} />} description="Your data is stored locally. We never track or export your metrics.">
                   <BackupManager />
                 </Section>
@@ -319,6 +444,144 @@ export default function Settings() {
                          <Trash2 size={18} className="text-red-500/20 group-hover:text-red-400 transition-colors" />
                       </button>
                    </div>
+                </Section>
+              </div>
+            )}
+
+            {activeTab === 'notifications' && (
+              <div className="space-y-6">
+                <Section title="Cognitive Anchors" icon={<Bell size={16} />} description="Configure non-intrusive smart alerts that keep your streak alive and mind sharp.">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                     <ToggleRow 
+                       label="Drink Water Alert" 
+                       description="Gentle prompts when hydration falls below daily milestone"
+                       active={userSettings.waterAlerts ?? true}
+                       onToggle={() => updateUserSettings({ waterAlerts: !(userSettings.waterAlerts ?? true) })}
+                     />
+                     <ToggleRow 
+                       label="Protein Threshold Warning" 
+                       description="Flashes an update if protein intake is critically low by evening"
+                       active={userSettings.proteinAlerts ?? true}
+                       onToggle={() => updateUserSettings({ proteinAlerts: !(userSettings.proteinAlerts ?? true) })}
+                     />
+                     <ToggleRow 
+                       label="Focus Block Reminders" 
+                       description="Tactile alerts when it is time to start a deep work tree block"
+                       active={userSettings.focusAlerts ?? true}
+                       onToggle={() => updateUserSettings({ focusAlerts: !(userSettings.focusAlerts ?? true) })}
+                     />
+                     <ToggleRow 
+                       label="Streak Vulnerability Warnings" 
+                       description="Alarms when coding, reading, or focus streaks are at risk of resetting"
+                       active={userSettings.streakAlerts ?? true}
+                       onToggle={() => updateUserSettings({ streakAlerts: !(userSettings.streakAlerts ?? true) })}
+                     />
+                     <ToggleRow 
+                       label="LeetCode Daily Quest" 
+                       description="Polite prompt to keep your algorithmic problem solving sharp"
+                       active={userSettings.leetcodeAlerts ?? true}
+                       onToggle={() => updateUserSettings({ leetcodeAlerts: !(userSettings.leetcodeAlerts ?? true) })}
+                     />
+                     <ToggleRow 
+                       label="Active Workout Prompts" 
+                       description="Tactful reminders when sedentary metrics exceed safe guidelines"
+                       active={userSettings.workoutAlerts ?? true}
+                       onToggle={() => updateUserSettings({ workoutAlerts: !(userSettings.workoutAlerts ?? true) })}
+                     />
+                  </div>
+                </Section>
+
+                <Section title="Restrictions Registry" icon={<Shield size={16} />} description="Enforce strict behavioral guidelines to maintain physical and cognitive discipline.">
+                  <div className="space-y-4">
+                    <p className="text-[11px] text-white/30 leading-relaxed font-medium">
+                      Enabling restrictions populates the Contextual Pulse on your Dashboard with real-time feedback and high-priority alarms.
+                    </p>
+                    
+                    {/* Calorie cap */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl bg-white/[0.02] border border-white/5 gap-4">
+                      <div>
+                        <div className="text-sm font-bold text-white/80">🔴 Calorie Intake Cap</div>
+                        <div className="text-[10px] text-white/20 mt-1">Restrict daily maximum calorie input</div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <input 
+                          type="number" 
+                          value={userSettings.calorieCap ?? 2100}
+                          onChange={e => updateUserSettings({ calorieCap: +e.target.value })}
+                          className="input-glass w-24 px-3 py-1.5 text-xs text-center font-bold"
+                        />
+                        <span className="text-[10px] text-white/30 font-bold">kcal</span>
+                        <div 
+                          onClick={() => updateUserSettings({ calorieCapEnabled: !(userSettings.calorieCapEnabled ?? true) })}
+                          className={`relative w-12 h-7 rounded-full cursor-pointer transition-all duration-300 ${(userSettings.calorieCapEnabled ?? true) ? 'bg-rose-500 shadow-lg shadow-rose-900/20' : 'bg-white/10'}`}
+                        >
+                          <div className={`absolute top-1 left-1 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-300 ${(userSettings.calorieCapEnabled ?? true) ? 'translate-x-5' : ''}`} />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Sugar cap */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl bg-white/[0.02] border border-white/5 gap-4">
+                      <div>
+                        <div className="text-sm font-bold text-white/80">🍭 Daily Sugar Limit</div>
+                        <div className="text-[10px] text-white/20 mt-1">Enforce sugar consumption restrictions</div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <input 
+                          type="number" 
+                          value={userSettings.sugarCap ?? 25}
+                          onChange={e => updateUserSettings({ sugarCap: +e.target.value })}
+                          className="input-glass w-24 px-3 py-1.5 text-xs text-center font-bold"
+                        />
+                        <span className="text-[10px] text-white/30 font-bold">g</span>
+                        <div 
+                          onClick={() => updateUserSettings({ sugarCapEnabled: !(userSettings.sugarCapEnabled ?? true) })}
+                          className={`relative w-12 h-7 rounded-full cursor-pointer transition-all duration-300 ${(userSettings.sugarCapEnabled ?? true) ? 'bg-rose-500 shadow-lg shadow-rose-900/20' : 'bg-white/10'}`}
+                        >
+                          <div className={`absolute top-1 left-1 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-300 ${(userSettings.sugarCapEnabled ?? true) ? 'translate-x-5' : ''}`} />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Caffeine cap */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl bg-white/[0.02] border border-white/5 gap-4">
+                      <div>
+                        <div className="text-sm font-bold text-white/80">☕ Caffeine Intake Cap</div>
+                        <div className="text-[10px] text-white/20 mt-1">Enforce safe daily caffeinated beverage limit</div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <input 
+                          type="number" 
+                          value={userSettings.caffeineCap ?? 2}
+                          onChange={e => updateUserSettings({ caffeineCap: +e.target.value })}
+                          className="input-glass w-24 px-3 py-1.5 text-xs text-center font-bold"
+                        />
+                        <span className="text-[10px] text-white/30 font-bold">cups</span>
+                        <div 
+                          onClick={() => updateUserSettings({ caffeineCapEnabled: !(userSettings.caffeineCapEnabled ?? true) })}
+                          className={`relative w-12 h-7 rounded-full cursor-pointer transition-all duration-300 ${(userSettings.caffeineCapEnabled ?? true) ? 'bg-rose-500 shadow-lg shadow-rose-900/20' : 'bg-white/10'}`}
+                        >
+                          <div className={`absolute top-1 left-1 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-300 ${(userSettings.caffeineCapEnabled ?? true) ? 'translate-x-5' : ''}`} />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Weekday junk cap */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl bg-white/[0.02] border border-white/5 gap-4">
+                      <div>
+                        <div className="text-sm font-bold text-white/80">🚫 Weekday Junk Restrict</div>
+                        <div className="text-[10px] text-white/20 mt-1">Strict behavioral guidelines against fast food on weekdays</div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div 
+                          onClick={() => updateUserSettings({ junkCapEnabled: !(userSettings.junkCapEnabled ?? true) })}
+                          className={`relative w-12 h-7 rounded-full cursor-pointer transition-all duration-300 ${(userSettings.junkCapEnabled ?? true) ? 'bg-rose-500 shadow-lg shadow-rose-900/20' : 'bg-white/10'}`}
+                        >
+                          <div className={`absolute top-1 left-1 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-300 ${(userSettings.junkCapEnabled ?? true) ? 'translate-x-5' : ''}`} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </Section>
               </div>
             )}

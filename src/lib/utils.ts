@@ -27,8 +27,16 @@ export function calculateStreak(history: Record<string, boolean>): { current: nu
   let longest = 0;
   let tempLongest = 0;
 
-  // Current streak - count backwards from today
-  for (let i = 0; i < 365; i++) {
+  const todayKey = format(today, 'yyyy-MM-dd');
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayKey = format(yesterday, 'yyyy-MM-dd');
+
+  // If today is not completed yet, but yesterday is, count backwards starting from yesterday
+  const startOffset = history[todayKey] ? 0 : (history[yesterdayKey] ? 1 : 0);
+
+  // Current streak - count backwards
+  for (let i = startOffset; i < 365; i++) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
     const key = format(d, 'yyyy-MM-dd');
@@ -89,7 +97,15 @@ export function formatDuration(minutes: number): string {
 }
 
 export function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  // Fallback RFC4122 v4 compliant UUID generator
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 }
 
 export function getDateLabel(dateStr: string): string {

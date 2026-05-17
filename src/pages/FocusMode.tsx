@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppStore } from '../store/useAppStore';
+import { useFocusSessions, useAddFocusSession, useUpdateFocusSession } from '../hooks/useFocusQuery';
 import {
   Play, Pause, SkipForward, RotateCcw, Settings, Maximize2, Minimize2,
   Volume2, VolumeX, Leaf, Music, Coffee, Wind, Keyboard, Rocket, X
@@ -43,10 +44,12 @@ const GROWTH_EMOJIS: Record<GrowthTheme, { growing: string; done: string; failed
 };
 
 export default function FocusMode() {
-  const { 
-    pomodoroSettings, updatePomodoroSettings, 
-    addFocusSession, updateFocusSession, focusSessions 
-  } = useAppStore();
+  const pomodoroSettings = useAppStore(s => s.pomodoroSettings);
+  const updatePomodoroSettings = useAppStore(s => s.updatePomodoroSettings);
+  
+  const { data: focusSessions = [] } = useFocusSessions();
+  const { mutate: addFocusSession } = useAddFocusSession();
+  const { mutate: updateFocusSession } = useUpdateFocusSession();
 
   const [mode, setMode]                 = useState<PomodoroMode>('focus');
   const [timeLeft, setTimeLeft]         = useState(pomodoroSettings.focusDuration * 60);
@@ -106,6 +109,18 @@ export default function FocusMode() {
   useEffect(() => {
     setVolume(pomodoroSettings.ambienceVolume);
   }, [pomodoroSettings.ambienceVolume]);
+
+  // Start/Stop Synthesized Ambience
+  useEffect(() => {
+    if (isRunning && mode === 'focus') {
+      soundEngine.startAmbience(pomodoroSettings.ambience, volume);
+    } else {
+      soundEngine.stopAmbience();
+    }
+    return () => {
+      soundEngine.stopAmbience();
+    };
+  }, [isRunning, pomodoroSettings.ambience, mode, volume]);
 
   /* ── tick ── */
   /* ── keyboard shortcuts ── */
@@ -674,7 +689,7 @@ export default function FocusMode() {
           if (reflection) {
             const lastSession = focusSessions[0];
             if (lastSession && lastSession.completed) {
-              updateFocusSession(lastSession.id, { reflection });
+              updateFocusSession({ id: lastSession.id, updates: { reflection } });
             }
           }
           setShowReflection(false);

@@ -3,34 +3,49 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, BookOpen, Code2, Timer, BarChart3,
-  Trophy, Settings, Zap, ChevronRight, Flame, Target, Sparkles
+  Trophy, Settings, Zap, ChevronRight, Flame, Target, Sparkles, Heart, Music
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { todayString, getProductivityScore } from '../lib/utils';
 import { useSoundFX } from '../hooks/useSoundFX';
+import { useBook } from '../hooks/useBookQuery';
+import { useProblems } from '../hooks/useLeetCodeQuery';
+import { useFocusSessions } from '../hooks/useFocusQuery';
+import { useProfile } from '../hooks/useProfileQuery';
+import { useDailyActivity } from '../hooks/useActivityQuery';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
-  { to: '/focus', icon: Timer, label: 'Focus Mode' },
-  { to: '/reading', icon: BookOpen, label: 'Reading' },
-  { to: '/leetcode', icon: Code2, label: 'LeetCode' },
+  { to: '/focus', icon: Timer, label: 'Focus' },
+  { to: '/reading', icon: BookOpen, label: 'Learning' },
+  { to: '/leetcode', icon: Code2, label: 'Coding' },
   { to: '/trackers', icon: Target, label: 'Trackers' },
+  { to: '/health', icon: Heart, label: 'Health' },
+  { to: '/ambient', icon: Music, label: 'Flowscape' },
   { to: '/analytics', icon: BarChart3, label: 'Analytics' },
   { to: '/achievements', icon: Trophy, label: 'Achievements' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];
 
 export default function Sidebar() {
-  const { readingStreak, codingStreak, focusStreak, book, problems, focusSessions, dailyActivity } = useAppStore();
+  const { data: book = { id: 'main-book', title: 'My Book', author: 'Author', chapters: [], startDate: todayString(), coverColor: '#7c3aed' } } = useBook();
+  const { data: problems = [] } = useProblems();
+  const { data: focusSessions = [] } = useFocusSessions();
+  const { data: profile } = useProfile();
+  const { data: dailyActivity = [] } = useDailyActivity();
+
+  const readingStreak = profile?.readingStreak ?? { currentStreak: 0, longestStreak: 0, history: {} };
+  const codingStreak = profile?.codingStreak ?? { currentStreak: 0, longestStreak: 0, history: {} };
+  const focusStreak = profile?.focusStreak ?? { currentStreak: 0, longestStreak: 0, history: {} };
   const location = useLocation();
   const { play } = useSoundFX();
   const today = todayString();
-  const todayActivity = dailyActivity.find(a => a.date === today);
-  const prodScore = getProductivityScore(
-    todayActivity?.chaptersRead || 0,
-    todayActivity?.problemsSolved || 0,
-    todayActivity?.focusMinutes || 0
-  );
+
+  const chaptersToday = book.chapters.filter(c => c.completed && c.dateCompleted === today).length;
+  const problemsToday = problems.filter(p => p.completed && p.date === today).length;
+  const focusMinutesToday = focusSessions.filter(s => s.completed && s.date === today).reduce((acc, s) => acc + (s.actualDuration || s.duration), 0);
+
+  const prodScore = getProductivityScore(chaptersToday, problemsToday, focusMinutesToday);
   const isElite = prodScore >= 80;
 
   const completedChapters = book.chapters.filter(c => c.completed).length;

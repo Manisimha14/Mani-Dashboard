@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0c15;
+      --card-bg: rgba(255, 255, 255, 0.03);
+      --accent: #8b5cf6;
+      --accent-glow: rgba(139, 92, 246, 0.25);
+      --text: #ffffff;
+      --text-muted: rgba(255, 255, 255, 0.4);
+      --border: rgba(255, 255, 255, 0.06);
+      --rose: #f43f5e;
+      --emerald: #10b981;
+      --amber: #f59e0b;
+      --cyan: #06b6d4;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Outfit', sans-serif;
+      width: 340px;
+      background: var(--bg);
+      color: var(--text);
+      padding: 16px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      max-height: 560px;
+    }
+
+    /* Track Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 4px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+    }
+
+    /* Glass Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 12px;
+      margin-bottom: 14px;
+    }
+
+    .title {
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: 0.5px;
+      background: linear-gradient(135deg, #fff 0%, var(--text-muted) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-transform: uppercase;
+    }
+
+    .live-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--emerald);
+      text-transform: uppercase;
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--emerald);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--emerald);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 0.4; }
+      50% { opacity: 1; }
+      100% { opacity: 0.4; }
+    }
+
+    /* Streak Stats */
+    .streak-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .streak-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px;
+      text-align: center;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .streak-card:hover {
+      border-color: rgba(139, 92, 246, 0.25);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .streak-label {
+      font-size: 8px;
+      text-transform: uppercase;
+      font-weight: 800;
+      color: var(--text-muted);
+      letter-spacing: 0.8px;
+    }
+
+    .streak-value {
+      font-size: 16px;
+      font-weight: 900;
+      color: #fff;
+      margin-top: 4px;
+    }
+
+    /* Main Action Timer Box */
+    .timer-box {
+      background: linear-gradient(180deg, rgba(139, 92, 246, 0.06) 0%, transparent 100%);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      text-align: center;
+      position: relative;
+      margin-bottom: 14px;
+    }
+
+    .timer-display {
+      font-size: 34px;
+      font-weight: 900;
+      letter-spacing: -1px;
+      margin-bottom: 10px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .btn {
+      width: 100%;
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 11px 16px;
+      font-size: 11px;
+      font-weight: 800;
+      border-radius: 10px;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 14px var(--accent-glow);
+    }
+
+    .btn:hover {
+      background: #7c3aed;
+      transform: translateY(-1px);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border);
+      box-shadow: none;
+      color: var(--text);
+      margin-top: 8px;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    /* Site Time Analytics */
+    .analytics-panel {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px;
+      margin-bottom: 14px;
+    }
+
+    .section-title {
+      font-size: 9px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .analytics-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+      font-size: 11px;
+    }
+
+    .analytics-name {
+      color: rgba(255, 255, 255, 0.7);
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .analytics-bar-bg {
+      height: 4px;
+      width: 80px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-left: 10px;
+    }
+
+    .analytics-bar {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.5s ease;
+    }
+
+    .code-bar { background: var(--cyan); }
+    .learn-bar { background: var(--accent); }
+    .dist-bar { background: var(--rose); }
+
+    /* Collapsible Configurations */
+    .accordion {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+
+    .accordion-header {
+      background: var(--card-bg);
+      padding: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .accordion-header:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .accordion-content {
+      padding: 12px;
+      background: rgba(0, 0, 0, 0.2);
+      border-top: 1px solid var(--border);
+      display: none;
+    }
+
+    .accordion-content.active {
+      display: block;
+    }
+
+    .blocklist-input-row {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+
+    .input-field {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: white;
+      padding: 8px;
+      font-size: 11px;
+      font-family: inherit;
+    }
+
+    .input-field:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .btn-add {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 0 12px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .blocklist-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      max-height: 90px;
+      overflow-y: auto;
+    }
+
+    .tag {
+      background: rgba(244, 63, 94, 0.1);
+      border: 1px solid rgba(244, 63, 94, 0.2);
+      color: var(--rose);
+      font-size: 9px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .tag-remove {
+      cursor: pointer;
+      font-weight: 900;
+      opacity: 0.6;
+    }
+
+    .tag-remove:hover {
+      opacity: 1;
+    }
+
+    /* Option Row & Footer */
+    .option-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 8px;
+    }
+
+    .option-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    /* Toggle switch */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 32px;
+      height: 18px;
+    }
+
+    .switch input { 
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(255, 255, 255, 0.08);
+      transition: .3s;
+      border-radius: 18px;
+      border: 1px solid var(--border);
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 10px;
+      width: 10px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+    }
+
+    input:checked + .slider {
+      background-color: var(--accent);
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(14px);
+    }
+
+    .footer {
+      font-size: 8px;
+      color: var(--text-muted);
+      text-align: center;
+      margin-top: 14px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .sync-status {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--emerald);
+    }
+
+    .sync-status.pending {
+      background: var(--amber);
+      box-shadow: 0 0 6px var(--amber);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="title">Antigravity Life OS</div>
+    <div class="live-indicator">
+      <span class="status-dot"></span> Live
+    </div>
+  </div>
+
+  <!-- Streaks Grid -->
+  <div class="streak-grid">
+    <div class="streak-card">
+      <div class="streak-label">Focus</div>
+      <div class="streak-value" id="streak-focus">--</div>
+    </div>
+    <div class="streak-card">
+      <div class="streak-label">Code</div>
+      <div class="streak-value" id="streak-code">--</div>
+    </div>
+    <div class="streak-card">
+      <div class="streak-label">Reading</div>
+      <div class="streak-value" id="streak-reading">--</div>
+    </div>
+  </div>
+
+  <!-- Active Focus Timer -->
+  <div class="timer-box">
+    <div class="timer-display" id="timer-display">25:00</div>
+    <button class="btn" id="start-btn">Start Focus Block</button>
+    <button class="btn btn-secondary" id="log-leetcode-btn">💻 Log LeetCode Solved</button>
+  </div>
+
+  <!-- Time-on-Site Analytics -->
+  <div class="analytics-panel">
+    <div class="section-title">
+      <span>Today's Time-on-Site</span>
+      <span id="total-time-val">0m</span>
+    </div>
+    <div class="analytics-row">
+      <div class="analytics-name">💻 Coding (LeetCode/GitHub)</div>
+      <div style="display: flex; align-items: center;">
+        <span id="code-time-val">0m</span>
+        <div class="analytics-bar-bg"><div class="analytics-bar code-bar" id="code-bar" style="width: 0%;"></div></div>
+      </div>
+    </div>
+    <div class="analytics-row">
+      <div class="analytics-name">🪐 Reading / Learning</div>
+      <div style="display: flex; align-items: center;">
+        <span id="learn-time-val">0m</span>
+        <div class="analytics-bar-bg"><div class="analytics-bar learn-bar" id="learn-bar" style="width: 0%;"></div></div>
+      </div>
+    </div>
+    <div class="analytics-row">
+      <div class="analytics-name">🛑 Blocked Distractions</div>
+      <div style="display: flex; align-items: center;">
+        <span id="dist-count-val">0</span>
+        <div class="analytics-bar-bg"><div class="analytics-bar dist-bar" id="dist-bar" style="width: 0%;"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Expandable Blocklist Configuration -->
+  <div class="accordion">
+    <div class="accordion-header" id="accordion-toggle">
+      <span>⚙️ Distraction Shield Configurations</span>
+      <span style="font-size: 8px; color: var(--accent);">EDIT</span>
+    </div>
+    <div class="accordion-content" id="accordion-panel">
+      <div class="blocklist-input-row">
+        <input type="text" class="input-field" id="new-site-input" placeholder="e.g. twitter.com">
+        <button class="btn-add" id="add-site-btn">Add</button>
+      </div>
+      <div class="blocklist-tags" id="blocklist-tags-container">
+        <!-- Site tags generated dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Blocker switch -->
+  <div class="option-row">
+    <div class="option-label">🛡️ Distraction Shield Blocker</div>
+    <label class="switch">
+      <input type="checkbox" id="blocker-switch" checked>
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <!-- Telemetry Sync button -->
+  <div class="option-row" style="cursor: pointer;" id="sync-btn">
+    <div class="option-label">🔄 Sync Dashboard Telemetry</div>
+    <span style="font-size: 10px; color: var(--accent); font-weight: 800;" id="sync-btn-label">SYNC</span>
+  </div>
+
+  <div class="footer">
+    <span class="sync-status" id="sync-indicator"></span>
+    <span>Companion Relay v1.1</span>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

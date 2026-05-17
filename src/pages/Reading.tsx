@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppStore } from '../store/useAppStore';
+import { useBook, useUpdateChapter, useSetBookMeta } from '../hooks/useBookQuery';
+import { useProfile } from '../hooks/useProfileQuery';
 import { BookOpen, Check, Calendar, ChevronDown, ChevronUp, Edit3, X, Flame } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatDate, todayString } from '../lib/utils';
@@ -12,7 +14,13 @@ const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.04 } } };
 const item = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } };
 
 export default function Reading() {
-  const { book, updateChapter, setBookMeta, readingStreak } = useAppStore();
+  const { data: book = { id: 'main-book', title: 'My Book', author: 'Author', chapters: [], startDate: todayString(), coverColor: '#7c3aed' } } = useBook();
+  const { mutate: updateChapter } = useUpdateChapter();
+  const { mutate: setBookMeta } = useSetBookMeta();
+  const { data: profile } = useProfile();
+  
+  const readingStreak = profile?.readingStreak ?? { currentStreak: 0, longestStreak: 0, history: {} };
+  
   const [editingBook, setEditingBook] = useState(false);
   const [bookTitle, setBookTitle] = useState(book.title);
   const [bookAuthor, setBookAuthor] = useState(book.author);
@@ -42,26 +50,22 @@ export default function Reading() {
   const progressPct = useMemo(() => Math.round((completedChapters / totalChapters) * 100), [completedChapters, totalChapters]);
   const nextChapter = useMemo(() => book.chapters.find(c => !c.completed), [book.chapters]);
 
-  // Milestone logic via effect to ensure state is settled
-  useEffect(() => {
-    if (completedChapters > 0) {
+  const handleToggleChapter = (chapterId: number, completed: boolean) => {
+    updateChapter({ chapterId, updates: { completed, status: completed ? 'completed' : 'not_started' } });
+    if (completed) {
+      toast.success(`Chapter completed! 🎉`, { icon: '📖' });
+      
+      const newCompleted = completedChapters + 1;
       const milestones = [10, 25, 40, totalChapters];
-      if (milestones.includes(completedChapters)) {
-        if (completedChapters === totalChapters) {
+      if (milestones.includes(newCompleted)) {
+        if (newCompleted === totalChapters) {
           setShowConfetti(true);
           setTimeout(() => setShowConfetti(false), 6000);
           toast.success('🏆 Book Complete! Incredible achievement!', { duration: 5000 });
         } else {
-          toast.success(`🌟 Milestone: ${completedChapters} chapters done!`, { duration: 4000 });
+          toast.success(`🌟 Milestone: ${newCompleted} chapters done!`, { duration: 4000 });
         }
       }
-    }
-  }, [completedChapters, totalChapters]);
-
-  const handleToggleChapter = (chapterId: number, completed: boolean) => {
-    updateChapter(chapterId, { completed, status: completed ? 'completed' : 'not_started' });
-    if (completed) {
-      toast.success(`Chapter completed! 🎉`, { icon: '📖' });
     }
   };
 
@@ -246,7 +250,7 @@ export default function Reading() {
                           value={chapter.status}
                           onChange={e => {
                             const status = e.target.value as any;
-                            updateChapter(chapter.id, { status, completed: status === 'completed' });
+                            updateChapter({ chapterId: chapter.id, updates: { status, completed: status === 'completed' } });
                           }}
                           className="input-glass text-sm px-3 py-1.5"
                         >
@@ -268,7 +272,7 @@ export default function Reading() {
                           className="input-glass w-full px-3 py-2 text-sm min-h-[80px] resize-none"
                           placeholder="What did you learn from this chapter?"
                           value={chapter.notes || ''}
-                          onChange={e => updateChapter(chapter.id, { notes: e.target.value })}
+                          onChange={e => updateChapter({ chapterId: chapter.id, updates: { notes: e.target.value } })}
                         />
                       </div>
                     </div>
