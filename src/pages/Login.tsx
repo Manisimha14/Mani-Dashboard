@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Mail, Zap, ArrowRight, CheckCircle, Loader2, Home } from 'lucide-react';
+import { isSupabaseConfigured } from '../lib/supabase';
+import { Mail, Zap, ArrowRight, CheckCircle, Loader2, Home, Sparkles, ShieldAlert } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 // ─── Floating orb background element ─────────────────────────────────────────
 function Orb({ className }: { className?: string }) {
@@ -15,6 +18,7 @@ function Orb({ className }: { className?: string }) {
 // ─── Main Login Page ─────────────────────────────────────────────────────────
 export default function LoginPage() {
   const { signInWithGoogle, signInWithMagicLink, authError } = useAuth();
+  const navigate = useNavigate();
 
   const [email, setEmail] = useState('');
   const [magicSent, setMagicSent] = useState(false);
@@ -123,93 +127,138 @@ export default function LoginPage() {
             ) : (
               /* ── Login form ── */
               <motion.div key="form" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                <h2 className="text-white text-2xl font-bold mb-1">Welcome back</h2>
-                <p className="text-white/40 text-sm mb-7">
-                  Sign in to sync your data across devices.
-                </p>
+                {!isSupabaseConfigured ? (
+                  <div className="space-y-5">
+                    <h2 className="text-white text-2xl font-bold mb-1">Local Workspace Active</h2>
+                    <p className="text-white/40 text-sm leading-relaxed">
+                      Your life productivity dashboard is running in high-performance local mode. All metrics and focus tools are ready to use!
+                    </p>
 
-                {/* Google */}
-                <button
-                  id="login-google"
-                  onClick={handleGoogle}
-                  disabled={googleLoading || magicLoading}
-                  className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 text-white font-medium text-sm transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed group mb-4"
-                >
-                  {googleLoading ? (
-                    <Loader2 size={18} className="animate-spin text-white/70" />
-                  ) : (
-                    <Home size={18} className="text-white/70 group-hover:text-white transition-colors" />
-                  )}
-                  Continue with Google
-                </button>
+                    {/* Amber Warning Box */}
+                    <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-200/90 text-xs space-y-2">
+                      <div className="flex items-center gap-1.5 font-bold">
+                        <ShieldAlert size={14} className="text-amber-400" />
+                        Supabase Offline Mode Active
+                      </div>
+                      <p className="leading-relaxed font-mono opacity-80 text-[10px]">
+                        No database environment variables detected on the host. Telemetry and goals will be saved locally on this browser.
+                      </p>
+                    </div>
 
-                {/* Divider */}
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="flex-1 h-px bg-white/10" />
-                  <span className="text-white/30 text-xs">or</span>
-                  <div className="flex-1 h-px bg-white/10" />
-                </div>
-
-                {/* Magic link form */}
-                <form onSubmit={handleMagicLink} className="space-y-3">
-                  <div className="relative">
-                    <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
-                    <input
-                      id="login-email"
-                      type="email"
-                      value={email}
-                      onChange={e => setEmail(e.target.value)}
-                      placeholder="your@email.com"
-                      required
-                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-violet-500/60 focus:bg-white/8 transition-all duration-200"
-                    />
-                  </div>
-
-                  <button
-                    id="login-magic-link"
-                    type="submit"
-                    disabled={magicLoading || googleLoading || !email}
-                    className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-semibold text-sm transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-violet-500/25"
-                  >
-                    {magicLoading ? (
-                      <Loader2 size={16} className="animate-spin" />
-                    ) : (
-                      <>
-                        Send magic link
-                        <ArrowRight size={16} />
-                      </>
-                    )}
-                  </button>
-                </form>
-
-                {/* Error */}
-                <AnimatePresence>
-                  {error && (
-                    <motion.p
-                      initial={{ opacity: 0, y: -4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0 }}
-                      className="mt-3 text-rose-400 text-xs text-center"
+                    {/* Elite Enter Button */}
+                    <button
+                      onClick={() => {
+                        navigate('/');
+                        toast.success('Entering workspace in secure offline mode!');
+                      }}
+                      className="w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-sm transition-all duration-200 shadow-lg shadow-amber-500/25 uppercase tracking-wider"
                     >
-                      {error}
-                    </motion.p>
-                  )}
-                </AnimatePresence>
+                      Enter Workspace as Guest
+                      <ArrowRight size={16} />
+                    </button>
 
-                <p className="mt-6 text-white/25 text-xs text-center leading-relaxed">
-                  By continuing, you agree to our{' '}
-                  <span className="text-white/40">Terms of Service</span> and{' '}
-                  <span className="text-white/40">Privacy Policy</span>.
-                </p>
+                    {/* Helpful developer guide */}
+                    <p className="text-[10px] text-white/20 text-center font-mono leading-relaxed pt-2">
+                      💡 To enable cloud sync and OAuth, add VITE_SUPABASE_URL & VITE_SUPABASE_ANON_KEY to your Vercel project settings and redeploy.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <h2 className="text-white text-2xl font-bold mb-1">Welcome back</h2>
+                    <p className="text-white/40 text-sm mb-7">
+                      Sign in to sync your data across devices.
+                    </p>
+
+                    {/* Google */}
+                    <button
+                      id="login-google"
+                      onClick={handleGoogle}
+                      disabled={googleLoading || magicLoading}
+                      className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 text-white font-medium text-sm transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed group mb-4"
+                    >
+                      {googleLoading ? (
+                        <Loader2 size={18} className="animate-spin text-white/70" />
+                      ) : (
+                        <Home size={18} className="text-white/70 group-hover:text-white transition-colors" />
+                      )}
+                      Continue with Google
+                    </button>
+
+                    {/* Divider */}
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="flex-1 h-px bg-white/10" />
+                      <span className="text-white/30 text-xs">or</span>
+                      <div className="flex-1 h-px bg-white/10" />
+                    </div>
+
+                    {/* Magic link form */}
+                    <form onSubmit={handleMagicLink} className="space-y-3">
+                      <div className="relative">
+                        <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+                        <input
+                          id="login-email"
+                          type="email"
+                          value={email}
+                          onChange={e => setEmail(e.target.value)}
+                          placeholder="your@email.com"
+                          required
+                          className="w-full pl-10 pr-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-violet-500/60 focus:bg-white/8 transition-all duration-200"
+                        />
+                      </div>
+
+                      <button
+                        id="login-magic-link"
+                        type="submit"
+                        disabled={magicLoading || googleLoading || !email}
+                        className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-semibold text-sm transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-violet-500/25"
+                      >
+                        {magicLoading ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : (
+                          <>
+                            Send magic link
+                            <ArrowRight size={16} />
+                          </>
+                        )}
+                      </button>
+                    </form>
+
+                    {/* Error */}
+                    <AnimatePresence>
+                      {error && (
+                        <motion.p
+                          initial={{ opacity: 0, y: -4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0 }}
+                          className="mt-3 text-rose-400 text-xs text-center"
+                        >
+                          {error}
+                        </motion.p>
+                      )}
+                    </AnimatePresence>
+
+                    <p className="mt-6 text-white/25 text-xs text-center leading-relaxed">
+                      By continuing, you agree to our{' '}
+                      <span className="text-white/40">Terms of Service</span> and{' '}
+                      <span className="text-white/40">Privacy Policy</span>.
+                    </p>
+                  </>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
         </div>
 
         {/* Skip for now (offline mode) */}
-        <p className="text-center mt-4 text-white/25 text-xs">
+        <p 
+          onClick={() => {
+            navigate('/');
+            toast.success('Entering workspace in secure offline mode!');
+          }}
+          className="text-center mt-4 text-white/25 text-xs cursor-pointer hover:text-white/50 transition-colors"
+        >
           Using without an account?{' '}
-          <span className="text-white/40">
+          <span className="text-white/40 underline">
             Data is saved locally only.
           </span>
         </p>
