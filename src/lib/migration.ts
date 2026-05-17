@@ -179,13 +179,21 @@ export async function migrateLocalStorageToSupabase(userId: string): Promise<Mig
     app.reminders = updatedReminders;
 
     const rows = updatedReminders.map((r: any) => ({
-      id: r.id, user_id: userId, title: r.title, message: r.message,
-      domain: r.domain, schedule_type: r.scheduleType,
-      scheduled_at: r.scheduledAt, recurrence: r.recurrence,
-      status: r.status, enabled: r.enabled, completed: r.completed,
+      id: r.id, 
+      user_id: userId, 
+      title: r.title || 'Reminder', 
+      message: r.message || '',
+      domain: r.domain || 'custom', 
+      schedule_type: r.scheduleType || 'one-time',
+      scheduled_at: r.scheduledAt || new Date().toISOString(), 
+      recurrence: r.recurrence || 'none',
+      status: r.status || 'active', 
+      enabled: typeof r.enabled === 'boolean' ? r.enabled : true, 
+      completed: typeof r.completed === 'boolean' ? r.completed : false,
       snoozed_until: r.snoozedUntil ?? null,
       last_triggered_at: r.lastTriggeredAt ?? null,
-      smart_rules: r.smartRules ?? null, metadata: r.metadata ?? null,
+      smart_rules: r.smartRules ?? null, 
+      metadata: r.metadata ?? null,
     }));
     const r = await safeInsert('reminders', rows);
     if (r.error) errors.reminders = r.error; else details.reminders = r.count;
