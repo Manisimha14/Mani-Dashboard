@@ -5,6 +5,15 @@
  * doesn't block the others. All errors are collected and reported.
  */
 import { supabase } from '../lib/supabase';
+import { generateId } from './utils';
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function ensureUUID(id: any): string {
+  if (typeof id === 'string' && UUID_REGEX.test(id)) {
+    return id;
+  }
+  return generateId();
+}
 
 export type MigrationResult = {
   success: boolean;
@@ -36,9 +45,10 @@ export async function migrateLocalStorageToSupabase(userId: string): Promise<Mig
   // ── Read Zustand snapshots ──────────────────────────────────────────────────
   let app: any = {};
   let health: any = {};
+  let appRaw: string | null = null;
 
   try {
-    const appRaw    = localStorage.getItem('dashboard-storage');
+    appRaw = localStorage.getItem('dashboard-storage');
     const healthRaw = localStorage.getItem('health-storage');
     app    = appRaw    ? (JSON.parse(appRaw)?.state    ?? {}) : {};
     health = healthRaw ? (JSON.parse(healthRaw)?.state ?? {}) : {};
@@ -162,7 +172,13 @@ export async function migrateLocalStorageToSupabase(userId: string): Promise<Mig
 
   // ── Reminders ───────────────────────────────────────────────────────────────
   {
-    const rows = (app.reminders ?? []).map((r: any) => ({
+    const updatedReminders = (app.reminders ?? []).map((r: any) => ({
+      ...r,
+      id: ensureUUID(r.id),
+    }));
+    app.reminders = updatedReminders;
+
+    const rows = updatedReminders.map((r: any) => ({
       id: r.id, user_id: userId, title: r.title, message: r.message,
       domain: r.domain, schedule_type: r.scheduleType,
       scheduled_at: r.scheduledAt, recurrence: r.recurrence,
@@ -179,9 +195,23 @@ export async function migrateLocalStorageToSupabase(userId: string): Promise<Mig
   {
     const trackers: any[] = app.trackers ?? [];
     let trackerCount = 0;
+    const healedTrackers: any[] = [];
+
     for (const tracker of trackers) {
+      const healedTrackerId = ensureUUID(tracker.id);
+      const healedItems = (tracker.items ?? []).map((item: any) => ({
+        ...item,
+        id: ensureUUID(item.id),
+      }));
+
+      healedTrackers.push({
+        ...tracker,
+        id: healedTrackerId,
+        items: healedItems,
+      });
+
       const { data: inserted, error } = await supabase.from('trackers').insert({
-        id: tracker.id, user_id: userId,
+        id: healedTrackerId, user_id: userId,
         title: tracker.title, description: tracker.description ?? null,
         icon: tracker.icon, color: tracker.color,
         type: tracker.type, category: tracker.category ?? null,
@@ -195,9 +225,9 @@ export async function migrateLocalStorageToSupabase(userId: string): Promise<Mig
         continue;
       }
 
-      if (inserted && tracker.items?.length) {
+      if (inserted && healedItems.length) {
         await supabase.from('tracker_items').insert(
-          tracker.items.map((item: any) => ({
+          healedItems.map((item: any) => ({
             id: item.id, tracker_id: (inserted as any).id, user_id: userId,
             title: item.title, status: item.status,
             date_completed: item.dateCompleted ?? null,
@@ -207,6 +237,7 @@ export async function migrateLocalStorageToSupabase(userId: string): Promise<Mig
       }
       trackerCount++;
     }
+    app.trackers = healedTrackers;
     if (!errors.trackers) details.trackers = trackerCount;
   }
 
@@ -251,6 +282,22 @@ export async function migrateLocalStorageToSupabase(userId: string): Promise<Mig
     }));
     const r = await safeInsert('daily_activity', rows, { onConflict: 'user_id,date' });
     if (r.error) errors.dailyActivity = r.error; else details.dailyActivity = r.count;
+  }
+
+  // If we made changes and successfully ran some migrations, write the healed snapshots back to localStorage
+  try {
+    if (appRaw) {
+      const parsed = JSON.parse(appRaw);
+      parsed.state = { 
+        ...parsed.state, 
+        reminders: app.reminders, 
+        trackers: app.trackers 
+      };
+      localStorage.setItem('dashboard-storage', JSON.stringify(parsed));
+      console.log('[Migration] Successfully wrote healed UUIDs back to localStorage dashboard-storage');
+    }
+  } catch (e: any) {
+    console.error('[Migration] Failed to write healed snapshots to localStorage:', e.message);
   }
 
   const success = Object.keys(errors).length === 0;
