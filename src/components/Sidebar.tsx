@@ -65,7 +65,7 @@ export default function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose
             <img src="/favicon.svg" alt="Logo" className="w-full h-full object-contain" />
           </div>
           <div className="flex-1">
-            <div className="font-bold text-sm tracking-tight text-white leading-tight">Aura OS</div>
+            <div className="font-bold text-sm tracking-tight text-white leading-tight">MANI OS</div>
             <div className="text-[10px] text-white/40 leading-tight">Premium Productivity</div>
           </div>
           {onClose && (

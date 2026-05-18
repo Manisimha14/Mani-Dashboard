@@ -10,7 +10,7 @@ import { useIsMobile } from '../hooks/useIsMobile';
 
 const getPageTitle = (pathname: string) => {
   switch (pathname) {
-    case '/': return 'Aura OS';
+    case '/': return 'MANI OS';
     case '/focus': return 'Focus Hub';
     case '/reading': return 'Learning Hub';
     case '/leetcode': return 'Coding Forge';
@@ -20,7 +20,7 @@ const getPageTitle = (pathname: string) => {
     case '/analytics': return 'Aura Analytics';
     case '/achievements': return 'Achievements';
     case '/settings': return 'Settings';
-    default: return 'Aura OS';
+    default: return 'MANI OS';
   }
 };
 

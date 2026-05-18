@@ -9,7 +9,7 @@ import { useSetBookMeta } from '../hooks/useBookQuery';
 const STEPS = [
   {
     id: 'welcome',
-    title: 'Welcome to Aura OS',
+    title: 'Welcome to MANI OS',
     subtitle: 'Your premium productivity companion',
     emoji: '⚡',
     content: null,

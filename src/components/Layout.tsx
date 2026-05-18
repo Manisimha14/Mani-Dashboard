@@ -90,6 +90,12 @@ export default function Layout() {
     const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
     setIsIOS(ios);
 
+    // If closed permanently, never show again
+    if (localStorage.getItem('pwa_installed_closed')) {
+      setShowPWAInstall(false);
+      return;
+    }
+
     // Check if already installed / running in standalone mode
     const standalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone;
     setIsStandalone(standalone);
@@ -97,7 +103,7 @@ export default function Layout() {
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      if (!standalone) {
+      if (!standalone && !localStorage.getItem('pwa_installed_closed')) {
         setShowPWAInstall(true);
       }
     };
@@ -119,6 +125,7 @@ export default function Layout() {
 
   const handlePWAInstallClick = async () => {
     play('click');
+    localStorage.setItem('pwa_installed_closed', 'true');
     if (isIOS) return;
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
@@ -127,8 +134,15 @@ export default function Layout() {
     setShowPWAInstall(false);
   };
 
+  const handleAlreadyInstalledClick = () => {
+    play('success');
+    localStorage.setItem('pwa_installed_closed', 'true');
+    setShowPWAInstall(false);
+  };
+
   const handlePWAClose = () => {
     play('click');
+    localStorage.setItem('pwa_installed_closed', 'true');
     setShowPWAInstall(false);
     if (isIOS) {
       localStorage.setItem('ios_pwa_prompt_closed', 'true');
@@ -387,7 +401,7 @@ export default function Layout() {
             </div>
             
             <div className="flex-1 min-w-0">
-              <h4 className="text-xs font-black uppercase tracking-wider text-violet-400">Aura OS Mobile</h4>
+              <h4 className="text-xs font-black uppercase tracking-wider text-violet-400">MANI OS Mobile</h4>
               <p className="text-[11px] text-white/70 leading-normal mt-0.5">
                 {isIOS 
                   ? 'Tap the Share button 📤 then "Add to Home Screen" ➕' 
@@ -398,11 +412,27 @@ export default function Layout() {
 
             <div className="flex items-center gap-2 flex-shrink-0">
               {!isIOS && (
+                <>
+                  <button
+                    onClick={handleAlreadyInstalledClick}
+                    className="px-2.5 py-1.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-white/40 hover:text-white font-bold text-[9px] uppercase tracking-wider transition-all"
+                  >
+                    Already Installed
+                  </button>
+                  <button
+                    onClick={handlePWAInstallClick}
+                    className="px-3 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-[9px] uppercase tracking-wider shadow-[0_0_15px_rgba(139,92,246,0.4)] active:scale-95 transition-all"
+                  >
+                    Install
+                  </button>
+                </>
+              )}
+              {isIOS && (
                 <button
-                  onClick={handlePWAInstallClick}
-                  className="px-3 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-2xs uppercase tracking-wider shadow-[0_0_15px_rgba(139,92,246,0.4)] active:scale-95 transition-all"
+                  onClick={handleAlreadyInstalledClick}
+                  className="px-2.5 py-1.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-white/40 hover:text-white font-bold text-[9px] uppercase tracking-wider transition-all"
                 >
-                  Install
+                  Dismiss
                 </button>
               )}
               <button
