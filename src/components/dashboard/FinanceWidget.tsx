@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  TrendingUp, TrendingDown, DollarSign, Plus, Trash2, 
-  Wallet, PieChart, ArrowUpRight, ArrowDownRight, Activity 
+  TrendingUp, DollarSign, Plus, Trash2, 
+  Wallet, ArrowUpRight, ArrowDownRight, Activity 
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useAppStore } from '../../store/useAppStore';
+import { useUpdateProfile } from '../../hooks/useProfileQuery';
 import { useSoundFX } from '../../hooks/useSoundFX';
 
 interface Transaction {
@@ -18,13 +20,16 @@ interface Transaction {
 
 export default function FinanceWidget() {
   const { play } = useSoundFX();
+  const { userSettings } = useAppStore();
+  const { mutate: updateProfile } = useUpdateProfile();
   
-  // Persisted state
-  const [transactions, setTransactions] = useState<Transaction[]>(() => {
-    const saved = localStorage.getItem('aura_finance_transactions');
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) { /* ignore */ }
-    }
+  // Memoize transactions and budgetLimit directly from database-synced profile
+  const transactions = useMemo<Transaction[]>(() => {
+    try {
+      const parsed = JSON.parse(userSettings.financeTransactions || '[]');
+      if (parsed.length > 0) return parsed;
+    } catch (e) { /* ignore */ }
+    
     // Beautiful default transactions
     return [
       { id: '1', title: 'Consulting Income', amount: 1250, type: 'income', date: '2026-05-18', category: 'Salary' },
@@ -32,12 +37,9 @@ export default function FinanceWidget() {
       { id: '3', title: 'S&P 500 Dividend', amount: 80, type: 'income', date: '2026-05-16', category: 'Investment' },
       { id: '4', title: 'Premium Subscription', amount: 20, type: 'expense', date: '2026-05-15', category: 'Software' },
     ];
-  });
+  }, [userSettings.financeTransactions]);
 
-  const [budgetLimit, setBudgetLimit] = useState<number>(() => {
-    const saved = localStorage.getItem('aura_finance_budget');
-    return saved ? Number(saved) : 1000;
-  });
+  const budgetLimit = userSettings.financeBudgetLimit ?? 1000;
 
   // Modal / Form state
   const [showAddForm, setShowAddForm] = useState(false);
@@ -45,15 +47,6 @@ export default function FinanceWidget() {
   const [amount, setAmount] = useState('');
   const [type, setType] = useState<'income' | 'expense'>('expense');
   const [category, setCategory] = useState('General');
-
-  // Save to LocalStorage
-  useEffect(() => {
-    localStorage.setItem('aura_finance_transactions', JSON.stringify(transactions));
-  }, [transactions]);
-
-  useEffect(() => {
-    localStorage.setItem('aura_finance_budget', budgetLimit.toString());
-  }, [budgetLimit]);
 
   // Derived financials
   const { totalIncome, totalExpense, netBalance } = useMemo(() => {
@@ -75,6 +68,7 @@ export default function FinanceWidget() {
     return Math.min(100, Math.round((totalExpense / budgetLimit) * 100));
   }, [totalExpense, budgetLimit]);
 
+  // Log Transaction to Database
   const handleAddTransaction = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
@@ -96,7 +90,14 @@ export default function FinanceWidget() {
       date: new Date().toISOString().split('T')[0]
     };
 
-    setTransactions(prev => [newTx, ...prev]);
+    const updated = [newTx, ...transactions];
+    updateProfile({
+      settings: {
+        ...userSettings,
+        financeTransactions: JSON.stringify(updated)
+      }
+    });
+
     setTitle('');
     setAmount('');
     setShowAddForm(false);
@@ -104,9 +105,16 @@ export default function FinanceWidget() {
     toast.success(type === 'income' ? 'Income Logged! 💰' : 'Expense Logged! 💸');
   };
 
+  // Delete Transaction from Database
   const handleDeleteTransaction = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setTransactions(prev => prev.filter(t => t.id !== id));
+    const updated = transactions.filter(t => t.id !== id);
+    updateProfile({
+      settings: {
+        ...userSettings,
+        financeTransactions: JSON.stringify(updated)
+      }
+    });
     play('click');
     toast.success('Transaction removed');
   };
@@ -124,7 +132,7 @@ export default function FinanceWidget() {
             </div>
             <div>
               <h3 className="font-bold text-white text-base uppercase tracking-wider">Finance Console</h3>
-              <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest mt-0.5">Asset flow & budgets</p>
+              <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest mt-0.5">Asset flow &amp; budgets</p>
             </div>
           </div>
           <button 
@@ -171,7 +179,15 @@ export default function FinanceWidget() {
               <input 
                 type="number"
                 value={budgetLimit}
-                onChange={e => setBudgetLimit(Math.max(0, Number(e.target.value)))}
+                onChange={e => {
+                  const val = Math.max(0, Number(e.target.value));
+                  updateProfile({
+                    settings: {
+                      ...userSettings,
+                      financeBudgetLimit: val
+                    }
+                  });
+                }}
                 className="w-16 bg-transparent text-xs font-bold text-white/40 hover:text-white/80 focus:text-white focus:outline-none text-right border-b border-transparent focus:border-white/20 pb-0.5"
                 title="Click to adjust limit"
               />
@@ -262,7 +278,7 @@ export default function FinanceWidget() {
               className="space-y-2 max-h-[160px] overflow-y-auto pr-1 no-scrollbar flex-1"
             >
               <div className="text-[10px] font-bold text-white/20 uppercase tracking-widest px-1 mb-2 flex items-center gap-1.5">
-                <Activity size={10} /> Ledger Operations
+                <Activity size={10} /> Ledger Operations (Synced)
               </div>
               {transactions.length === 0 ? (
                 <div className="text-center py-8 opacity-20 border border-dashed border-white/5 rounded-xl">

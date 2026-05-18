@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAppStore } from '../store/useAppStore';
+import { useUpdateProfile } from '../hooks/useProfileQuery';
 import { useSoundFX } from '../hooks/useSoundFX';
-import { Edit3, CheckCircle, Plus, Trash2, StickyNote, ListTodo } from 'lucide-react';
+import { Plus, Trash2, StickyNote, ListTodo, CheckCircle } from 'lucide-react';
 
 interface QuickTodo {
   id: string;
@@ -11,29 +13,33 @@ interface QuickTodo {
 
 export default function QuickScratchpad() {
   const { play } = useSoundFX();
+  const { userSettings } = useAppStore();
+  const { mutate: updateProfile } = useUpdateProfile();
   const [activeTab, setActiveTab] = useState<'notes' | 'todos'>('notes');
   
-  // Note State
-  const [noteText, setNoteText] = useState(() => {
-    return localStorage.getItem('aura_scratchpad_note') || '';
-  });
+  // Memoize note and todo states from central database-synced store
+  const noteText = userSettings.scratchpadNote || '';
+  
+  const todos = React.useMemo<QuickTodo[]>(() => {
+    try {
+      return JSON.parse(userSettings.scratchpadTodos || '[]');
+    } catch (e) {
+      return [];
+    }
+  }, [userSettings.scratchpadTodos]);
 
-  // Todo State
-  const [todos, setTodos] = useState<QuickTodo[]>(() => {
-    const saved = localStorage.getItem('aura_scratchpad_todos');
-    return saved ? JSON.parse(saved) : [
-      { id: '1', text: 'Plan tomorrow\'s deep work chapters', completed: false },
-      { id: '2', text: 'Solve 2 LeetCode medium problems', completed: false },
-      { id: '3', text: 'Hydrate & complete evening stretches', completed: true },
-    ];
-  });
   const [newTodo, setNewTodo] = useState('');
 
-  // Persist Note
+  // Save Note to Database
   const handleNoteChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const text = e.target.value;
-    setNoteText(text);
-    localStorage.setItem('aura_scratchpad_note', text);
+    // Debounced or direct update - React Query is super efficient at merging
+    updateProfile({
+      settings: {
+        ...userSettings,
+        scratchpadNote: text
+      }
+    });
   };
 
   // Add Todo Item
@@ -44,8 +50,12 @@ export default function QuickScratchpad() {
       ...todos,
       { id: Date.now().toString(), text: newTodo.trim(), completed: false }
     ];
-    setTodos(updated);
-    localStorage.setItem('aura_scratchpad_todos', JSON.stringify(updated));
+    updateProfile({
+      settings: {
+        ...userSettings,
+        scratchpadTodos: JSON.stringify(updated)
+      }
+    });
     setNewTodo('');
   };
 
@@ -59,16 +69,24 @@ export default function QuickScratchpad() {
     const updated = todos.map(todo =>
       todo.id === id ? { ...todo, completed: !todo.completed } : todo
     );
-    setTodos(updated);
-    localStorage.setItem('aura_scratchpad_todos', JSON.stringify(updated));
+    updateProfile({
+      settings: {
+        ...userSettings,
+        scratchpadTodos: JSON.stringify(updated)
+      }
+    });
   };
 
   // Delete Todo Item
   const deleteTodoItem = (id: string) => {
     play('click');
     const updated = todos.filter(todo => todo.id !== id);
-    setTodos(updated);
-    localStorage.setItem('aura_scratchpad_todos', JSON.stringify(updated));
+    updateProfile({
+      settings: {
+        ...userSettings,
+        scratchpadTodos: JSON.stringify(updated)
+      }
+    });
   };
 
   return (
@@ -77,7 +95,7 @@ export default function QuickScratchpad() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-4 mb-4">
         <div>
           <h3 className="text-xs font-black text-white/40 uppercase tracking-[0.25em]">Dashboard Console</h3>
-          <p className="text-[10px] text-white/20 uppercase tracking-widest mt-1">Quick Scratchpad &amp; Sticky Tasks</p>
+          <p className="text-[10px] text-white/20 uppercase tracking-widest mt-1">Synced Scratchpad &amp; Sticky Tasks</p>
         </div>
 
         {/* Tab Buttons */}
@@ -122,11 +140,11 @@ export default function QuickScratchpad() {
               <textarea
                 value={noteText}
                 onChange={handleNoteChange}
-                placeholder="Type anything here... Your notes auto-save locally so they are always waiting for you when you return."
+                placeholder="Type anything here... Your notes sync globally and auto-save to the cloud instantly."
                 className="w-full min-h-[130px] p-4 rounded-2xl bg-white/[0.02] border border-white/5 text-sm text-white/80 placeholder-white/20 focus:outline-none focus:border-violet-500/40 focus:bg-white/[0.04] transition-all resize-none leading-relaxed"
               />
               <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-widest text-white/20 px-1">
-                <span>Auto-saved to Local Storage</span>
+                <span>Synchronized with Supabase Cloud</span>
                 <span>{noteText.length} characters</span>
               </div>
             </motion.div>
@@ -146,7 +164,7 @@ export default function QuickScratchpad() {
                   value={newTodo}
                   onChange={(e) => setNewTodo(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && addTodoItem()}
-                  placeholder="Add a fast task..."
+                  placeholder="Add a synced task..."
                   className="flex-1 px-4 py-2.5 rounded-2xl bg-white/[0.02] border border-white/5 text-sm text-white/80 placeholder-white/20 focus:outline-none focus:border-violet-500/40 focus:bg-white/[0.04] transition-all"
                 />
                 <button

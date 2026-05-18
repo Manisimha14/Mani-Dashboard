@@ -165,6 +165,10 @@ export interface UserSettings {
   streakAlerts?: boolean;
   leetcodeAlerts?: boolean;
   workoutAlerts?: boolean;
+  scratchpadNote?: string;
+  scratchpadTodos?: string;
+  financeTransactions?: string;
+  financeBudgetLimit?: number;
 }
 
 // ─── App State ────────────────────────────────────────────────────────────────

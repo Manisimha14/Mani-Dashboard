@@ -27,7 +27,7 @@ import { useMemo } from 'react';
 import DeferredOnVisible from '../components/DeferredOnVisible';
 import FinanceWidget from '../components/dashboard/FinanceWidget';
 
-const ProductivityInsights = lazy(() => import('../components/ProductivityInsights'));
+const SpaceClock = lazy(() => import('../components/dashboard/SpaceClock'));
 const QuickScratchpad = lazy(() => import('../components/QuickScratchpad'));
 const DashboardActivityChart = lazy(() => import('../components/dashboard/DashboardActivityChart'));
 
@@ -241,18 +241,11 @@ export default function Dashboard() {
         </Suspense>
       </motion.div>
 
-      {/* Productivity Insights */}
+      {/* Real-time System Space Clock */}
       <motion.div variants={item}>
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <InsightSkeleton />
-            <InsightSkeleton />
-          </div>
-        ) : (
-          <Suspense fallback={<div className="grid grid-cols-1 md:grid-cols-2 gap-4"><InsightSkeleton /><InsightSkeleton /></div>}>
-            <ProductivityInsights />
-          </Suspense>
-        )}
+        <Suspense fallback={null}>
+          <SpaceClock />
+        </Suspense>
       </motion.div>
 
       {/* Streak Row */}

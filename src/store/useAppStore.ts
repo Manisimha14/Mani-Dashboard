@@ -133,6 +133,10 @@ const DEFAULT_USER_SETTINGS: UserSettings = {
   dashboardLayout: ['stats', 'focus', 'reading', 'coding', 'achievements'],
   petType: 'owl',
   keyboardShortcuts: true,
+  scratchpadNote: '',
+  scratchpadTodos: '[]',
+  financeTransactions: '[]',
+  financeBudgetLimit: 1000,
 };
 
 const DEFAULT_APP_LINKS: AppLink[] = [
