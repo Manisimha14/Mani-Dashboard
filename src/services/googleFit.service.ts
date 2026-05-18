@@ -73,6 +73,7 @@ export async function fetchTodayGoogleFitData(): Promise<GoogleFitData> {
     }
 
     const data = await response.json();
+    console.log('Google Fit API Response:', JSON.stringify(data, null, 2));
     
     let steps = 0;
     let calories = 0;
