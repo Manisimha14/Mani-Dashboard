@@ -28,7 +28,7 @@ import DeferredOnVisible from '../components/DeferredOnVisible';
 import FinanceWidget from '../components/dashboard/FinanceWidget';
 
 const ProductivityInsights = lazy(() => import('../components/ProductivityInsights'));
-const CognitiveCockpit = lazy(() => import('../components/CognitiveCockpit'));
+const QuickScratchpad = lazy(() => import('../components/QuickScratchpad'));
 const DashboardActivityChart = lazy(() => import('../components/dashboard/DashboardActivityChart'));
 
 const stagger: Variants = {
@@ -237,7 +237,7 @@ export default function Dashboard() {
       {/* Contextual Awareness */}
       <motion.div variants={item}>
         <Suspense fallback={null}>
-          <CognitiveCockpit />
+          <QuickScratchpad />
         </Suspense>
       </motion.div>
 
