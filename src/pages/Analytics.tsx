@@ -13,6 +13,10 @@ import {
   useWater, useMeals, useWorkouts, useSleepEntries, useHealthGoals,
   useHealthRestrictions, useUpdateRestriction, useAddRestriction, useUpdateGoal, useAddGoal,
 } from '../hooks/useHealthQuery';
+import { useBook } from '../hooks/useBookQuery';
+import { useProblems } from '../hooks/useLeetCodeQuery';
+import { useFocusSessions } from '../hooks/useFocusQuery';
+import { useDailyActivity } from '../hooks/useActivityQuery';
 import {
   TrendingUp, Target, Zap, BookOpen, Clock, Activity,
   Download, Heart, Droplets, Dumbbell, Moon,
@@ -74,11 +78,13 @@ function BioChart({
 
 // ── Main Component ───────────────────────────────────────────────────────────
 export default function Analytics() {
-  const book           = useAppStore(s => s.book);
-  const problems       = useAppStore(s => s.problems);
-  const focusSessions  = useAppStore(s => s.focusSessions);
-  const dailyActivity  = useAppStore(s => s.dailyActivity);
-  const focusStreak    = useAppStore(s => s.focusStreak);
+  const localStore = useAppStore();
+  const focusStreak = useAppStore(s => s.focusStreak);
+
+  const { data: book = localStore.book } = useBook();
+  const { data: problems = [] } = useProblems();
+  const { data: focusSessions = [] } = useFocusSessions();
+  const { data: dailyActivity = [] } = useDailyActivity();
 
   const [range, setRange]           = useState<7 | 30 | 90>(30);
   const [showReport, setShowReport] = useState(false);
