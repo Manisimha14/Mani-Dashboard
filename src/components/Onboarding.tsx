@@ -6,7 +6,7 @@ import { Zap, BookOpen, Code2, Timer, ChevronRight, Check } from 'lucide-react';
 const STEPS = [
   {
     id: 'welcome',
-    title: 'Welcome to Dashboard',
+    title: 'Welcome to Aura OS',
     subtitle: 'Your premium productivity companion',
     emoji: '⚡',
     content: null,

@@ -64,7 +64,7 @@ function BioChart({
         <span className="text-[10px] text-white/30 font-bold uppercase tracking-wider">{legend}</span>
       </div>
       <div className="h-[260px]">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
           {children as React.ReactElement}
         </ResponsiveContainer>
       </div>
@@ -671,7 +671,7 @@ export default function Analytics() {
             <motion.div variants={item} className="glass-card p-6 flex flex-col items-center">
               <h3 className="font-bold text-white mb-4 text-xs uppercase tracking-widest self-start">Health Breakdown</h3>
               <div className="h-[220px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                   <RadarChart cx="50%" cy="50%" outerRadius="80%" data={[
                     { subject: 'Calories',  A: Math.min(100, (biometricStats.avgCalories    / 2100) * 100) },
                     { subject: 'Water',     A: Math.min(100, (Number(biometricStats.avgWaterL) / 3.5) * 100) },

@@ -90,7 +90,7 @@ export default function HourlyPerformance({ focusSessions }: HourlyPerformancePr
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-center">
         {/* Hourly focus minutes bar chart (takes 2/3 width) */}
         <div className="lg:col-span-2 h-[200px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <BarChart data={hourlyData} margin={{ left: -30, right: 10 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
               <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 9 }} interval={2} />

@@ -1,7 +1,9 @@
 import React, { useEffect, useRef } from 'react';
 import { motion, useMotionValue, useSpring } from 'framer-motion';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 export default function InteractiveGrid() {
+  const isMobile = useIsMobile();
   const containerRef = useRef<HTMLDivElement>(null);
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
@@ -11,6 +13,7 @@ export default function InteractiveGrid() {
   const dy = useSpring(mouseY, springConfig);
 
   useEffect(() => {
+    if (isMobile) return;
     const handleMouseMove = (e: MouseEvent) => {
       const { clientX, clientY } = e;
       mouseX.set(clientX);
@@ -19,7 +22,9 @@ export default function InteractiveGrid() {
 
     window.addEventListener('mousemove', handleMouseMove);
     return () => window.removeEventListener('mousemove', handleMouseMove);
-  }, [mouseX, mouseY]);
+  }, [mouseX, mouseY, isMobile]);
+
+  if (isMobile) return null;
 
   return (
     <div 
@@ -73,3 +78,4 @@ export default function InteractiveGrid() {
     </div>
   );
 }
+

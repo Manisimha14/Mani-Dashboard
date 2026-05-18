@@ -143,9 +143,9 @@ export default function Dashboard() {
   return (
     <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-8 max-w-7xl pb-12">
       {/* Header */}
-      <motion.div variants={item} className="flex items-start justify-between">
+      <motion.div variants={item} className="flex flex-col md:flex-row md:items-start justify-between gap-6">
         <div className="space-y-1">
-          <h1 className="text-4xl font-black tracking-tight text-white flex items-center gap-3">
+          <h1 className="text-3xl md:text-4xl font-black tracking-tight text-white flex items-center gap-3">
             {userSettings.name ? `Hey, ${userSettings.name}` : 'Dashboard'}
             <motion.span
               animate={{ rotate: [0, 20, 0] }}
@@ -161,7 +161,7 @@ export default function Dashboard() {
         </div>
         <motion.div 
           whileHover={{ scale: 1.05 }}
-          className="glass-card px-5 py-3 flex items-center gap-3 text-sm text-white/70 italic border-white/10 shadow-xl max-w-md bg-white/[0.02]"
+          className="glass-card px-5 py-3 flex items-center gap-3 text-sm text-white/70 italic border-white/10 shadow-xl max-w-md w-full md:w-auto bg-white/[0.02]"
         >
           <div className="w-8 h-8 rounded-full bg-violet-500/20 flex items-center justify-center shrink-0">
             <Star size={16} className="text-violet-400" />
@@ -185,7 +185,7 @@ export default function Dashboard() {
                 transition: { duration: 0.8, ease: "easeInOut" }
               }}
             />
-            <div className="relative flex items-center justify-between">
+            <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-6">
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -202,8 +202,8 @@ export default function Dashboard() {
                   </motion.span>
                   <span className="text-white/20 mb-3 text-2xl font-bold">/ 100</span>
                 </div>
-                <div className="mt-4 flex items-center gap-3">
-                  <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                  <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shrink-0 w-max ${
                     prodScore >= 70 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
                     prodScore >= 40 ? 'bg-violet-500/20 text-violet-400 border border-violet-500/30' :
                     'bg-white/5 text-white/30 border border-white/10'
@@ -218,7 +218,7 @@ export default function Dashboard() {
                   </p>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-6">
+              <div className="grid grid-cols-3 gap-3 md:gap-6 w-full lg:w-auto">
                 <ScorePill 
                   icon={<BookOpen size={18} />} 
                   label="Library" 
@@ -252,7 +252,7 @@ export default function Dashboard() {
       </motion.div>
 
       {/* Streak Row */}
-      <motion.div variants={item} className="grid grid-cols-3 gap-6">
+      <motion.div variants={item} className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {loading ? (
           <>
             <StatCardSkeleton />
@@ -451,14 +451,14 @@ export default function Dashboard() {
       </motion.div>
 
       {/* Two-column: Chart + Next Actions */}
-      <div className="grid grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* Activity Chart */}
-        <motion.div variants={item} className="col-span-3 glass-card p-5">
+        <motion.div variants={item} className="col-span-1 lg:col-span-3 glass-card p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-white">Weekly Activity</h3>
             <span className="text-xs text-white/30">Last 7 days</span>
           </div>
-          <ResponsiveContainer width="100%" height={180}>
+          <ResponsiveContainer width="100%" height={180} minWidth={0}>
             <LineChart data={last7} margin={{ top: 5, right: 5, bottom: 5, left: -20 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
               <XAxis dataKey="day" tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 11 }} axisLine={false} tickLine={false} />
@@ -475,7 +475,7 @@ export default function Dashboard() {
         </motion.div>
 
         {/* Right column */}
-        <div className="col-span-2 flex flex-col gap-4">
+        <div className="col-span-1 lg:col-span-2 flex flex-col gap-4">
           {/* Mission Control (Goal Console) */}
           <motion.div variants={item}>
             <MissionControl />

@@ -3,7 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, BookOpen, Code2, Timer, BarChart3,
-  Trophy, Settings, Zap, ChevronRight, Flame, Target, Sparkles, Heart, Music
+  Trophy, Settings, Zap, ChevronRight, Flame, Target, Sparkles, Heart, Music, X
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { todayString, getProductivityScore } from '../lib/utils';
@@ -27,7 +27,7 @@ const navItems = [
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }) {
   const { data: book = { id: 'main-book', title: 'My Book', author: 'Author', chapters: [], startDate: todayString(), coverColor: '#7c3aed' } } = useBook();
   const { data: problems = [] } = useProblems();
   const { data: focusSessions = [] } = useFocusSessions();
@@ -57,17 +57,25 @@ export default function Sidebar() {
   const strokeDashoffset = circumference * (1 - Math.min(prodScore, 100) / 100);
 
   return (
-    <div className="sidebar">
+    <div className={`sidebar ${isOpen ? 'sidebar-open' : ''}`}>
       {/* Logo */}
       <div className="p-5 border-b border-white/5">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-purple-700 flex items-center justify-center shadow-glow-sm p-1.5">
+        <div className="flex items-center gap-3 w-full">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-purple-700 flex items-center justify-center shadow-glow-sm p-1.5 flex-shrink-0">
             <img src="/favicon.svg" alt="Logo" className="w-full h-full object-contain" />
           </div>
-          <div>
-            <div className="font-bold text-sm tracking-tight text-white">Dashboard</div>
-            <div className="text-xs text-white/40">Premium Productivity</div>
+          <div className="flex-1">
+            <div className="font-bold text-sm tracking-tight text-white leading-tight">Aura OS</div>
+            <div className="text-[10px] text-white/40 leading-tight">Premium Productivity</div>
           </div>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="md:hidden p-1.5 rounded-lg bg-white/5 border border-white/10 text-white/60 hover:text-white transition-colors"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -113,7 +121,7 @@ export default function Sidebar() {
             key={to}
             to={to}
             end={end}
-            onClick={() => play('click')}
+            onClick={() => { play('click'); onClose?.(); }}
             className="group block no-underline"
           >
             {({ isActive }) => (

@@ -10,8 +10,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {
-        name: 'FlowState — Premium Productivity',
-        short_name: 'FlowState',
+        name: 'Aura OS — Premium Productivity',
+        short_name: 'Aura OS',
         description: 'Forest Pomodoro + Book Tracker + LeetCode + Analytics Dashboard',
         theme_color: '#7c3aed',
         background_color: '#0a0b14',

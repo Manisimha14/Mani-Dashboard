@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Flame, Plus, Trash2, Star, ChevronDown, ChevronUp, Edit2, Check, X } from 'lucide-react';
 import { useMeals, useHealthGoals, useAddMeal, useDeleteMeal, useToggleMealFavorite, useAddGoal, useUpdateGoal, useLogSteps, useAddWorkout } from '../../hooks/useHealthQuery';
@@ -17,12 +17,14 @@ const MEAL_COLOR: Record<MealType, string> = {
 };
 
 const CALORIE_PRESETS = [
-  { name: 'Protein Shake', emoji: '🥤', calories: 180, protein: 30, carbs: 3, fat: 2, mealType: 'snacks' as MealType },
-  { name: 'Avocado Toast', emoji: '🥞', calories: 320, protein: 12, carbs: 32, fat: 16, mealType: 'breakfast' as MealType },
-  { name: 'Chicken Salad', emoji: '🥗', calories: 420, protein: 38, carbs: 12, fat: 18, mealType: 'lunch' as MealType },
-  { name: 'Oatmeal & Berries', emoji: '🥣', calories: 280, protein: 10, carbs: 52, fat: 4, mealType: 'breakfast' as MealType },
-  { name: 'Salmon & Quinoa', emoji: '🍣', calories: 580, protein: 42, carbs: 44, fat: 22, mealType: 'dinner' as MealType },
-  { name: 'Double Espresso', emoji: '☕', calories: 45, protein: 1, carbs: 4, fat: 2, mealType: 'snacks' as MealType },
+  { name: 'Whey Protein', emoji: '🥤', calories: 120, protein: 24, carbs: 3, fat: 1.5, mealType: 'snacks' as MealType },
+  { name: 'Boiled Eggs (2)', emoji: '🥚', calories: 156, protein: 12.6, carbs: 1.2, fat: 10.6, mealType: 'breakfast' as MealType },
+  { name: 'Paneer Bhurji', emoji: '🧀', calories: 280, protein: 18, carbs: 6, fat: 20, mealType: 'lunch' as MealType },
+  { name: 'Chicken Breast', emoji: '🍗', calories: 165, protein: 31, carbs: 0, fat: 3.6, mealType: 'lunch' as MealType },
+  { name: 'Oatmeal & Milk', emoji: '🥣', calories: 270, protein: 13, carbs: 39, fat: 7.5, mealType: 'breakfast' as MealType },
+  { name: 'Salmon & Veggies', emoji: '🍣', calories: 420, protein: 35, carbs: 12, fat: 26, mealType: 'dinner' as MealType },
+  { name: 'Greek Yogurt', emoji: '🥛', calories: 120, protein: 20, carbs: 7.2, fat: 0.8, mealType: 'snacks' as MealType },
+  { name: 'Mixed Almonds', emoji: '🥜', calories: 160, protein: 6, carbs: 6, fat: 14, mealType: 'snacks' as MealType },
 ];
 
 const EMPTY_FORM = {
@@ -130,6 +132,30 @@ export default function CalorieTracker({ today }: { today: string }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [showForm, setShowForm] = useState(false);
   const [expandedMeal, setExpandedMeal] = useState<MealType | null>('breakfast');
+  const [matchedNlpItems, setMatchedNlpItems] = useState<string[]>([]);
+
+  // Debounced database search
+  useEffect(() => {
+    if (!form.name || form.name.length < 3) {
+      setDbResults([]);
+      return;
+    }
+    const delayDebounceFn = setTimeout(async () => {
+      setSearchingDb(true);
+      try {
+        const results = await searchOpenFoodFacts(form.name);
+        setDbResults(results);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setSearchingDb(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [form.name]);
+
+  const formatDecimal = (num: number) => Number((num || 0).toFixed(1));
 
   const [dbResults, setDbResults] = useState<OpenFoodFactsProduct[]>([]);
   const [searchingDb, setSearchingDb] = useState(false);
@@ -156,7 +182,7 @@ export default function CalorieTracker({ today }: { today: string }) {
 
     setForm(f => ({
       ...f,
-      calories: String(Math.round(baseMacros.calories * scale)),
+      calories: String(Math.round(baseMacros.calories * scale * 10) / 10),
       protein: String(Math.round((baseMacros.protein * scale) * 10) / 10),
       carbs: String(Math.round((baseMacros.carbs * scale) * 10) / 10),
       fat: String(Math.round((baseMacros.fat * scale) * 10) / 10),
@@ -183,6 +209,7 @@ export default function CalorieTracker({ today }: { today: string }) {
     // Client-side NLP heuristic auto-fill
     const nlp = parseNaturalLanguageNutrition(name);
     if (nlp.matched) {
+      setMatchedNlpItems(nlp.matchedItems || []);
       const base = {
         calories: nlp.calories,
         protein: nlp.protein,
@@ -201,6 +228,8 @@ export default function CalorieTracker({ today }: { today: string }) {
         fat: String(nlp.fat),
         quantity: '1 servings',
       }));
+    } else {
+      setMatchedNlpItems([]);
     }
   };
 
@@ -213,10 +242,10 @@ export default function CalorieTracker({ today }: { today: string }) {
   };
 
   const todayMeals = meals; // already filtered by date from the hook
-  const totalCal   = todayMeals.reduce((a, m) => a + m.calories, 0);
-  const totalProt  = todayMeals.reduce((a, m) => a + m.protein, 0);
-  const totalCarbs = todayMeals.reduce((a, m) => a + m.carbs, 0);
-  const totalFat   = todayMeals.reduce((a, m) => a + m.fat, 0);
+  const totalCal   = formatDecimal(todayMeals.reduce((a, m) => a + m.calories, 0));
+  const totalProt  = formatDecimal(todayMeals.reduce((a, m) => a + m.protein, 0));
+  const totalCarbs = formatDecimal(todayMeals.reduce((a, m) => a + m.carbs, 0));
+  const totalFat   = formatDecimal(todayMeals.reduce((a, m) => a + m.fat, 0));
   
   const addGoalMut = useAddGoal();
   const updateGoalMut = useUpdateGoal();
@@ -254,6 +283,7 @@ export default function CalorieTracker({ today }: { today: string }) {
       quantity: form.quantity || undefined,
     });
     setForm(EMPTY_FORM);
+    setMatchedNlpItems([]);
     setShowForm(false);
   };
 
@@ -326,9 +356,9 @@ export default function CalorieTracker({ today }: { today: string }) {
         {/* Macros */}
         <div className="grid grid-cols-3 gap-3">
           {[
-            { label: 'Protein', val: Math.round(totalProt), goal: proteinGoal, unit: 'g', color: '#a78bfa', pct: totalProt * 4 / macroTotal },
-            { label: 'Carbs', val: Math.round(totalCarbs), goal: 250, unit: 'g', color: '#facc15', pct: totalCarbs * 4 / macroTotal },
-            { label: 'Fat', val: Math.round(totalFat), goal: 65, unit: 'g', color: '#fb923c', pct: totalFat * 9 / macroTotal },
+            { label: 'Protein', val: totalProt, goal: proteinGoal, unit: 'g', color: '#a78bfa', pct: totalProt * 4 / macroTotal },
+            { label: 'Carbs', val: totalCarbs, goal: 250, unit: 'g', color: '#facc15', pct: totalCarbs * 4 / macroTotal },
+            { label: 'Fat', val: totalFat, goal: 65, unit: 'g', color: '#fb923c', pct: totalFat * 9 / macroTotal },
           ].map(m => (
             <div key={m.label} className="glass-card px-3 py-2.5">
               <div className="flex justify-between items-center mb-1">
@@ -496,6 +526,19 @@ export default function CalorieTracker({ today }: { today: string }) {
                     </button>
                   </div>
 
+                  {matchedNlpItems.length > 0 && (
+                    <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                      <span className="text-[10px] font-black text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded-lg flex items-center gap-1.5 animate-pulse">
+                        ✨ Parsed components:
+                      </span>
+                      {matchedNlpItems.map((item, idx) => (
+                        <span key={idx} className="text-[10px] font-semibold text-white/80 bg-white/5 border border-white/10 px-2.5 py-0.5 rounded-lg shadow-sm">
+                          {item}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
                   {dbResults.length > 0 && (
                     <div className="mt-3 p-4 glass-card bg-black/40 border border-white/5 rounded-2xl space-y-2 max-h-64 overflow-y-auto shadow-2xl backdrop-blur-md">
                       <div className="flex justify-between items-center mb-2 pb-1 border-b border-white/5">
@@ -655,7 +698,7 @@ export default function CalorieTracker({ today }: { today: string }) {
                     <label className="text-xs text-white/40 mb-1 block">{label}</label>
                     <div className="relative">
                       <input
-                        type="number" min="0"
+                        type="number" min="0" step="any"
                         className="input-glass w-full px-3 py-2 text-sm pr-8"
                         placeholder={placeholder}
                         value={(form as any)[key]}
@@ -685,7 +728,7 @@ export default function CalorieTracker({ today }: { today: string }) {
         {MEAL_ORDER.map(mealType => {
           const entries = todayMeals.filter(m => m.mealType === mealType);
           if (entries.length === 0) return null;
-          const mealCal = entries.reduce((a, m) => a + m.calories, 0);
+          const mealCal = formatDecimal(entries.reduce((a, m) => a + m.calories, 0));
           const isOpen = expandedMeal === mealType;
           return (
             <div key={mealType} className="glass-card overflow-hidden">
@@ -727,12 +770,12 @@ export default function CalorieTracker({ today }: { today: string }) {
                               <div className="text-sm font-medium text-white">{entry.name}</div>
                               <div className="text-[10px] text-white/30">
                                 {entry.quantity && `${entry.quantity} · `}
-                                P:{entry.protein}g · C:{entry.carbs}g · F:{entry.fat}g
+                                P:{formatDecimal(entry.protein)}g · C:{formatDecimal(entry.carbs)}g · F:{formatDecimal(entry.fat)}g
                               </div>
                             </div>
                           </div>
                           <div className="flex items-center gap-3">
-                            <span className="text-sm font-bold text-white/70">{entry.calories} kcal</span>
+                            <span className="text-sm font-bold text-white/70">{formatDecimal(entry.calories)} kcal</span>
                             <button onClick={() => deleteMealMut.mutate(entry.id)}
                               className="opacity-0 group-hover:opacity-100 text-white/20 hover:text-rose-400 transition-all">
                               <Trash2 size={13} />
@@ -787,7 +830,7 @@ export default function CalorieTracker({ today }: { today: string }) {
 
               {/* Middle Content */}
               <h3 className="text-base font-black text-white">Sign in with Google</h3>
-              <p className="text-xs text-white/40 mb-4">to continue to <span className="text-emerald-400 font-bold">Life OS Dashboard</span></p>
+              <p className="text-xs text-white/40 mb-4">to continue to <span className="text-emerald-400 font-bold">Aura OS Dashboard</span></p>
 
               {/* Account selection list */}
               <div className="space-y-2 mb-4">

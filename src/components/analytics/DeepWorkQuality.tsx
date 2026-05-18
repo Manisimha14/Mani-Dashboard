@@ -90,7 +90,7 @@ export default function DeepWorkQuality({ focusSessions }: DeepWorkQualityProps)
         {/* Core Ratios Donut Chart */}
         <div className="flex flex-col md:flex-row gap-4 items-center">
           <div className="h-[140px] w-full md:w-[140px] relative flex items-center justify-center">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <PieChart>
                 <Pie data={analytics.donutData} cx="50%" cy="50%" innerRadius={48} outerRadius={65} paddingAngle={2} dataKey="value">
                   {analytics.donutData.map((e, i) => <Cell key={i} fill={e.color} />)}

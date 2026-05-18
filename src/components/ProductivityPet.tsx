@@ -3,8 +3,10 @@ import { motion, AnimatePresence, useSpring, useMotionValue } from 'framer-motio
 import { useAppStore } from '../store/useAppStore';
 import { getProductivityScore, todayString } from '../lib/utils';
 import { Settings, X, MessageSquare, Zap, Heart } from 'lucide-react';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 export default function ProductivityPet() {
+  const isMobile = useIsMobile();
   const { dailyActivity, readingStreak, codingStreak, focusStreak, userSettings, updateUserSettings } = useAppStore();
   const [isOpen, setIsOpen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -17,6 +19,7 @@ export default function ProductivityPet() {
   const eyeY = useSpring(useMotionValue(0), { stiffness: 300, damping: 20 });
 
   useEffect(() => {
+    if (isMobile) return;
     const handleMouseMove = (e: MouseEvent) => {
       const { clientX, clientY } = e;
       const x = (clientX / window.innerWidth - 0.5) * 8;
@@ -36,7 +39,9 @@ export default function ProductivityPet() {
       window.removeEventListener('mousemove', handleMouseMove);
       clearInterval(blinkInterval);
     };
-  }, []);
+  }, [isMobile]);
+
+  if (isMobile) return null;
 
   const todayActivity = dailyActivity.find(a => a.date === todayString());
   const prodScore = getProductivityScore(
@@ -67,7 +72,7 @@ export default function ProductivityPet() {
       dragElastic={0.1}
       dragTransition={{ bounceStiffness: 600, bounceDamping: 20 }}
       whileDrag={{ scale: 1.05 }}
-      className="fixed bottom-10 right-10 z-[200] flex flex-col items-end gap-6 pointer-events-auto cursor-grab active:cursor-grabbing"
+      className="hidden md:flex fixed bottom-10 right-10 z-[200] flex flex-col items-end gap-6 pointer-events-auto cursor-grab active:cursor-grabbing"
     >
       {/* Speech Bubble */}
       <AnimatePresence>

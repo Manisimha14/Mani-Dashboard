@@ -99,7 +99,7 @@ export default function FocusIntelligence({ focusSessions }: FocusIntelligencePr
         {/* Session completion donut chart */}
         <div className="flex flex-col items-center">
           <div className="h-[140px] w-full relative flex items-center justify-center">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <PieChart>
                 <Pie data={metrics.donutData} cx="50%" cy="50%" innerRadius={50} outerRadius={68} paddingAngle={2} dataKey="value">
                   {metrics.donutData.map((e, i) => <Cell key={i} fill={e.color} />)}
@@ -117,7 +117,7 @@ export default function FocusIntelligence({ focusSessions }: FocusIntelligencePr
 
         {/* Focus distribution histogram */}
         <div className="h-[140px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <BarChart data={metrics.histogram} margin={{ left: -30 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
               <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 9 }} />

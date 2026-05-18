@@ -434,7 +434,7 @@ export default function StepsTracker({ today }: { today: string }) {
 
               {/* Middle Content */}
               <h3 className="text-base font-black text-white">Sign in with Google</h3>
-              <p className="text-xs text-white/40 mb-4">to continue to <span className="text-emerald-400 font-bold">Life OS Dashboard</span></p>
+              <p className="text-xs text-white/40 mb-4">to continue to <span className="text-emerald-400 font-bold">Aura OS Dashboard</span></p>
 
               {/* Account selection list */}
               <div className="space-y-2 mb-4">

@@ -83,6 +83,15 @@
     .glass-card { background: rgba(18, 20, 32, 0.97); }
   }
 
+  @media (max-width: 768px) {
+    .glass-card {
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      background: hsl(225, 15%, 10%) !important;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    }
+  }
+
   .glass-card-hover {
     @apply glass-card transition-all duration-300;
   }
@@ -92,6 +101,15 @@
     border-color: rgba(139, 92, 246, 0.2);
     box-shadow: 0 8px 48px rgba(0,0,0,0.5), 0 0 0 1px rgba(139,92,246,0.1), 0 0 30px rgba(139,92,246,0.1);
     transform: translateY(-2px);
+  }
+
+  @media (max-width: 768px) {
+    .glass-card-hover:hover {
+      transform: none !important;
+      background: hsl(225, 15%, 10%) !important;
+      border-color: rgba(255, 255, 255, 0.06) !important;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5) !important;
+    }
   }
 
   /* Glow Button */
@@ -236,6 +254,12 @@
     animation: blob 12s infinite;
   }
 
+  @media (max-width: 768px) {
+    .ambient-blob {
+      animation: none !important;
+    }
+  }
+
   /* Stat Card */
   .stat-card {
     @apply glass-card p-5 flex flex-col gap-2 relative overflow-hidden;
@@ -327,6 +351,7 @@
     bottom: 0;
     z-index: 50;
     overflow-y: auto;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   /* Main content */
@@ -334,6 +359,21 @@
     margin-left: 240px;
     min-height: 100vh;
     padding: 24px;
+    transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  @media (max-width: 768px) {
+    .sidebar {
+      transform: translateX(-100%);
+      z-index: 100;
+    }
+    .sidebar.sidebar-open {
+      transform: translateX(0);
+    }
+    .main-content {
+      margin-left: 0;
+      padding: 16px;
+    }
   }
 
   /* Page transition */
@@ -581,4 +621,86 @@ button.ripple-btn {
     opacity: 0;
   }
 }
+
+/* ----------------------------------------------------
+   Samsung Galaxy F42 5G & Narrow Mobile Optimizations
+   Targeting layout viewports under 380px width (e.g. 360px)
+   ---------------------------------------------------- */
+@media (max-width: 380px) {
+  /* Reduce content and card paddings to reclaim screen real estate */
+  .main-content {
+    padding: 8px !important;
+  }
+  
+  .glass-card, 
+  .stat-card, 
+  .achievement-card {
+    padding: 12px 10px !important;
+    border-radius: 12px !important;
+  }
+
+  /* Compact grid/flex gaps to fit cards side-by-side */
+  .gap-4 {
+    gap: 8px !important;
+  }
+  .gap-3 {
+    gap: 6px !important;
+  }
+  .gap-5 {
+    gap: 10px !important;
+  }
+  .space-y-5 > * + * {
+    margin-top: 10px !important;
+  }
+  .space-y-6 > * + * {
+    margin-top: 12px !important;
+  }
+
+  /* Prevent oversized typography from pushing buttons/columns into wrap-breaking */
+  .text-4xl {
+    font-size: 1.875rem !important; /* 30px */
+    line-height: 2.25rem !important;
+  }
+  .text-3xl {
+    font-size: 1.5rem !important; /* 24px */
+    line-height: 2rem !important;
+  }
+  .text-2xl {
+    font-size: 1.25rem !important; /* 20px */
+    line-height: 1.75rem !important;
+  }
+  .text-xl {
+    font-size: 1.125rem !important; /* 18px */
+    line-height: 1.5rem !important;
+  }
+  .text-lg {
+    font-size: 1rem !important; /* 16px */
+  }
+  .text-base {
+    font-size: 0.875rem !important; /* 14px */
+  }
+
+  /* Shrink hero dials / circular progress gauges to fit standard 360px viewport */
+  .w-44.h-44 {
+    width: 7.5rem !important; /* 120px */
+    height: 7.5rem !important; /* 120px */
+  }
+
+  /* Compact quick-add buttons inside health modules */
+  .grid-cols-2.sm-grid-cols-4.gap-2 {
+    gap: 6px !important;
+  }
+  
+  .input-glass {
+    padding-top: 6px !important;
+    padding-bottom: 6px !important;
+    font-size: 13px !important;
+  }
+  
+  .btn-glow {
+    padding: 8px 12px !important;
+    font-size: 12px !important;
+  }
+}
+
 

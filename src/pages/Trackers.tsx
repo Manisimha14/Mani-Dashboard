@@ -197,10 +197,10 @@ export default function Trackers() {
   }, [trackers]);
 
   return (
-    <div className="flex gap-8 max-w-7xl mx-auto pb-20">
+    <div className="flex flex-col lg:flex-row gap-8 max-w-7xl mx-auto pb-20">
       {/* Left Column: List */}
       <div className="flex-1 space-y-8">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-black tracking-tight text-white">Trackers</h1>
             <p className="text-white/40 text-sm mt-1">Track anything that matters to you.</p>
@@ -223,7 +223,7 @@ export default function Trackers() {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <AnimatePresence mode="popLayout">
             {filteredTrackers.map((t) => (
               <motion.div
@@ -301,7 +301,7 @@ export default function Trackers() {
       </div>
 
       {/* Right Column: Intelligence & Templates */}
-      <div className="w-80 space-y-8">
+      <div className="w-full lg:w-80 space-y-8">
         {/* Mission Status */}
         <div className="glass-card p-6 border-violet-500/10 text-center relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-b from-violet-500/5 to-transparent opacity-50" />
@@ -544,23 +544,23 @@ function TrackerDetail({ tracker, onClose, onEdit }: { tracker: Tracker; onClose
   
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-5 p-5 glass-card relative overflow-hidden">
+      <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 p-5 glass-card relative overflow-hidden text-center sm:text-left">
         <div className="absolute top-0 right-0 p-4 opacity-5">
            <Zap size={60} />
-        </div>
-        <div className="w-20 h-20 rounded-2xl flex items-center justify-center text-4xl shadow-glow-sm" style={{ backgroundColor: `${tracker.color}20`, color: tracker.color, border: `1px solid ${tracker.color}40` }}>
+         </div>
+        <div className="w-20 h-20 rounded-2xl flex items-center justify-center text-4xl shadow-glow-sm flex-shrink-0 mx-auto sm:mx-0" style={{ backgroundColor: `${tracker.color}20`, color: tracker.color, border: `1px solid ${tracker.color}40` }}>
           {tracker.icon}
         </div>
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <div className="px-2.5 py-1 rounded bg-white/5 border border-white/10 text-[9px] font-black uppercase tracking-widest text-white/40 mb-1 inline-block">
             {tracker.type}
           </div>
-          <h3 className="text-2xl font-black text-white italic uppercase tracking-tighter">{tracker.title}</h3>
-          <p className="text-xs text-white/40 font-medium">{tracker.description || 'System tracking in progress...'}</p>
+          <h3 className="text-2xl font-black text-white italic uppercase tracking-tighter break-words">{tracker.title}</h3>
+          <p className="text-xs text-white/40 font-medium mt-1">{tracker.description || 'System tracking in progress...'}</p>
         </div>
         <button 
           onClick={onEdit}
-          className="p-2 rounded-xl bg-white/5 hover:bg-white/10 transition-colors text-white/40 hover:text-white"
+          className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 transition-colors text-white/40 hover:text-white flex-shrink-0 self-center sm:self-start"
         >
           <Edit3 size={18} />
         </button>

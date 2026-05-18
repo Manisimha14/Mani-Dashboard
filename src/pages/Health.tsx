@@ -43,10 +43,10 @@ export default function Health() {
   return (
     <div className="page-enter space-y-6">
       {/* ── Header ─────────────────────────────────────── */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-rose-500 to-pink-600
-                          flex items-center justify-center shadow-[0_0_24px_rgba(244,63,94,0.4)]">
+                          flex items-center justify-center shrink-0 shadow-[0_0_24px_rgba(244,63,94,0.4)]">
             <Heart size={20} className="text-white" />
           </div>
           <div>
@@ -57,8 +57,8 @@ export default function Health() {
           </div>
         </div>
 
-        {/* Quick KPIs */}
-        <div className="flex items-center gap-3">
+        {/* Quick KPIs - Scrollable on mobile, no layout breakage */}
+        <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto no-scrollbar py-1 shrink-0">
           <QuickKpi label="Calories" value={`${todayData.totalCalories}`} unit="kcal"
             pct={calPct} color="rose" icon="🔥" />
           <QuickKpi label="Water" value={`${(todayData.totalWaterMl / 1000).toFixed(1)}`} unit="L"
@@ -69,7 +69,7 @@ export default function Health() {
       </div>
 
       {/* ── Tabs ──────────────────────────────────────── */}
-      <div className="flex gap-1 p-1 glass-card rounded-2xl w-fit flex-wrap">
+      <div className="flex gap-1 p-1 glass-card rounded-2xl w-full md:w-fit overflow-x-auto no-scrollbar scroll-smooth shrink-0">
         {TABS.map(tab => {
           const Icon = tab.icon;
           const active = activeTab === tab.id;
@@ -80,7 +80,7 @@ export default function Health() {
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
               className={`relative flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold
-                          transition-colors duration-200
+                          transition-colors duration-200 shrink-0
                           ${active
                             ? 'text-white'
                             : 'text-white/40 hover:text-white/70'}`}

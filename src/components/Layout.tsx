@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
+import { X } from 'lucide-react';
 import Sidebar from './Sidebar';
 import CommandPalette from './CommandPalette';
 import TopHeader from './TopHeader';
@@ -25,13 +26,16 @@ import { useAchievementsEngine } from '../hooks/useAchievementsEngine';
 import { useExtensionSync } from '../hooks/useExtensionSync';
 import Confetti from 'react-confetti';
 import CompanionTerminal from './analytics/CompanionTerminal';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 export default function Layout() {
+  const isMobile = useIsMobile();
   const [cmdOpen, setCmdOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [remModalOpen, setRemModalOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [terminalOpen, setTerminalOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   
   const { requestPermission } = useReminderEngine();
   const weather = useWeather();
@@ -42,6 +46,63 @@ export default function Layout() {
   useRealtimeSync();
   useAchievementsEngine();
   useExtensionSync();
+
+  // PWA installation prompt states
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showPWAInstall, setShowPWAInstall] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+
+  React.useEffect(() => {
+    // Check if running on iOS
+    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+    setIsIOS(ios);
+
+    // Check if already installed / running in standalone mode
+    const standalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone;
+    setIsStandalone(standalone);
+
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      if (!standalone) {
+        setShowPWAInstall(true);
+      }
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    if (ios && !standalone) {
+      const iosPromptClosed = localStorage.getItem('ios_pwa_prompt_closed');
+      if (!iosPromptClosed) {
+        const t = setTimeout(() => setShowPWAInstall(true), 5000);
+        return () => clearTimeout(t);
+      }
+    }
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handlePWAInstallClick = async () => {
+    play('click');
+    if (isIOS) return;
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log(`PWA install prompt outcome: ${outcome}`);
+    setDeferredPrompt(null);
+    setShowPWAInstall(false);
+  };
+
+  const handlePWAClose = () => {
+    play('click');
+    setShowPWAInstall(false);
+    if (isIOS) {
+      localStorage.setItem('ios_pwa_prompt_closed', 'true');
+    }
+  };
 
   // Unlock audio on first interaction
   React.useEffect(() => {
@@ -118,40 +179,62 @@ export default function Layout() {
       <SoundscapeMixer />
       
       {/* Ambient background blobs - Now reactive */}
-      <motion.div 
-        animate={{ 
-          scale: [1, 1.2, 1],
-          opacity: [0.3, 0.5, 0.3],
-          x: [0, 50, 0],
-          y: [0, 30, 0]
-        }}
-        transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-        className={`ambient-blob w-[500px] h-[500px] blur-[120px] rounded-full fixed top-[-10%] left-[-5%] ${getAuraColor()} pointer-events-none z-0`} 
-      />
-      <motion.div 
-        animate={{ 
-          scale: [1, 1.3, 1],
-          opacity: [0.2, 0.4, 0.2],
-          x: [0, -40, 0],
-          y: [0, -60, 0]
-        }}
-        transition={{ duration: 15, repeat: Infinity, ease: "easeInOut", delay: 2 }}
-        className="ambient-blob w-[400px] h-[400px] blur-[100px] rounded-full fixed top-[40%] right-[-5%] bg-indigo-900 pointer-events-none z-0" 
-      />
-      <motion.div 
-        animate={{ 
-          scale: [1, 1.1, 1],
-          opacity: [0.1, 0.3, 0.1],
-        }}
-        transition={{ duration: 12, repeat: Infinity, ease: "easeInOut", delay: 5 }}
-        className="ambient-blob w-[600px] h-[600px] blur-[150px] rounded-full fixed bottom-[-10%] left-[20%] bg-fuchsia-900 pointer-events-none z-0" 
-      />
+      {!isMobile ? (
+        <>
+          <motion.div 
+            animate={{ 
+              scale: [1, 1.2, 1],
+              opacity: [0.3, 0.5, 0.3],
+              x: [0, 50, 0],
+              y: [0, 30, 0]
+            }}
+            transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+            className={`ambient-blob w-[500px] h-[500px] blur-[120px] rounded-full fixed top-[-10%] left-[-5%] ${getAuraColor()} pointer-events-none z-0`} 
+          />
+          <motion.div 
+            animate={{ 
+              scale: [1, 1.3, 1],
+              opacity: [0.2, 0.4, 0.2],
+              x: [0, -40, 0],
+              y: [0, -60, 0]
+            }}
+            transition={{ duration: 15, repeat: Infinity, ease: "easeInOut", delay: 2 }}
+            className="ambient-blob w-[400px] h-[400px] blur-[100px] rounded-full fixed top-[40%] right-[-5%] bg-indigo-900 pointer-events-none z-0" 
+          />
+          <motion.div 
+            animate={{ 
+              scale: [1, 1.1, 1],
+              opacity: [0.1, 0.3, 0.1],
+            }}
+            transition={{ duration: 12, repeat: Infinity, ease: "easeInOut", delay: 5 }}
+            className="ambient-blob w-[600px] h-[600px] blur-[150px] rounded-full fixed bottom-[-10%] left-[20%] bg-fuchsia-900 pointer-events-none z-0" 
+          />
+        </>
+      ) : (
+        <>
+          {/* Static lightweight ambient glow for mobile */}
+          <div className={`ambient-blob w-[250px] h-[250px] blur-[80px] rounded-full fixed top-[-5%] left-[-10%] ${getAuraColor()} pointer-events-none z-0 opacity-20`} />
+          <div className="ambient-blob w-[200px] h-[200px] blur-[80px] rounded-full fixed top-[45%] right-[-15%] bg-indigo-950 pointer-events-none z-0 opacity-15" />
+        </>
+      )}
  
-      <Sidebar />
+      <AnimatePresence>
+        {sidebarOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setSidebarOpen(false)}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[45] md:hidden"
+          />
+        )}
+      </AnimatePresence>
+
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
  
       <main className="main-content flex flex-col min-h-screen relative z-10">
-        <TopHeader />
-        <div className="p-8 pt-4 flex-1">
+        <TopHeader onToggleSidebar={() => setSidebarOpen(true)} />
+        <div className="p-4 md:p-8 pt-4 flex-1">
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}
@@ -215,13 +298,13 @@ export default function Layout() {
       />
 
       {/* Ctrl+K hint */}
-      <div className="fixed bottom-6 left-[260px] text-xs text-white/20 flex items-center gap-1.5 pointer-events-none z-40">
+      <div className="hidden md:flex fixed bottom-6 left-[260px] text-xs text-white/20 items-center gap-1.5 pointer-events-none z-40">
         <kbd className="border border-white/10 rounded px-1.5 py-0.5 text-white/30">Ctrl K</kbd>
         <span>Command palette</span>
       </div>
 
       {/* Global Terminal toggle hint */}
-      <div className="fixed bottom-6 left-[410px] text-xs text-white/20 flex items-center gap-1.5 pointer-events-none z-40">
+      <div className="hidden md:flex fixed bottom-6 left-[410px] text-xs text-white/20 items-center gap-1.5 pointer-events-none z-40">
         <kbd className="border border-white/10 rounded px-1.5 py-0.5 text-white/30">Ctrl `</kbd>
         <span>Command Console</span>
       </div>
@@ -324,8 +407,50 @@ export default function Layout() {
         )}
       </AnimatePresence>
 
+      {/* PWA Install Banner */}
+      <AnimatePresence>
+        {showPWAInstall && !isStandalone && (
+          <motion.div
+            initial={{ opacity: 0, y: 100, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, x: '-50%' }}
+            exit={{ opacity: 0, y: 100, x: '-50%' }}
+            className="fixed bottom-6 left-1/2 w-[90%] max-w-md glass-card z-50 p-4 border border-violet-500/20 bg-gradient-to-r from-violet-950/20 via-[#0e0f17]/95 to-[#0e0f17]/98 shadow-[0_10px_50px_rgba(0,0,0,0.8),0_0_20px_rgba(139,92,246,0.15)] flex items-center gap-4"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-600 flex items-center justify-center shadow-[0_0_15px_rgba(139,92,246,0.4)] p-2.5 flex-shrink-0">
+              <img src="/favicon.svg" alt="App Logo" className="w-full h-full object-contain" />
+            </div>
+            
+            <div className="flex-1 min-w-0">
+              <h4 className="text-xs font-black uppercase tracking-wider text-violet-400">Aura OS Mobile</h4>
+              <p className="text-[11px] text-white/70 leading-normal mt-0.5">
+                {isIOS 
+                  ? 'Tap the Share button 📤 then "Add to Home Screen" ➕' 
+                  : 'Install our App on your phone for a premium, native-grade experience!'}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {!isIOS && (
+                <button
+                  onClick={handlePWAInstallClick}
+                  className="px-3 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-2xs uppercase tracking-wider shadow-[0_0_15px_rgba(139,92,246,0.4)] active:scale-95 transition-all"
+                >
+                  Install
+                </button>
+              )}
+              <button
+                onClick={handlePWAClose}
+                className="p-2 rounded-xl bg-white/5 border border-white/10 text-white/40 hover:text-white transition-colors"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Global Grain Texture - The 'Award Winning' secret sauce */}
-      <div className="fixed inset-0 pointer-events-none z-[999] opacity-[0.03] mix-blend-overlay bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
+      <div className="fixed inset-0 pointer-events-none z-[999] opacity-[0.08] mix-blend-overlay bg-noise" />
     </div>
   );
 }

@@ -218,7 +218,7 @@ export default function LeetCode() {
           {solved.length === 0 ? (
             <div className="h-40 flex items-center justify-center text-white/30 text-sm">No data yet</div>
           ) : (
-            <ResponsiveContainer width="100%" height={160}>
+            <ResponsiveContainer width="100%" height={160} minWidth={0}>
               <PieChart>
                 <Pie data={diffData} cx="50%" cy="50%" innerRadius={40} outerRadius={70} dataKey="value" paddingAngle={3}>
                   {diffData.map((d) => <Cell key={d.name} fill={d.color} />)}
@@ -243,7 +243,7 @@ export default function LeetCode() {
           {topicData.length === 0 ? (
             <div className="h-40 flex items-center justify-center text-white/30 text-sm">No data yet</div>
           ) : (
-            <ResponsiveContainer width="100%" height={160}>
+            <ResponsiveContainer width="100%" height={160} minWidth={0}>
               <BarChart data={topicData} margin={{ top: 0, right: 0, bottom: 20, left: -20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
                 <XAxis dataKey="topic" tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 9 }} angle={-35} textAnchor="end" axisLine={false} tickLine={false} />
