@@ -49,8 +49,7 @@ export async function fetchTodayGoogleFitData(): Promise<GoogleFitData> {
   const requestBody = {
     aggregateBy: [
       {
-        dataTypeName: 'com.google.step_count.delta',
-        dataSourceId: 'derived:com.google.step_count.delta:com.google.android.gms:estimated_steps'
+        dataTypeName: 'com.google.step_count.delta'
       },
       {
         dataTypeName: 'com.google.calories.expended'
