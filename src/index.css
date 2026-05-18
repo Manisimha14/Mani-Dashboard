@@ -90,6 +90,18 @@
       background: hsl(225, 15%, 10%) !important;
       box-shadow: 0 4px 16px rgba(0,0,0,0.5);
     }
+
+    /* Force hardware composition layer promote to eliminate scrolling repaints inside mobile PWA */
+    body, 
+    .main-content, 
+    .glass-card, 
+    .stat-card {
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      transform: translate3d(0, 0, 0);
+      -webkit-transform: translate3d(0, 0, 0);
+      will-change: transform;
+    }
   }
 
   .glass-card-hover {

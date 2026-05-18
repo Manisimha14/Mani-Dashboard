@@ -238,11 +238,20 @@ export default function Layout() {
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}
-              initial={{ opacity: 0, x: 20, filter: 'blur(10px)' }}
-              animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
-              exit={{ opacity: 0, x: -20, filter: 'blur(10px)' }}
+              initial={isMobile 
+                ? { opacity: 0, y: 10 } 
+                : { opacity: 0, x: 20, filter: 'blur(10px)' }
+              }
+              animate={isMobile 
+                ? { opacity: 1, y: 0 } 
+                : { opacity: 1, x: 0, filter: 'blur(0px)' }
+              }
+              exit={isMobile 
+                ? { opacity: 0, y: 10 } 
+                : { opacity: 0, x: -20, filter: 'blur(10px)' }
+              }
               transition={{ 
-                duration: 0.3, 
+                duration: isMobile ? 0.15 : 0.3, 
                 ease: [0.22, 1, 0.36, 1] 
               }}
             >
