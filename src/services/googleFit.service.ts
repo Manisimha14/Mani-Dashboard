@@ -41,10 +41,7 @@ export async function fetchTodayGoogleFitData(): Promise<GoogleFitData> {
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
   const startTimeMillis = startOfToday.getTime();
-
-  const endOfToday = new Date();
-  endOfToday.setHours(23, 59, 59, 999);
-  const endTimeMillis = endOfToday.getTime();
+  const endTimeMillis = Date.now();
 
   const requestBody = {
     aggregateBy: [
@@ -90,23 +87,25 @@ export async function fetchTodayGoogleFitData(): Promise<GoogleFitData> {
     let calories = 0;
     let activeMinutes = 0;
 
-    if (data.bucket && data.bucket[0] && data.bucket[0].dataset) {
-      const datasets = data.bucket[0].dataset;
-      
-      // 1. Steps
-      const stepsDataset = datasets.find((d: any) => d.dataSourceId?.includes('step_count'));
-      const stepsData = stepsDataset?.point?.[0]?.value?.[0]?.intVal;
-      if (stepsData !== undefined) steps = stepsData;
+    if (data.bucket?.[0]?.dataset) {
+      for (const dataset of data.bucket[0].dataset) {
+        const source = dataset.dataSourceId || '';
+        const point = dataset.point?.[0];
 
-      // 2. Calories
-      const calDataset = datasets.find((d: any) => d.dataSourceId?.includes('calories'));
-      const calData = calDataset?.point?.[0]?.value?.[0]?.fpVal;
-      if (calData !== undefined) calories = Math.round(calData);
+        if (!point) continue;
 
-      // 3. Active Minutes
-      const activeDataset = datasets.find((d: any) => d.dataSourceId?.includes('active_minutes'));
-      const activeData = activeDataset?.point?.[0]?.value?.[0]?.intVal;
-      if (activeData !== undefined) activeMinutes = activeData;
+        if (source.includes('step_count')) {
+          steps = point.value?.[0]?.intVal ?? 0;
+        }
+
+        if (source.includes('calories')) {
+          calories = Math.round(point.value?.[0]?.fpVal ?? 0);
+        }
+
+        if (source.includes('active_minutes')) {
+          activeMinutes = point.value?.[0]?.intVal ?? 0;
+        }
+      }
     }
 
     return { steps, calories, activeMinutes };
