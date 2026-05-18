@@ -131,41 +131,42 @@ export const COMMAND_REGISTRY: Record<string, CommandHandler> = {
   sleep: (args, ctx) => [
     'Sleep Quality Analysis',
     '----------------------',
-    `Average Rest    : ${ctx.biometricStats.avgSleepHrs} h/day`,
+    `30d Avg Rest    : ${ctx.biometricStats.avgSleepHrs} h/day`,
     'Goal Target     : 7.5 h/day',
-    'Status          : Complete recovery pattern.',
+    'Status          : Based on logged sleep data only.',
   ],
 
   calories: (args, ctx) => [
     'Metabolic Calorie Intake',
     '------------------------',
-    `Average Intake  : ${ctx.biometricStats.avgCalories} kcal/day`,
+    `30d Avg Intake  : ${ctx.biometricStats.avgCalories} kcal/day`,
     'Goal Target     : 2100 kcal/day',
-    'Status          : Balanced metabolism.',
+    'Status          : Descriptive average, not a metabolic assessment.',
   ],
 
   today: (args, ctx) => {
-    const completed = ctx.focusSessions.filter(s => s.completed);
+    const today = new Date().toISOString().slice(0, 10);
+    const completed = ctx.focusSessions.filter(s => s.completed && s.date === today);
     const durations = completed.map(s => s.actualDuration || s.duration);
-    const avg = durations.length > 0 ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : 0;
-    const totalProblems = ctx.problems.filter(p => p.completed).length;
+    const focusMinutes = durations.reduce((a, b) => a + b, 0);
+    const totalProblems = ctx.problems.filter(p => p.completed && (p as { date?: string }).date === today).length;
 
     return [
       'Today Telemetry Snapshot',
       '------------------------',
-      `Focus Completed : ${avg} minutes`,
+      `Focus Completed : ${focusMinutes} minutes`,
       `Problems Solved : ${totalProblems} exercises`,
-      `Water Intake    : ${ctx.biometricStats.avgWaterL} L`,
-      `Sleep Hrs Logged: ${ctx.biometricStats.avgSleepHrs} h`,
+      `Water Intake    : ${ctx.biometricStats.todayWaterL} L`,
+      `Sleep Hrs Logged: ${ctx.biometricStats.todaySleepHrs} h`,
     ];
   },
 
   insights: (args, ctx) => [
     'Productivity Coach Insights',
     '---------------------------',
-    '- Maintain 7.5h sleep cycle to prevent focus regression.',
-    '- Hydration correlates with high completion efficiency.',
-    '- Peak cognitive window detected between 9 AM - 11 AM.',
+    '- Insights are generated from logged data only.',
+    '- No confidence-scored model is running in this console yet.',
+    '- Use analytics views for computed trends and raw totals.',
   ],
 
   go: (args, ctx) => {

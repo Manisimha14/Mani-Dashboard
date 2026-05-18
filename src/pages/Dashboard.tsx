@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { motion, type Variants } from 'framer-motion';
 import { useAppStore } from '../store/useAppStore';
 import { useBook } from '../hooks/useBookQuery';
@@ -17,19 +17,18 @@ import {
 } from 'lucide-react';
 import { formatDuration, todayString, getProductivityScore } from '../lib/utils';
 import { format, parseISO } from 'date-fns';
-import {
-  RadialBarChart, RadialBar, ResponsiveContainer,
-  LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid
-} from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import { PRODUCTIVITY_QUOTES } from '../lib/data';
 import TiltCard from '../components/TiltCard';
-import ProductivityInsights from '../components/ProductivityInsights';
-import ContextualAlerts from '../components/ContextualAlerts';
 import Skeleton, { StatCardSkeleton, InsightSkeleton } from '../components/Skeleton';
 import MissionControl from '../components/MissionControl';
 import QuickLauncher from '../components/QuickLauncher';
 import { useMemo } from 'react';
+import DeferredOnVisible from '../components/DeferredOnVisible';
+
+const ProductivityInsights = lazy(() => import('../components/ProductivityInsights'));
+const ContextualAlerts = lazy(() => import('../components/ContextualAlerts'));
+const DashboardActivityChart = lazy(() => import('../components/dashboard/DashboardActivityChart'));
 
 const stagger: Variants = {
   hidden: { opacity: 0 },
@@ -236,7 +235,9 @@ export default function Dashboard() {
 
       {/* Contextual Awareness */}
       <motion.div variants={item}>
-        <ContextualAlerts />
+        <Suspense fallback={null}>
+          <ContextualAlerts />
+        </Suspense>
       </motion.div>
 
       {/* Productivity Insights */}
@@ -247,7 +248,9 @@ export default function Dashboard() {
             <InsightSkeleton />
           </div>
         ) : (
-          <ProductivityInsights />
+          <Suspense fallback={<div className="grid grid-cols-1 md:grid-cols-2 gap-4"><InsightSkeleton /><InsightSkeleton /></div>}>
+            <ProductivityInsights />
+          </Suspense>
         )}
       </motion.div>
 
@@ -453,25 +456,15 @@ export default function Dashboard() {
       {/* Two-column: Chart + Next Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* Activity Chart */}
-        <motion.div variants={item} className="col-span-1 lg:col-span-3 glass-card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-white">Weekly Activity</h3>
-            <span className="text-xs text-white/30">Last 7 days</span>
-          </div>
-          <ResponsiveContainer width="100%" height={180} minWidth={0}>
-            <LineChart data={last7} margin={{ top: 5, right: 5, bottom: 5, left: -20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-              <XAxis dataKey="day" tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 11 }} axisLine={false} tickLine={false} />
-              <Tooltip
-                contentStyle={{ background: 'rgba(15,16,28,0.95)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, color: 'white', fontSize: 12 }}
-                cursor={{ stroke: 'rgba(139,92,246,0.3)' }}
-              />
-              <Line type="monotone" dataKey="focus" stroke="#8b5cf6" strokeWidth={2} dot={false} name="Focus (min)" />
-              <Line type="monotone" dataKey="problems" stroke="#06b6d4" strokeWidth={2} dot={false} name="Problems" />
-              <Line type="monotone" dataKey="chapters" stroke="#10b981" strokeWidth={2} dot={false} name="Chapters" />
-            </LineChart>
-          </ResponsiveContainer>
+        <motion.div variants={item} className="col-span-1 lg:col-span-3">
+          <DeferredOnVisible
+            minHeight={252}
+            fallback={<div className="glass-card p-5 h-[252px]" />}
+          >
+            <Suspense fallback={<div className="glass-card p-5 h-[252px]" />}>
+              <DashboardActivityChart data={last7} />
+            </Suspense>
+          </DeferredOnVisible>
         </motion.div>
 
         {/* Right column */}

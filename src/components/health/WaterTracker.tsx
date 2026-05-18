@@ -58,7 +58,7 @@ export default function WaterTracker({ today }: { today: string }) {
       <div className="glass-card p-8 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-sky-600/3 pointer-events-none" />
 
-        <div className="flex items-center gap-10">
+        <div className="flex flex-col sm:flex-row items-center gap-8 sm:gap-10">
           {/* Animated fill ring */}
           <div className="relative w-44 h-44 flex-shrink-0">
             {/* Wave fill visual */}
@@ -147,10 +147,10 @@ export default function WaterTracker({ today }: { today: string }) {
             </svg>
           </div>
 
-          <div className="flex-1 space-y-6">
+          <div className="flex-1 space-y-6 w-full text-center sm:text-left">
             <div>
               <div className="text-xs text-white/30 uppercase tracking-widest font-bold mb-2">Quick Add Vessel</div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full">
                 {QUICK_ADD_CONFIG.map(vessel => (
                   <motion.button
                     key={vessel.amount}
@@ -170,13 +170,13 @@ export default function WaterTracker({ today }: { today: string }) {
 
             <div>
               <div className="text-xs text-white/30 uppercase tracking-widest font-bold mb-1">Custom Amount</div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 justify-center sm:justify-start">
                 <input
                   type="number"
                   placeholder="e.g. 750"
                   value={customMl}
                   onChange={e => setCustomMl(e.target.value)}
-                  className="input-glass px-3 py-2 text-sm w-32 font-mono"
+                  className="input-glass px-3 py-2 text-sm w-32 font-mono text-center sm:text-left"
                 />
                 <span className="text-white/30 self-center text-sm">ml</span>
                 <motion.button
@@ -191,7 +191,7 @@ export default function WaterTracker({ today }: { today: string }) {
             </div>
 
             {/* Macro progress */}
-            <div>
+            <div className="text-left">
               <div className="flex justify-between text-xs text-white/30 mb-1">
                 <span>Progress</span>
                 <span>{Math.round(pct * 100)}%</span>
@@ -206,11 +206,11 @@ export default function WaterTracker({ today }: { today: string }) {
               </div>
               <div className="text-xs text-white/20 mt-1">
                 {Math.max(0, goalMl - totalMl)}ml remaining to hit goal
-              </div>
             </div>
           </div>
         </div>
       </div>
+    </div>
 
       {/* Log */}
       <div className="glass-card p-5">

@@ -20,13 +20,13 @@ export function useFocusSessions() {
   });
 }
 
-export function useAddFocusSession(): UseMutationResult<unknown, Error, Omit<FocusSession, 'id'>> {
+export function useAddFocusSession(): UseMutationResult<FocusSession | void, Error, Omit<FocusSession, 'id'>> {
   const { user } = useAuth();
   const qc = useQueryClient();
   const localStore = useAppStore();
 
   return useMutation({
-    mutationFn: async (session): Promise<unknown> => user
+    mutationFn: async (session): Promise<FocusSession | void> => user
       ? FocusSvc.insertFocusSession(user.id, session)
       : localStore.addFocusSession(session),
     onSuccess: () => {
@@ -49,4 +49,3 @@ export function useUpdateFocusSession(): UseMutationResult<void, Error, { id: st
     },
   });
 }
-

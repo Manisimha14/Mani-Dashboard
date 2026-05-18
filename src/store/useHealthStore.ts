@@ -123,10 +123,15 @@ export function computeHealthScore(
   sleepMinutes: number, sleepGoal: number,
   hasWorkedOut: boolean
 ): number {
-  const calScore = Math.min(totalCalories / calorieGoal, 1) * 20;
-  const waterScore = Math.min(totalWaterMl / waterGoal, 1) * 20;
-  const proteinScore = Math.min(totalProtein / proteinGoal, 1) * 20;
-  const sleepScore = Math.min(sleepMinutes / (sleepGoal * 60), 1) * 25;
+  const safeCalorieGoal = Math.max(calorieGoal, 1);
+  const safeWaterGoal = Math.max(waterGoal, 1);
+  const safeProteinGoal = Math.max(proteinGoal, 1);
+  const safeSleepGoalMinutes = Math.max(sleepGoal * 60, 1);
+
+  const calScore = Math.min(totalCalories / safeCalorieGoal, 1) * 20;
+  const waterScore = Math.min(totalWaterMl / safeWaterGoal, 1) * 20;
+  const proteinScore = Math.min(totalProtein / safeProteinGoal, 1) * 20;
+  const sleepScore = Math.min(sleepMinutes / safeSleepGoalMinutes, 1) * 25;
   const workoutScore = hasWorkedOut ? 15 : 0;
   return Math.round(calScore + waterScore + proteinScore + sleepScore + workoutScore);
 }

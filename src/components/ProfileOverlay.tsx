@@ -23,7 +23,7 @@ const MOODS: { id: AppMood; label: string; icon: any; color: string; desc: strin
 ];
 
 export default function ProfileOverlay({ open, onClose }: ProfileOverlayProps) {
-  const { userSettings, updateUserSettings, readingStreak, codingStreak, focusStreak, dailyActivity } = useAppStore();
+  const { userSettings, updateUserSettings, readingStreak, codingStreak, focusStreak, dailyActivity, problems, book, achievements } = useAppStore();
   const [view, setView] = React.useState<'settings' | 'showcase'>('settings');
   const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -56,6 +56,11 @@ export default function ProfileOverlay({ open, onClose }: ProfileOverlayProps) {
 
   const totalStreak = Math.max(readingStreak.currentStreak, codingStreak.currentStreak, focusStreak.currentStreak);
   const currentMood = MOODS.find(m => m.id === userSettings.mood) || MOODS[0];
+  const totalFocusHours = Math.round(dailyActivity.reduce((sum, day) => sum + day.focusMinutes, 0) / 60);
+  const totalSolved = problems.filter(p => p.completed).length;
+  const completedChapters = book?.chapters.filter(c => c.completed).length ?? 0;
+  const unlockedAchievements = achievements.filter(a => a.unlocked).length;
+  const activeDays = new Set(dailyActivity.filter(day => day.focusMinutes > 0 || day.problemsSolved > 0 || day.chaptersRead > 0).map(day => day.date)).size;
 
   return (
     <AnimatePresence>
@@ -133,7 +138,7 @@ export default function ProfileOverlay({ open, onClose }: ProfileOverlayProps) {
                   </motion.h2>
                   <div className="flex items-center gap-2 mt-1">
                     <div className="px-2 py-0.5 rounded bg-violet-500/20 border border-violet-500/30 text-[10px] font-black text-violet-400 uppercase tracking-widest">
-                      Rank: Elite
+                      Active Days: {activeDays}
                     </div>
                     <div className="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/30 text-[10px] font-black text-emerald-400 uppercase tracking-widest">
                       Vibe: {userSettings.mood}
@@ -168,7 +173,7 @@ export default function ProfileOverlay({ open, onClose }: ProfileOverlayProps) {
                     {/* Stats Grid */}
                     <div className="grid grid-cols-2 gap-4">
                       <StatCard icon={Flame} label="Active Streak" value={`${totalStreak} Days`} color="text-orange-400" />
-                      <StatCard icon={Star} label="Skill Level" value="Level 42" color="text-amber-400" />
+                      <StatCard icon={Star} label="Achievements" value={`${unlockedAchievements}`} color="text-amber-400" />
                     </div>
 
                     {/* Vibe Selector */}
@@ -239,8 +244,8 @@ export default function ProfileOverlay({ open, onClose }: ProfileOverlayProps) {
                     className="space-y-6"
                   >
                     <div className="text-center mb-8">
-                      <div className="text-[10px] text-violet-400 font-black uppercase tracking-[0.3em] mb-2">Verified Identity</div>
-                      <h3 className="text-2xl font-black text-white italic tracking-tighter uppercase">Operational Excellence Card</h3>
+                      <div className="text-[10px] text-violet-400 font-black uppercase tracking-[0.3em] mb-2">Logged Totals</div>
+                      <h3 className="text-2xl font-black text-white italic tracking-tighter uppercase">Progress Snapshot</h3>
                     </div>
 
                     <div className="p-6 rounded-3xl bg-gradient-to-br from-white/10 to-transparent border border-white/10 relative overflow-hidden group">
@@ -249,22 +254,22 @@ export default function ProfileOverlay({ open, onClose }: ProfileOverlayProps) {
                       </div>
                       <div className="text-[10px] font-black text-white/20 uppercase tracking-widest mb-4">Master Stats</div>
                       <div className="space-y-4">
-                        <ShowcaseStat label="Neural Focus" value="842 hrs" progress={85} color="bg-emerald-500" />
-                        <ShowcaseStat label="Code Logic" value="1,240 solved" progress={92} color="bg-cyan-500" />
-                        <ShowcaseStat label="Knowledge Depth" value="51 chapters" progress={64} color="bg-violet-500" />
+                        <ShowcaseStat label="Focus Logged" value={`${totalFocusHours} hrs`} progress={Math.min(100, totalFocusHours)} color="bg-emerald-500" />
+                        <ShowcaseStat label="Problems Solved" value={`${totalSolved}`} progress={Math.min(100, totalSolved)} color="bg-cyan-500" />
+                        <ShowcaseStat label="Chapters Completed" value={`${completedChapters}`} progress={Math.min(100, completedChapters)} color="bg-violet-500" />
                       </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                       <div className="p-6 rounded-3xl bg-white/5 border border-white/5">
-                        <div className="text-[10px] font-black text-white/20 uppercase tracking-widest mb-2">World Rank</div>
-                        <div className="text-3xl font-black text-white">#422</div>
-                        <div className="text-[10px] text-emerald-400 font-bold mt-1">↑ Top 0.1%</div>
+                        <div className="text-[10px] font-black text-white/20 uppercase tracking-widest mb-2">Active Days</div>
+                        <div className="text-3xl font-black text-white">{activeDays}</div>
+                        <div className="text-[10px] text-emerald-400 font-bold mt-1">Days with logged activity</div>
                       </div>
                       <div className="p-6 rounded-3xl bg-white/5 border border-white/5">
-                        <div className="text-[10px] font-black text-white/20 uppercase tracking-widest mb-2">Achievement</div>
-                        <div className="text-3xl font-black text-white">48</div>
-                        <div className="text-[10px] text-violet-400 font-bold mt-1">Unstoppable</div>
+                        <div className="text-[10px] font-black text-white/20 uppercase tracking-widest mb-2">Achievements</div>
+                        <div className="text-3xl font-black text-white">{unlockedAchievements}</div>
+                        <div className="text-[10px] text-violet-400 font-bold mt-1">Unlocked badges</div>
                       </div>
                     </div>
 
@@ -351,6 +356,5 @@ function ShowcaseStat({ label, value, progress, color }: { label: string; value:
     </div>
   );
 }
-
 
 

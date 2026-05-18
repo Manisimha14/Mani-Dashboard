@@ -9,9 +9,6 @@ import { Loader2 } from 'lucide-react';
  * - Redirects to /login if the user is not authenticated.
  * - Renders children if the user is authenticated.
  *
- * NOTE: Auth is currently OPTIONAL — the app works without login.
- * To make auth mandatory, remove the offline bypass comment below
- * and uncomment the redirect.
  */
 export default function ProtectedRoute() {
   const { user, loading } = useAuth();
@@ -27,14 +24,8 @@ export default function ProtectedRoute() {
     );
   }
 
-  // ── OFFLINE BYPASS ──────────────────────────────────────────────────────────
-  // Currently the app is accessible without an account (localStorage mode).
-  // To enforce login, replace the line below with:
-  //   if (!user) return <Navigate to="/login" replace />;
-  // ────────────────────────────────────────────────────────────────────────────
   if (!user) {
-    // Allow unauthenticated access — data lives in localStorage.
-    return <Outlet />;
+    return <Navigate to="/login" replace />;
   }
 
   return <Outlet />;

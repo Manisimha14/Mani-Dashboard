@@ -1,29 +1,48 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppStore } from '../store/useAppStore';
-import { 
-  Palette, User, Shield, Zap, Search, 
+import {
+  Palette, User, Shield, Zap, Search,
   Keyboard, Beaker, MousePointer2, Globe,
   Trash2, Check, AlertCircle, Cloud, LogIn, LogOut,
   Layout, Monitor, Activity, Bell, RefreshCw, Loader2
 } from 'lucide-react';
-import type { AppTheme, AppMood } from '../types';
+import type { AppMood, UserSettings } from '../types';
 import BackupManager from '../components/BackupManager';
 import { useAuth } from '../contexts/AuthContext';
 import { migrateLocalStorageToSupabase, isMigrationDone, markMigrationComplete } from '../lib/migration';
 import { useProfile, useUpdateProfile } from '../hooks/useProfileQuery';
+import { useHealthStore } from '../store/useHealthStore';
 
 type SettingsTab = 'general' | 'appearance' | 'controls' | 'notifications' | 'privacy' | 'labs';
 
 import { THEMES } from '../lib/themes';
 
+const DEFAULT_USER_SETTINGS: UserSettings = {
+  theme: 'dark_pro',
+  accentColor: '#8b5cf6',
+  mood: 'focused',
+  animationIntensity: 'full',
+  reducedMotion: false,
+  compactMode: false,
+  customQuote: '',
+  name: '',
+  onboardingComplete: false,
+  dashboardLayout: [],
+  petType: 'bonsai',
+  keyboardShortcuts: true,
+};
+
 export default function Settings() {
   const { data: profile } = useProfile();
   const { mutate: updateProfile } = useUpdateProfile();
 
-  const userSettings = profile?.settings ?? { name: '', theme: 'dark', accentColor: '#7c3aed', mood: 'focused', customQuote: '', onboardingComplete: false, compactMode: false, keyboardShortcuts: true, reducedMotion: false, animationIntensity: 'full' } as any;
+  const userSettings: UserSettings = {
+    ...DEFAULT_USER_SETTINGS,
+    ...(profile?.settings ?? {}),
+  };
 
-  const updateUserSettings = (updates: any) => {
+  const updateUserSettings = (updates: Partial<UserSettings>) => {
     updateProfile({ settings: { ...userSettings, ...updates } });
   };
 
@@ -79,6 +98,36 @@ export default function Settings() {
     { id: 'rose', label: 'Rose', color: '#f43f5e' },
     { id: 'indigo', label: 'Indigo', color: '#6366f1' },
   ];
+
+  const resetPreferences = () => {
+    updateUserSettings({
+      theme: 'dark_pro',
+      accentColor: '#8b5cf6',
+      mood: 'focused',
+      animationIntensity: 'full',
+      reducedMotion: false,
+      compactMode: false,
+      customQuote: '',
+      name: '',
+      keyboardShortcuts: true,
+    });
+  };
+
+  const purgeAllData = () => {
+    useAppStore.getState().resetData();
+    useHealthStore.setState({
+      meals: [],
+      water: [],
+      workouts: [],
+      sleep: [],
+      weight: [],
+      goals: [],
+      restrictions: [],
+      steps: {},
+    });
+    localStorage.removeItem('dashboard-storage');
+    localStorage.removeItem('health-storage-v2');
+  };
 
   return (
     <div className="min-h-[80vh] flex flex-col md:flex-row gap-8">
@@ -424,7 +473,7 @@ export default function Settings() {
                 <Section title="Danger Zone" icon={<AlertCircle size={16} />} description="Irreversible system operations. Handle with caution.">
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <button 
-                        onClick={() => { if(confirm('Reset all preferences?')) useAppStore.getState().resetData(); }}
+                        onClick={() => { if(confirm('Reset all preferences?')) resetPreferences(); }}
                         className="flex items-center justify-between p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/5 transition-all group"
                       >
                          <div className="text-left">
@@ -434,7 +483,7 @@ export default function Settings() {
                          <RefreshCw size={18} className="text-white/10 group-hover:text-amber-400 group-hover:rotate-180 transition-all duration-500" />
                       </button>
                       <button 
-                         onClick={() => { if(confirm('WIPE ALL DATA? This cannot be undone.')) useAppStore.getState().resetData(); }}
+                         onClick={() => { if(confirm('WIPE ALL DATA? This cannot be undone.')) purgeAllData(); }}
                          className="flex items-center justify-between p-4 rounded-2xl bg-red-500/[0.02] border border-red-500/10 hover:bg-red-500/10 transition-all group"
                       >
                          <div className="text-left">

@@ -3,7 +3,9 @@ import { motion } from 'framer-motion';
 import type { Variants } from 'framer-motion';
 import { format, subDays, parseISO } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
-import { useAppStore } from '../../store/useAppStore';
+import { useFocusSessions } from '../../hooks/useFocusQuery';
+import { useProblems } from '../../hooks/useLeetCodeQuery';
+import { useProfile } from '../../hooks/useProfileQuery';
 import {
   useAddWater,
   useAddMeal,
@@ -29,10 +31,11 @@ export default function CompanionTerminal({
 }: CompanionTerminalProps) {
   const navigate = useNavigate();
 
-  // ── Fetch dynamic store states internally ──
-  const focusSessions = useAppStore(s => s.focusSessions) as FocusSession[];
-  const problems      = useAppStore(s => s.problems) as Problem[];
-  const focusStreak   = useAppStore(s => s.focusStreak) as FocusStreak;
+  // ── Fetch dynamic states from the canonical query source ──
+  const { data: focusSessions = [] } = useFocusSessions();
+  const { data: problems = [] } = useProblems();
+  const { data: profile } = useProfile();
+  const focusStreak = (profile?.focusStreak ?? { currentStreak: 0 }) as FocusStreak;
 
   // ── Fetch biometrics internally ──
   const { data: waterLogs = [] }   = useWater();
@@ -83,6 +86,7 @@ export default function CompanionTerminal({
     });
 
     const div = Math.max(1, range);
+    const todayKey = format(new Date(), 'yyyy-MM-dd');
     const inRangeWorkouts = workouts.filter(w => {
       try {
         const d = parseISO(w.date);
@@ -97,6 +101,8 @@ export default function CompanionTerminal({
       avgSleepHrs: (totalSleepMin / div / 60).toFixed(1),
       avgCalories: Math.round(totalCalories / div),
       totalWorkouts: inRangeWorkouts.length,
+      todayWaterL: ((biometricData[todayKey]?.water ?? 0) / 1000).toFixed(2),
+      todaySleepHrs: (((biometricData[todayKey]?.sleepMin ?? 0) / 60)).toFixed(1),
     };
   }, [waterLogs, meals, workouts, sleepLogs]);
 

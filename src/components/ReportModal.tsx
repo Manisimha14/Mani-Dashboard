@@ -1,15 +1,22 @@
-import React, { useRef } from 'react';
-import { motion } from 'framer-motion';
+import React from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { format, subDays } from 'date-fns';
 import { formatDuration } from '../lib/utils';
 import { useWater, useMeals, useWorkouts, useSleepEntries } from '../hooks/useHealthQuery';
-import { Trophy, Flame, Timer, Code2, BookOpen, Download, Shield, Droplets, Dumbbell, Heart, Moon } from 'lucide-react';
+import { Download } from 'lucide-react';
 import Modal from '../components/Modal';
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
 
 export default function ReportModal({ open, onClose }: { open: boolean, onClose: () => void }) {
   const { dailyActivity, focusSessions, problems, book, readingStreak, codingStreak, focusStreak, userSettings } = useAppStore();
-  const reportRef = useRef<HTMLDivElement>(null);
 
   // ── Health Data Queries ──
   const { data: waterLogs = [] } = useWater();
@@ -38,16 +45,69 @@ export default function ReportModal({ open, onClose }: { open: boolean, onClose:
   const avgSleepHrs = recentSleep.length ? (recentSleep.reduce((a, b) => a + (b.totalMinutes || 0), 0) / recentSleep.length / 60).toFixed(1) : '0.0';
 
   const handlePrint = () => {
-    const content = reportRef.current?.innerHTML;
-    if (!content) return;
-    
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
+
+    const reportHtml = `
+      <div class="section-title">Productivity Summary (Last 7 Days)</div>
+      <div class="grid">
+        <div class="card">
+          <div class="card-title">Focus Time</div>
+          <div class="card-value">${escapeHtml(formatDuration(weekFocus))}</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Problems Solved</div>
+          <div class="card-value">${weekProblems}</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Chapters Read</div>
+          <div class="card-value">${weekChapters}</div>
+        </div>
+      </div>
+
+      <div class="section-title">Health Summary (Last 7 Days)</div>
+      <div class="grid">
+        <div class="card">
+          <div class="card-title">Hydration Avg</div>
+          <div class="card-value">${avgWaterL}L/day</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Calorie Intake Avg</div>
+          <div class="card-value">${avgCalories} kcal</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Workout Time</div>
+          <div class="card-value">${totalWorkoutMin} min</div>
+        </div>
+      </div>
+
+      <div class="section-title">Lifetime Totals</div>
+      <div class="row">
+        <span>Total Focus Logged</span>
+        <strong>${escapeHtml(formatDuration(focusSessions.reduce((a, s) => a + (s.completed ? s.actualDuration || s.duration : 0), 0)))}</strong>
+      </div>
+      <div class="row">
+        <span>Total Problems Solved</span>
+        <strong>${problems.filter(p => p.completed).length}</strong>
+      </div>
+      <div class="row">
+        <span>Total Chapters Completed</span>
+        <strong>${book?.chapters.filter(c => c.completed).length || 0}</strong>
+      </div>
+      <div class="row">
+        <span>Average Sleep (7d)</span>
+        <strong>${avgSleepHrs} h</strong>
+      </div>
+      <div class="row">
+        <span>Longest Active Streak</span>
+        <strong>${Math.max(readingStreak.longestStreak, codingStreak.longestStreak, focusStreak.longestStreak)} days</strong>
+      </div>
+    `;
     
     printWindow.document.write(`
       <html>
         <head>
-          <title>Antigravity Life OS Performance Audit</title>
+          <title>Life OS Summary Report</title>
           <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
           <style>
             body { font-family: 'Outfit', sans-serif; padding: 40px; color: #0f172a; max-width: 900px; margin: 0 auto; background: #fafafa; }
@@ -79,11 +139,11 @@ export default function ReportModal({ open, onClose }: { open: boolean, onClose:
         </head>
         <body>
           <div class="header">
-            <h1>ANTIGRAVITY LIFE OS</h1>
-            <div class="subtitle">Weekly Performance & Biometric Audit</div>
-            <div style="margin-top: 10px; font-size: 12px; color: #94a3b8; font-weight: 600;">Subject: ${userSettings.name || 'Agent'} • Generated on ${format(new Date(), 'MMMM d, yyyy')}</div>
+            <h1>Life OS Summary</h1>
+            <div class="subtitle">Weekly productivity and health totals</div>
+            <div style="margin-top: 10px; font-size: 12px; color: #94a3b8; font-weight: 600;">Subject: ${escapeHtml(userSettings.name || 'Member')} • Generated on ${format(new Date(), 'MMMM d, yyyy')}</div>
           </div>
-          ${content}
+          ${reportHtml}
           <div class="no-print" style="margin-top: 50px; text-align: center;">
             <button onclick="window.print()" style="background: #8b5cf6; color: white; border: none; padding: 14px 28px; border-radius: 12px; cursor: pointer; font-weight: 800; font-size: 16px; box-shadow: 0 4px 12px rgba(139,92,246,0.3); transition: transform 0.2s;">🖨️ Print / Save as PDF</button>
           </div>
@@ -96,68 +156,11 @@ export default function ReportModal({ open, onClose }: { open: boolean, onClose:
   return (
     <Modal open={open} onClose={onClose} title="Performance Report" maxWidth="max-w-2xl">
       <div className="space-y-6">
-        <div ref={reportRef} className="hidden-for-real-but-captured" style={{ display: 'none' }}>
-          <div className="section-title">Productivity Core (Last 7 Days)</div>
-          <div className="grid">
-            <div className="card">
-              <div className="card-title">Focus Time</div>
-              <div className="card-value">{formatDuration(weekFocus)}</div>
-            </div>
-            <div className="card">
-              <div className="card-title">Problems Solved</div>
-              <div className="card-value">{weekProblems}</div>
-            </div>
-            <div className="card">
-              <div className="card-title">Chapters Read</div>
-              <div className="card-value">{weekChapters}</div>
-            </div>
-          </div>
-
-          <div className="section-title">Physiological Core (Last 7 Days)</div>
-          <div className="grid">
-            <div className="card">
-              <div className="card-title">Hydration Avg</div>
-              <div className="card-value">{avgWaterL}L/day</div>
-            </div>
-            <div className="card">
-              <div className="card-title">Calorie Intake Avg</div>
-              <div className="card-value">{avgCalories} kcal</div>
-            </div>
-            <div className="card">
-              <div className="card-title">Active Workouts</div>
-              <div className="card-value">{totalWorkoutMin} mins</div>
-            </div>
-          </div>
-
-          <div className="section-title">Lifetime Discipline Scorecard</div>
-          <div className="row">
-            <span>Total Focus Commitment</span>
-            <strong>{formatDuration(focusSessions.reduce((a, s) => a + (s.completed ? s.actualDuration || s.duration : 0), 0))}</strong>
-          </div>
-          <div className="row">
-            <span>Total Algorithm Forges</span>
-            <strong>{problems.filter(p => p.completed).length} completed</strong>
-          </div>
-          <div className="row">
-            <span>Reading Vault Index</span>
-            <strong>{book?.chapters.filter(c => c.completed).length || 0} chapters</strong>
-          </div>
-          <div className="row">
-            <span>Wellness Equilibrium Score</span>
-            <strong><span className="badge badge-success">Optimal</span></strong>
-          </div>
-          <div className="row">
-            <span>Max Consecutive Consistency</span>
-            <strong>{Math.max(readingStreak.longestStreak, codingStreak.longestStreak, focusStreak.longestStreak)} days</strong>
-          </div>
-        </div>
-
-        {/* Preview UI */}
         <div className="bg-white/5 rounded-xl p-6 border border-white/10 text-center">
           <div className="text-4xl mb-3">📄</div>
-          <h3 className="text-lg font-bold text-white mb-2">Weekly Summary Audit Ready</h3>
+          <h3 className="text-lg font-bold text-white mb-2">Weekly Summary Ready</h3>
           <p className="text-sm text-white/40 mb-6 max-w-sm mx-auto">
-            Generate a beautiful, print-ready PDF containing your combined productivity logs, physical activity times, and sleep metrics.
+            Generate a printable report with your logged productivity totals and recent health averages.
           </p>
           <button onClick={handlePrint} className="btn-glow px-6 py-2.5 flex items-center justify-center gap-2 mx-auto">
             <Download size={16} /> Open Printable Report

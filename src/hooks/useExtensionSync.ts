@@ -11,6 +11,11 @@ export function useExtensionSync() {
   const { mutate: addProblem } = useAddProblem();
 
   useEffect(() => {
+    if (import.meta.env.PROD) {
+      console.warn('Extension sync is disabled in production until a trusted transport is implemented.');
+      return;
+    }
+
     // 1. Listen for messages from the content script
     const handleMessage = (event: MessageEvent) => {
       if (!event.data || event.data.type !== 'antigravity-extension-message') return;

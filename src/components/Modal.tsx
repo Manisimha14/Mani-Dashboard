@@ -24,12 +24,27 @@ export default function Modal({
   maxWidth = 'max-w-lg',
   showClose = true,
 }: ModalProps) {
+  const modalRef = React.useRef<HTMLDivElement | null>(null);
+  const previousFocusRef = React.useRef<HTMLElement | null>(null);
+
   // Close on Escape
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     if (open) window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [open, onClose]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
+    const frame = requestAnimationFrame(() => modalRef.current?.focus());
+
+    return () => {
+      cancelAnimationFrame(frame);
+      previousFocusRef.current?.focus();
+    };
+  }, [open]);
 
   if (!document.body) return null;
 
@@ -65,6 +80,11 @@ export default function Modal({
               onClick={e => e.stopPropagation()}
             >
               <div
+                ref={modalRef}
+                role="dialog"
+                aria-modal="true"
+                aria-label={title ?? 'Dialog'}
+                tabIndex={-1}
                 className="glass-card p-6 relative overflow-hidden"
                 style={{
                   background: 'rgba(10,11,22,0.97)',
@@ -81,6 +101,7 @@ export default function Modal({
                     {showClose && (
                       <button
                         onClick={onClose}
+                        aria-label="Close dialog"
                         className="ml-auto text-white/30 hover:text-white/80 transition-colors p-1 rounded-lg hover:bg-white/5"
                       >
                         <X size={16} />

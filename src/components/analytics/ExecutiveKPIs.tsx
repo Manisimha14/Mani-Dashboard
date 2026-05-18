@@ -1,5 +1,6 @@
 import React from 'react';
-import { ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Target, Clock, Zap, BookOpen, Activity, AlertCircle } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Target, Clock, Zap, BookOpen, Activity } from 'lucide-react';
+import type { Book, LeetCodeProblem, StreakData } from '../../types';
 
 interface ExecutiveKPIsProps {
   stats: {
@@ -11,13 +12,9 @@ interface ExecutiveKPIsProps {
     countChange: number;
     avgSession: number;
   };
-  problems: any[];
-  book: {
-    chapters: any[];
-  };
-  focusStreak: {
-    currentStreak: number;
-  };
+  problems: LeetCodeProblem[];
+  book: Pick<Book, 'chapters'>;
+  focusStreak: Pick<StreakData, 'currentStreak'>;
   weeklyReview: {
     consistency: number;
   };
@@ -61,18 +58,18 @@ export default function ExecutiveKPIs({
     {
       label: 'Avg Duration',
       value: `${stats.avgSession}m`,
-      subLabel: 'Baseline optimal session',
+      subLabel: 'Average completed session length',
       isPositive: true,
       icon: <Target size={16} className="text-cyan-400" />,
       context: 'Average length of completed sessions',
     },
     {
-      label: 'Algorithmic Solve',
+      label: 'Problems Solved',
       value: `${completedProblems}`,
-      subLabel: 'Active logic exercises',
+      subLabel: 'Completed coding entries',
       isPositive: true,
       icon: <BookOpen size={16} className="text-blue-400" />,
-      context: 'Total verified completed code tasks',
+      context: 'Total coding problems marked completed',
     },
     {
       label: 'Focus Streak',
@@ -85,7 +82,7 @@ export default function ExecutiveKPIs({
     {
       label: 'Consistency Score',
       value: `${weeklyReview.consistency}%`,
-      subLabel: 'Active weekly layout ratio',
+      subLabel: 'Active days this week',
       isPositive: weeklyReview.consistency >= 70,
       icon: <Target size={16} className="text-emerald-400" />,
       context: 'Percentage of active days in current week',

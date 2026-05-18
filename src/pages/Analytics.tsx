@@ -2,11 +2,6 @@ import React, { useMemo, useState, Suspense, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { useAppStore } from '../store/useAppStore';
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area,
-  RadarChart, PolarGrid, PolarAngleAxis, Radar, CartesianGrid,
-} from 'recharts';
-import {
   format, subDays, startOfWeek, addDays, parseISO,
 } from 'date-fns';
 import {
@@ -24,57 +19,24 @@ import {
 
 import WeeklyHeatmapMatrix from '../components/analytics/WeeklyHeatmapMatrix';
 import WeeklyPerformance from '../components/analytics/WeeklyPerformance';
-import PerformanceRadar from '../components/analytics/PerformanceRadar';
 import ActivityHeatmap from '../components/analytics/ActivityHeatmap';
 import CognitiveInsights from '../components/analytics/CognitiveInsights';
 import ExecutiveKPIs from '../components/analytics/ExecutiveKPIs';
-import TrendAnalytics from '../components/analytics/TrendAnalytics';
-import FocusIntelligence from '../components/analytics/FocusIntelligence';
-import DeepWorkQuality from '../components/analytics/DeepWorkQuality';
-import HourlyPerformance from '../components/analytics/HourlyPerformance';
 import GoalTracking from '../components/analytics/GoalTracking';
+import DeferredOnVisible from '../components/DeferredOnVisible';
 
 const DrillDownModal = React.lazy(() => import('../components/DrillDownModal'));
 const ReportModal    = React.lazy(() => import('../components/ReportModal'));
+const TrendAnalytics = React.lazy(() => import('../components/analytics/TrendAnalytics'));
+const FocusIntelligence = React.lazy(() => import('../components/analytics/FocusIntelligence'));
+const DeepWorkQuality = React.lazy(() => import('../components/analytics/DeepWorkQuality'));
+const HourlyPerformance = React.lazy(() => import('../components/analytics/HourlyPerformance'));
+const PerformanceRadar = React.lazy(() => import('../components/analytics/PerformanceRadar'));
+const AnalyticsHealthCharts = React.lazy(() => import('../components/analytics/AnalyticsHealthCharts'));
 
 // ── Animation variants ──────────────────────────────────────────────────────
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.04 } } };
 const item    = { hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0 } };
-
-const CHART_TOOLTIP_STYLE = {
-  background: 'rgba(9,10,22,0.95)',
-  border: '1px solid rgba(255,255,255,0.08)',
-  borderRadius: 12,
-  color: 'white',
-  fontSize: 11,
-};
-
-// ── Reusable BioChart sub-component ──────────────────────────────────────────
-function BioChart({
-  title, icon, legend, children,
-}: {
-  title: string;
-  icon: React.ReactNode;
-  legend: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <motion.div variants={item} className="glass-card p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          {icon}
-          <h3 className="font-bold text-white">{title}</h3>
-        </div>
-        <span className="text-[10px] text-white/30 font-bold uppercase tracking-wider">{legend}</span>
-      </div>
-      <div className="h-[260px]">
-        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-          {children as React.ReactElement}
-        </ResponsiveContainer>
-      </div>
-    </motion.div>
-  );
-}
 
 // ── Main Component ───────────────────────────────────────────────────────────
 export default function Analytics() {
@@ -504,7 +466,7 @@ export default function Analytics() {
               Analytics
             </span>
           </h1>
-          <p className="text-white/40 mt-1 text-sm font-medium font-sans">Enterprise-grade data-dense focus performance reporting dashboard</p>
+          <p className="text-white/40 mt-1 text-sm font-medium font-sans">Computed productivity and health trends from your logged activity.</p>
         </div>
 
         <div className="flex items-center gap-3">
@@ -588,7 +550,11 @@ export default function Analytics() {
           {/* Time Series trends + Goal forecasts */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2">
-              <TrendAnalytics activityData={activityData} />
+              <DeferredOnVisible minHeight={420} fallback={<div className="glass-card h-[420px]" />}>
+                <Suspense fallback={<div className="glass-card h-[420px]" />}>
+                  <TrendAnalytics activityData={activityData} />
+                </Suspense>
+              </DeferredOnVisible>
             </div>
             <GoalTracking
               stats={stats}
@@ -600,8 +566,16 @@ export default function Analytics() {
 
           {/* Focus Intelligence + Deep Work Quality */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <FocusIntelligence focusSessions={focusSessions} />
-            <DeepWorkQuality focusSessions={focusSessions} />
+            <DeferredOnVisible minHeight={360} fallback={<div className="glass-card h-[360px]" />}>
+              <Suspense fallback={<div className="glass-card h-[360px]" />}>
+                <FocusIntelligence focusSessions={focusSessions} />
+              </Suspense>
+            </DeferredOnVisible>
+            <DeferredOnVisible minHeight={360} fallback={<div className="glass-card h-[360px]" />}>
+              <Suspense fallback={<div className="glass-card h-[360px]" />}>
+                <DeepWorkQuality focusSessions={focusSessions} />
+              </Suspense>
+            </DeferredOnVisible>
           </div>
 
           {/* Weekly summary reports + performance radar */}
@@ -609,12 +583,20 @@ export default function Analytics() {
             <div className="lg:col-span-2">
               <WeeklyPerformance weeklyReview={weeklyReview} itemAnim={item} />
             </div>
-            <PerformanceRadar radarData={radarData} itemAnim={item} />
+            <DeferredOnVisible minHeight={320} fallback={<div className="glass-card h-[320px]" />}>
+              <Suspense fallback={<div className="glass-card h-[320px]" />}>
+                <PerformanceRadar radarData={radarData} itemAnim={item} />
+              </Suspense>
+            </DeferredOnVisible>
           </div>
 
           {/* Pearson Correlation Engine */}
           <div className="w-full">
-            <HourlyPerformance focusSessions={focusSessions} />
+            <DeferredOnVisible minHeight={360} fallback={<div className="glass-card h-[360px]" />}>
+              <Suspense fallback={<div className="glass-card h-[360px]" />}>
+                <HourlyPerformance focusSessions={focusSessions} />
+              </Suspense>
+            </DeferredOnVisible>
           </div>
 
           {/* Contribution Heatmap Grid */}
@@ -674,24 +656,15 @@ export default function Analytics() {
               </div>
             </motion.div>
 
-            <motion.div variants={item} className="glass-card p-6 flex flex-col items-center">
-              <h3 className="font-bold text-white mb-4 text-xs uppercase tracking-widest self-start">Health Breakdown</h3>
-              <div className="h-[220px] w-full">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                  <RadarChart cx="50%" cy="50%" outerRadius="80%" data={[
-                    { subject: 'Calories',  A: Math.min(100, (biometricStats.avgCalories    / 2100) * 100) },
-                    { subject: 'Water',     A: Math.min(100, (Number(biometricStats.avgWaterL) / 3.5) * 100) },
-                    { subject: 'Exercise',  A: Math.min(100, (biometricStats.avgWorkoutMin   / 45)  * 100) },
-                    { subject: 'Sleep',     A: Math.min(100, (Number(biometricStats.avgSleepHrs) / 8) * 100) },
-                    { subject: 'Workouts',  A: Math.min(100, (biometricStats.totalWorkouts   / 4)   * 100) },
-                  ]}>
-                    <PolarGrid stroke="rgba(255,255,255,0.05)" />
-                    <PolarAngleAxis dataKey="subject" tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 9, fontWeight: 700 }} />
-                    <Radar name="Wellness" dataKey="A" stroke="#f43f5e" fill="#f43f5e" fillOpacity={0.3} />
-                  </RadarChart>
-                </ResponsiveContainer>
-              </div>
-            </motion.div>
+            <DeferredOnVisible minHeight={320} fallback={<div className="glass-card h-[320px]" />}>
+              <Suspense fallback={<div className="glass-card h-[320px]" />}>
+                <AnalyticsHealthCharts
+                  variant="breakdown"
+                  biometricStats={biometricStats}
+                  biometricActivityData={biometricActivityData}
+                />
+              </Suspense>
+            </DeferredOnVisible>
           </div>
 
           {/* Cognitive insights */}
@@ -700,56 +673,15 @@ export default function Analytics() {
             itemAnim={item}
           />
 
-          {/* Biometric charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <BioChart title="Water Intake" icon={<div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-400"><Droplets size={18} /></div>} legend="Logged Water (ml)">
-              <AreaChart data={biometricActivityData} margin={{ left: -20 }}>
-                <defs>
-                  <linearGradient id="gWaterIntake" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="#06b6d4" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#06b6d4" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.2)', fontSize: 10 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.2)', fontSize: 10 }} />
-                <Tooltip contentStyle={{ ...CHART_TOOLTIP_STYLE, border: '1px solid #0891b2' }} />
-                <Area type="monotone" dataKey="water" stroke="#06b6d4" fill="url(#gWaterIntake)" strokeWidth={2} />
-              </AreaChart>
-            </BioChart>
-
-            <BioChart title="Calories" icon={<div className="p-2 rounded-lg bg-rose-500/10 text-rose-400"><Heart size={18} /></div>} legend="Consumed (kcal)">
-              <BarChart data={biometricActivityData} margin={{ left: -20 }}>
-                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.2)', fontSize: 10 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.2)', fontSize: 10 }} />
-                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
-                <Bar dataKey="calories" fill="#f43f5e" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </BioChart>
-
-            <BioChart title="Workouts" icon={<div className="p-2 rounded-lg bg-violet-500/10 text-violet-400"><Dumbbell size={18} /></div>} legend="Active Mins">
-              <AreaChart data={biometricActivityData} margin={{ left: -20 }}>
-                <defs>
-                  <linearGradient id="gWorkoutActive" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="#8b5cf6" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.2)', fontSize: 10 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.2)', fontSize: 10 }} />
-                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
-                <Area type="monotone" dataKey="workoutMin" stroke="#8b5cf6" fill="url(#gWorkoutActive)" strokeWidth={2} />
-              </AreaChart>
-            </BioChart>
-
-            <BioChart title="Sleep" icon={<div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400"><Moon size={18} /></div>} legend="Hours">
-              <BarChart data={biometricActivityData} margin={{ left: -20 }}>
-                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.2)', fontSize: 10 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.2)', fontSize: 10 }} />
-                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
-                <Bar dataKey="sleepHrs" fill="#6366f1" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </BioChart>
-          </div>
+          <DeferredOnVisible minHeight={700} fallback={<div className="grid grid-cols-1 lg:grid-cols-2 gap-6"><div className="glass-card h-[320px]" /><div className="glass-card h-[320px]" /><div className="glass-card h-[320px]" /><div className="glass-card h-[320px]" /></div>}>
+            <Suspense fallback={<div className="grid grid-cols-1 lg:grid-cols-2 gap-6"><div className="glass-card h-[320px]" /><div className="glass-card h-[320px]" /><div className="glass-card h-[320px]" /><div className="glass-card h-[320px]" /></div>}>
+              <AnalyticsHealthCharts
+                variant="series"
+                biometricStats={biometricStats}
+                biometricActivityData={biometricActivityData}
+              />
+            </Suspense>
+          </DeferredOnVisible>
         </div>
       )}
 

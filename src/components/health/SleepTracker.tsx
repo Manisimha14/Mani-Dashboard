@@ -58,7 +58,7 @@ export default function SleepTracker({ today }: { today: string }) {
       {/* Hero */}
       <div className="glass-card p-6 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-purple-600/3 pointer-events-none" />
-        <div className="flex items-center gap-8">
+        <div className="flex flex-col sm:flex-row items-center gap-6 sm:gap-8">
           {/* Moon ring */}
           <div className="relative w-36 h-36 flex-shrink-0">
             <svg viewBox="0 0 144 144" className="w-full h-full -rotate-90">
@@ -91,31 +91,31 @@ export default function SleepTracker({ today }: { today: string }) {
             </div>
           </div>
 
-          <div className="flex-1 space-y-4">
+          <div className="flex-1 space-y-4 w-full">
             {todaySleep ? (
               <>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-3 gap-2.5 sm:gap-3 w-full">
                   {[
                     { label: 'Sleep', val: todaySleep.sleepTime, icon: '🌙' },
                     { label: 'Wake', val: todaySleep.wakeTime, icon: '☀️' },
                     { label: 'Quality', val: QUALITY_LABELS[todaySleep.quality], icon: '⭐' },
                   ].map(({ label, val, icon }) => (
-                    <div key={label} className="glass-card px-3 py-2.5">
-                      <div className="text-[10px] text-white/30 uppercase tracking-widest font-bold">{label}</div>
-                      <div className="text-sm font-bold text-white mt-0.5">{icon} {val}</div>
+                    <div key={label} className="glass-card px-2.5 py-2 sm:px-3 sm:py-2.5 text-center sm:text-left">
+                      <div className="text-[9px] sm:text-[10px] text-white/30 uppercase tracking-widest font-bold">{label}</div>
+                      <div className="text-xs sm:text-sm font-bold text-white mt-0.5 whitespace-nowrap">{icon} {val}</div>
                     </div>
                   ))}
                 </div>
                 {todaySleep.notes && (
-                  <div className="text-xs text-white/30 italic">"{todaySleep.notes}"</div>
+                  <div className="text-xs text-white/30 italic text-center sm:text-left">"{todaySleep.notes}"</div>
                 )}
                 <button onClick={() => deleteSleep(todaySleep.id)}
-                  className="text-xs text-rose-400/60 hover:text-rose-400 transition-colors flex items-center gap-1">
+                  className="text-xs text-rose-400/60 hover:text-rose-400 transition-colors flex items-center justify-center sm:justify-start gap-1 mx-auto sm:mx-0">
                   <Trash2 size={11} /> Remove today's entry
                 </button>
               </>
             ) : (
-              <div>
+              <div className="flex flex-col items-center sm:items-start text-center sm:text-left">
                 <div className="text-white/50 font-medium mb-3">No sleep logged for today.</div>
                 <motion.button
                   whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}

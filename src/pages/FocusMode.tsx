@@ -48,7 +48,7 @@ export default function FocusMode() {
   const updatePomodoroSettings = useAppStore(s => s.updatePomodoroSettings);
   
   const { data: focusSessions = [] } = useFocusSessions();
-  const { mutate: addFocusSession } = useAddFocusSession();
+  const { mutateAsync: addFocusSession } = useAddFocusSession();
   const { mutate: updateFocusSession } = useUpdateFocusSession();
 
   const [mode, setMode]                 = useState<PomodoroMode>('focus');
@@ -64,6 +64,7 @@ export default function FocusMode() {
   const [reflection, setReflection]     = useState('');
   const [showConfetti, setShowConfetti] = useState(false);
   const [currentSession, setCurrentSession] = useState<Partial<FocusSession> | null>(null);
+  const [lastCompletedSessionId, setLastCompletedSessionId] = useState<string | null>(null);
   const [growthProgress, setGrowthProgress] = useState(0);
   const [sessionFailed, setSessionFailed]   = useState(false);
   const [volume, setVolume]             = useState(pomodoroSettings.ambienceVolume);
@@ -157,13 +158,13 @@ export default function FocusMode() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isRunning]);
 
-  const handleSessionComplete = useCallback(() => {
+  const handleSessionComplete = useCallback(async () => {
     setIsRunning(false);
     if (mode === 'focus' && currentSession) {
       const duration = pomodoroSettings.focusDuration;
       const score = Math.min(100, Math.round((duration / 25) * 80 + (mood === 'energetic' ? 20 : mood === 'motivated' ? 15 : 10)));
       
-      addFocusSession({
+      const createdSession = await addFocusSession({
         ...currentSession,
         endTime: new Date().toISOString(),
         actualDuration: duration,
@@ -173,6 +174,7 @@ export default function FocusMode() {
         productivityScore: score,
         reflection: reflection || undefined,
       } as Omit<FocusSession, 'id'>);
+      setLastCompletedSessionId((createdSession as FocusSession | undefined)?.id ?? null);
       soundEngine.sessionEnd(0.5);
       setSessionCount(c => c + 1);
       setShowConfetti(true);
@@ -193,7 +195,7 @@ export default function FocusMode() {
     setGrowthProgress(0);
     setSessionFailed(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, currentSession, sessionCount, pomodoroSettings, mood, reflection, getDurationForMode]);
+  }, [mode, currentSession, sessionCount, pomodoroSettings, mood, reflection, getDurationForMode, addFocusSession]);
 
   const handleStart = () => {
     if (!isRunning && mode === 'focus' && !currentSession) {
@@ -689,14 +691,12 @@ export default function FocusMode() {
           onChange={e => setReflection(e.target.value)}
         />
         <button onClick={() => {
-          if (reflection) {
-            const lastSession = focusSessions[0];
-            if (lastSession && lastSession.completed) {
-              updateFocusSession({ id: lastSession.id, updates: { reflection } });
-            }
+          if (reflection && lastCompletedSessionId) {
+            updateFocusSession({ id: lastCompletedSessionId, updates: { reflection } });
           }
           setShowReflection(false);
           setReflection('');
+          setLastCompletedSessionId(null);
         }}
           className="btn-glow w-full py-2.5 text-sm font-semibold">
           Complete Reflection →

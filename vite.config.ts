@@ -31,4 +31,43 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) {
+            return;
+          }
+
+          if (id.includes('recharts')) {
+            return 'vendor-charts';
+          }
+
+          if (id.includes('@supabase')) {
+            return 'vendor-supabase';
+          }
+
+          if (id.includes('@tanstack/react-query')) {
+            return 'vendor-query';
+          }
+
+          if (id.includes('zustand') || id.includes('dexie')) {
+            return 'vendor-state';
+          }
+
+          if (id.includes('framer-motion') || id.includes('gsap') || id.includes('react-confetti')) {
+            return 'vendor-motion';
+          }
+
+          if (id.includes('react-router') || id.includes('react-dom') || id.includes('/react/')) {
+            return 'vendor-react';
+          }
+
+          if (id.includes('lucide-react') || id.includes('@radix-ui') || id.includes('cmdk') || id.includes('react-hot-toast')) {
+            return 'vendor-ui';
+          }
+        },
+      },
+    },
+  },
 });

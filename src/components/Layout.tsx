@@ -1,32 +1,32 @@
-import React, { useState, useCallback } from 'react';
+import React, { Suspense, lazy, useState, useCallback } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import Sidebar from './Sidebar';
-import CommandPalette from './CommandPalette';
 import TopHeader from './TopHeader';
 import InteractiveGrid from './InteractiveGrid';
 import { useAppStore } from '../store/useAppStore';
 import { useRipple } from '../hooks/useRipple';
 import { useSoundFX, soundEngine } from '../hooks/useSoundFX';
 import { useWeather } from '../hooks/useWeather';
-import WeatherOverlay from './WeatherOverlay';
-import SoundscapeMixer from './SoundscapeMixer';
-import ProductivityPet from './ProductivityPet';
 import { getProductivityScore, todayString } from '../lib/utils';
 import { useReminderEngine } from '../hooks/useReminderEngine';
-import NotificationCenter from './NotificationCenter';
-import ReminderModal from './ReminderModal';
-import ShortcutsHelp from './ShortcutsHelp';
-import QuickLauncherModal from './QuickLauncherModal';
 import { useShortcuts } from '../hooks/useShortcuts';
 import { useRealtimeSync } from '../hooks/useRealtimeSync';
 import { useAchievementsEngine } from '../hooks/useAchievementsEngine';
 import { useExtensionSync } from '../hooks/useExtensionSync';
-import Confetti from 'react-confetti';
-import CompanionTerminal from './analytics/CompanionTerminal';
 import { useIsMobile } from '../hooks/useIsMobile';
+
+const CommandPalette = lazy(() => import('./CommandPalette'));
+const WeatherOverlay = lazy(() => import('./WeatherOverlay'));
+const SoundscapeMixer = lazy(() => import('./SoundscapeMixer'));
+const ProductivityPet = lazy(() => import('./ProductivityPet'));
+const ReminderModal = lazy(() => import('./ReminderModal'));
+const ShortcutsHelp = lazy(() => import('./ShortcutsHelp'));
+const QuickLauncherModal = lazy(() => import('./QuickLauncherModal'));
+const CompanionTerminal = lazy(() => import('./analytics/CompanionTerminal'));
+const Confetti = lazy(() => import('react-confetti'));
 
 export default function Layout() {
   const isMobile = useIsMobile();
@@ -175,8 +175,10 @@ export default function Layout() {
   return (
     <div className="min-h-screen relative overflow-x-hidden" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
       <InteractiveGrid />
-      <WeatherOverlay type={weather.type} />
-      <SoundscapeMixer />
+      <Suspense fallback={null}>
+        <WeatherOverlay type={weather.type} />
+        <SoundscapeMixer />
+      </Suspense>
       
       {/* Ambient background blobs - Now reactive */}
       {!isMobile ? (
@@ -261,10 +263,16 @@ export default function Layout() {
         </div>
       </main>
 
-      <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
-      <QuickLauncherModal />
-      <ReminderModal open={remModalOpen} onClose={() => setRemModalOpen(false)} />
-      <ShortcutsHelp isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+      {(cmdOpen || remModalOpen || shortcutsOpen) && (
+        <Suspense fallback={null}>
+          {cmdOpen && <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />}
+          <ReminderModal open={remModalOpen} onClose={() => setRemModalOpen(false)} />
+          <ShortcutsHelp isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+        </Suspense>
+      )}
+      <Suspense fallback={null}>
+        <QuickLauncherModal />
+      </Suspense>
 
       <AnimatePresence>
         {terminalOpen && (
@@ -283,9 +291,11 @@ export default function Layout() {
               className="w-full max-w-2xl bg-transparent"
               onClick={e => e.stopPropagation()}
             >
-              <CompanionTerminal
-                onClose={() => setTerminalOpen(false)}
-              />
+              <Suspense fallback={null}>
+                <CompanionTerminal
+                  onClose={() => setTerminalOpen(false)}
+                />
+              </Suspense>
             </motion.div>
           </motion.div>
         )}
@@ -318,16 +328,20 @@ export default function Layout() {
         <span>Command Console</span>
       </div>
 
-      <ProductivityPet />
+      <Suspense fallback={null}>
+        <ProductivityPet />
+      </Suspense>
 
       {/* Confetti Celebration */}
       {celebratingAchievement && (
-        <Confetti
-          width={window.innerWidth}
-          height={window.innerHeight}
-          recycle={false}
-          numberOfPieces={400}
-        />
+        <Suspense fallback={null}>
+          <Confetti
+            width={window.innerWidth}
+            height={window.innerHeight}
+            recycle={false}
+            numberOfPieces={400}
+          />
+        </Suspense>
       )}
 
       {/* Achievement Unlocked Immersive Dialog */}

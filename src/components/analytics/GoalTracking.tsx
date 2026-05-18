@@ -1,15 +1,14 @@
 import React, { useMemo } from 'react';
-import { Target, CheckCircle2, Clock, Zap, BookOpen } from 'lucide-react';
+import { Target, Clock, Zap, BookOpen } from 'lucide-react';
+import type { Book, LeetCodeProblem } from '../../types';
 
 interface GoalTrackingProps {
   stats: {
     totalMin: number;
     count: number;
   };
-  problems: any[];
-  book: {
-    chapters: any[];
-  };
+  problems: LeetCodeProblem[];
+  book: Pick<Book, 'chapters'>;
   biometricStats: {
     avgWaterL: string;
     avgSleepHrs: string;
@@ -50,7 +49,7 @@ export default function GoalTracking({
         icon: <Clock size={14} className="text-violet-400" />,
       },
       {
-        name: 'Algorithmic Goal',
+        name: 'Coding Goal',
         current: codingVal,
         target: targets.problems,
         pct: calcPct(codingVal, targets.problems),
@@ -60,7 +59,7 @@ export default function GoalTracking({
         icon: <Zap size={14} className="text-cyan-400" />,
       },
       {
-        name: 'Literature & Learning',
+        name: 'Reading Goal',
         current: readingVal,
         target: targets.chapters,
         pct: calcPct(readingVal, targets.chapters),
@@ -77,8 +76,8 @@ export default function GoalTracking({
       <div className="flex items-center gap-2 mb-6 pb-4 border-b border-white/5">
         <Target className="text-emerald-400" size={16} />
         <div>
-          <h3 className="text-lg font-black text-white tracking-tight">Goal Tracking Analytics</h3>
-          <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest mt-0.5">Target progress, expected forecast & variance analysis</p>
+          <h3 className="text-lg font-black text-white tracking-tight">Goal Tracking</h3>
+          <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest mt-0.5">Target progress, remaining work and weekly variance</p>
         </div>
       </div>
 

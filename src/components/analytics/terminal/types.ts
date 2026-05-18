@@ -24,6 +24,8 @@ export interface BiometricStats {
   avgSleepHrs: string;
   avgCalories: number;
   totalWorkouts: number;
+  todayWaterL: string;
+  todaySleepHrs: string;
 }
 
 export interface FocusStreak {

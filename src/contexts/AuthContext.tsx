@@ -44,10 +44,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Fetch initial session
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
-      if (data.session?.provider_token) {
-        localStorage.setItem('google_provider_token', data.session.provider_token);
-        localStorage.setItem('google_provider_token_saved_at', Date.now().toString());
-      }
       setLoading(false);
     });
 
@@ -60,15 +56,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (newSession) {
         setAuthError(null); // clear error once successfully signed in
-        if (newSession.provider_token) {
-          localStorage.setItem('google_provider_token', newSession.provider_token);
-          localStorage.setItem('google_provider_token_saved_at', Date.now().toString());
-        }
       }
       if (event === 'SIGNED_OUT') {
-        localStorage.removeItem('google_provider_token');
-        localStorage.removeItem('google_provider_token_saved_at');
-        
         // Only clear stores and local storage if we actually had a previous authenticated user session.
         // This stops the initial passive unauthenticated load from destroying local guest data.
         if (previousUser) {

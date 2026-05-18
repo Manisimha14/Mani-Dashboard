@@ -1,9 +1,11 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Flame, Droplets, Dumbbell, Moon, Footprints, Scale, Zap } from 'lucide-react';
+import { Flame, Droplets, Dumbbell, Moon, Footprints, Scale, Zap, Plus, Sparkles } from 'lucide-react';
 import type { HealthState, HealthGoal } from '../../types/health';
 import { computeHealthScore } from '../../store/useHealthStore';
-import { useTodayHealthData } from '../../hooks/useHealthQuery';
+import { useTodayHealthData, useAddWater, useAddMeal } from '../../hooks/useHealthQuery';
+import { parseNaturalLanguageNutrition } from '../../lib/nutritionParser';
+import { useSoundFX } from '../../hooks/useSoundFX';
 
 interface Props {
   todayData: ReturnType<typeof useTodayHealthData>;
@@ -13,6 +15,53 @@ interface Props {
 }
 
 export default function HealthOverview({ todayData, goals, today, onTabChange }: Props) {
+  const addWaterMut = useAddWater();
+  const addMealMut = useAddMeal();
+  const { play } = useSoundFX();
+  const [quickFoodText, setQuickFoodText] = React.useState('');
+
+  const handleQuickWater = (ml: number) => {
+    play('success');
+    const now = new Date().toTimeString().slice(0, 5);
+    addWaterMut.mutate({ date: today, time: now, amount: ml });
+  };
+
+  const handlePresetFood = (p: any) => {
+    play('success');
+    const now = new Date().toTimeString().slice(0, 5);
+    addMealMut.mutate({
+      date: today,
+      time: now,
+      mealType: p.type,
+      name: p.name,
+      calories: p.c,
+      protein: p.p,
+      carbs: p.cb,
+      fat: p.f,
+    });
+  };
+
+  const handleQuickFoodSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickFoodText.trim()) return;
+
+    play('success');
+    const now = new Date().toTimeString().slice(0, 5);
+    const parsed = parseNaturalLanguageNutrition(quickFoodText);
+
+    addMealMut.mutate({
+      date: today,
+      time: now,
+      mealType: 'custom',
+      name: quickFoodText,
+      calories: parsed.matched ? parsed.calories : 150,
+      protein: parsed.matched ? parsed.protein : 10,
+      carbs: parsed.matched ? parsed.carbs : 15,
+      fat: parsed.matched ? parsed.fat : 5,
+    });
+
+    setQuickFoodText('');
+  };
   const calorieGoal = goals.find(g => g.type === 'calories')?.targetValue ?? 1700;
   const waterGoal   = goals.find(g => g.type === 'water')?.targetValue   ?? 3000;
   const proteinGoal = goals.find(g => g.type === 'protein')?.targetValue ?? 120;
@@ -115,7 +164,7 @@ export default function HealthOverview({ todayData, goals, today, onTabChange }:
       {/* Performance Score */}
       <div className="glass-card p-6 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-rose-500/5 to-pink-600/3 pointer-events-none" />
-        <div className="flex items-center gap-8">
+        <div className="flex flex-col sm:flex-row items-center gap-6 sm:gap-8">
           {/* Score Ring */}
           <div className="relative w-32 h-32 flex-shrink-0">
             <motion.div
@@ -151,23 +200,107 @@ export default function HealthOverview({ todayData, goals, today, onTabChange }:
             </div>
           </div>
 
-          <div className="flex-1">
+          <div className="flex-1 w-full text-center sm:text-left">
             <div className="text-xs text-white/30 uppercase tracking-widest font-bold mb-1">
               Today's Performance
             </div>
             <div className="text-xl font-black text-white mb-3">
               {score >= 80 ? '🔥 Peak Performance' : score >= 60 ? '⚡ On Track' : score >= 40 ? '🌱 Building Up' : '😴 Just Starting'}
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-2.5 sm:gap-3 w-full">
               {[
                 { label: 'Calories', val: `${todayData.totalCalories}/${calorieGoal}`, ok: todayData.totalCalories >= calorieGoal * 0.7 },
                 { label: 'Hydration', val: `${(todayData.totalWaterMl/1000).toFixed(1)}/${waterGoal/1000}L`, ok: todayData.totalWaterMl >= waterGoal * 0.7 },
                 { label: 'Protein', val: `${Math.round(todayData.totalProtein)}/${proteinGoal}g`, ok: todayData.totalProtein >= proteinGoal * 0.7 },
               ].map(({ label, val, ok }) => (
-                <div key={label} className={`glass-card px-3 py-2 border ${ok ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-white/5'}`}>
-                  <div className="text-[10px] text-white/30 uppercase tracking-widest">{label}</div>
-                  <div className={`text-sm font-bold ${ok ? 'text-emerald-400' : 'text-white/60'}`}>{val}</div>
+                <div key={label} className={`glass-card px-2 py-1.5 sm:px-3 sm:py-2 border ${ok ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-white/5'} text-center sm:text-left`}>
+                  <div className="text-[8px] sm:text-[10px] text-white/30 uppercase tracking-widest font-bold">{label}</div>
+                  <div className={`text-[10px] sm:text-sm font-bold ${ok ? 'text-emerald-400' : 'text-white/60'} whitespace-nowrap`}>{val}</div>
                 </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ⚡ Express Logger Panel */}
+      <div className="glass-card p-5 relative overflow-hidden bg-gradient-to-br from-rose-500/5 via-cyan-500/5 to-purple-600/5 border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.2)]">
+        <div className="absolute inset-0 bg-gradient-to-tr from-rose-500/3 via-transparent to-cyan-500/3 pointer-events-none" />
+        
+        <div className="flex items-center justify-between mb-4">
+          <div className="text-xs text-white/40 uppercase tracking-widest font-black flex items-center gap-2">
+            <Sparkles size={14} className="text-rose-400 animate-pulse" />
+            <span>⚡ Express Logger</span>
+          </div>
+          <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+            AI NLP Enabled
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 relative z-10">
+          {/* Water quick log */}
+          <div className="space-y-2.5">
+            <div className="text-[10px] text-white/50 font-extrabold uppercase tracking-widest flex items-center gap-1.5">
+              💧 Quick Hydrate
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                { label: 'Cup', amount: 150, emoji: '🥛' },
+                { label: 'Glass', amount: 250, emoji: '🥤' },
+                { label: 'Bottle', amount: 350, emoji: '🍼' },
+                { label: 'Flask', amount: 500, emoji: '🧊' },
+              ].map(v => (
+                <button
+                  key={v.amount}
+                  onClick={() => handleQuickWater(v.amount)}
+                  className="p-2.5 rounded-xl bg-cyan-500/5 border border-cyan-500/10 hover:border-cyan-500/30 text-cyan-400 flex flex-col items-center justify-center gap-1 hover:bg-cyan-500/10 active:scale-95 transition-all"
+                >
+                  <span className="text-xl">{v.emoji}</span>
+                  <span className="text-[8px] font-black uppercase text-white/30 truncate w-full">{v.label}</span>
+                  <span className="text-[10px] font-bold">+{v.amount}ml</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Food quick log */}
+          <div className="space-y-2.5">
+            <div className="text-[10px] text-white/50 font-extrabold uppercase tracking-widest flex items-center gap-1.5">
+              🥗 Express Meal NLP
+            </div>
+            <form onSubmit={handleQuickFoodSubmit} className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Type '2 eggs', 'whey protein', '100g chicken'..."
+                value={quickFoodText}
+                onChange={e => setQuickFoodText(e.target.value)}
+                className="input-glass flex-1 px-3 py-2 text-xs placeholder:text-white/20 rounded-xl"
+              />
+              <button
+                type="submit"
+                className="btn-glow px-4 py-2 text-xs flex items-center gap-1 shrink-0 rounded-xl"
+                style={{ background: 'linear-gradient(135deg, #f43f5e, #fb923c)' }}
+              >
+                <Plus size={13} /> Log
+              </button>
+            </form>
+            {/* Quick popular meal presets */}
+            <div className="flex flex-wrap gap-1.5 items-center">
+              <span className="text-[9px] text-white/30 font-bold uppercase tracking-wider mr-1">Presets:</span>
+              {[
+                { name: 'Whey Protein', emoji: '🥤', c: 120, p: 24, cb: 3, f: 1.5, type: 'snacks' },
+                { name: 'Boiled Egg (2)', emoji: '🥚', c: 156, p: 12.6, cb: 1.2, f: 10.6, type: 'breakfast' },
+                { name: 'Chicken Breast', emoji: '🍗', c: 165, p: 31, cb: 0, f: 3.6, type: 'lunch' },
+              ].map(p => (
+                <button
+                  key={p.name}
+                  type="button"
+                  onClick={() => handlePresetFood(p)}
+                  className="px-2 py-1 rounded-lg bg-white/5 hover:bg-rose-500/10 border border-white/5 hover:border-rose-500/20 text-[10px] text-white/60 hover:text-rose-400 font-bold flex items-center gap-1 transition-all active:scale-95"
+                >
+                  <span>{p.emoji}</span>
+                  <span>{p.name}</span>
+                </button>
               ))}
             </div>
           </div>

@@ -23,7 +23,7 @@ export function useBook() {
         return books[0];
       }
       // Seed a default book in the database if the user has none
-      const defaultBook = localStore.book;
+      const defaultBook = { ...localStore.book, id: '' };
       return BookSvc.upsertBook(user.id, defaultBook);
     },
   });
@@ -90,4 +90,3 @@ export function useSetBookMeta(): UseMutationResult<
     },
   });
 }
-

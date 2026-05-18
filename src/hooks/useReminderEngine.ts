@@ -1,8 +1,8 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
-import { todayString, generateId } from '../lib/utils';
-import type { Reminder, AppNotification, ISODateString } from '../types/reminder';
-import { isAfter, parseISO, addMinutes, addDays, addWeeks, addMonths, setHours, setMinutes } from 'date-fns';
+import { todayString } from '../lib/utils';
+import type { Reminder, ISODateString } from '../types/reminder';
+import { isAfter, parseISO, addDays, addWeeks, addMonths, setHours, setMinutes } from 'date-fns';
 
 export function useReminderEngine() {
   const { 
@@ -32,8 +32,10 @@ export function useReminderEngine() {
       const startTime = setMinutes(setHours(new Date(), startH), startM);
       const endTime = setMinutes(setHours(new Date(), endH), endM);
 
-      // Simple range check
-      if (now >= startTime || now <= endTime) return;
+      const inQuietHours = reminderSettings.quietHours.crossesMidnight
+        ? now >= startTime || now <= endTime
+        : now >= startTime && now <= endTime;
+      if (inQuietHours) return;
     }
 
     // 2. Check Focus Mode
@@ -108,7 +110,6 @@ export function useReminderEngine() {
       
       // 1. Focus Inactivity (Nudge at 2 PM if no focus)
       if (hours === 14 && (!today || today.focusMinutes < 15)) {
-        const id = 'smart-focus-nudge';
         if (!notifications.find(n => n.timestamp.startsWith(todayString()) && n.title.includes('Neural Engine Idle'))) {
           addNotification({
             title: 'Neural Engine Idle',
@@ -152,7 +153,6 @@ export function useReminderEngine() {
   }, [reminders, triggerNotification, reminderSettings, dailyActivity, notifications, addNotification]);
 
   useEffect(() => {
-    requestPermission();
     checkInterval.current = setInterval(runCheck, 60000); // Check every minute
     runCheck(); // Initial check
 

@@ -39,6 +39,9 @@ export default function NotificationCenter({ open, onClose }: NotificationCenter
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Notification center"
             className="fixed top-0 right-0 bottom-0 w-full max-w-md bg-[#0a0b14]/95 backdrop-blur-2xl z-[251] border-l border-white/5 flex flex-col shadow-2xl"
           >
             {/* Header */}
@@ -58,6 +61,7 @@ export default function NotificationCenter({ open, onClose }: NotificationCenter
               <div className="flex items-center gap-2">
                 <button 
                   onClick={clearNotifications}
+                  aria-label="Clear all notifications"
                   className="p-2 rounded-xl hover:bg-white/5 text-white/20 hover:text-white transition-all"
                   title="Clear All"
                 >
@@ -65,6 +69,7 @@ export default function NotificationCenter({ open, onClose }: NotificationCenter
                 </button>
                 <button 
                   onClick={onClose}
+                  aria-label="Close notifications"
                   className="p-2 rounded-xl hover:bg-white/5 text-white/20 hover:text-white transition-all"
                 >
                   <X size={20} />

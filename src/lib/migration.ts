@@ -49,7 +49,7 @@ export async function migrateLocalStorageToSupabase(userId: string): Promise<Mig
 
   try {
     appRaw = localStorage.getItem('dashboard-storage');
-    const healthRaw = localStorage.getItem('health-storage');
+    const healthRaw = localStorage.getItem('health-storage-v2');
     app    = appRaw    ? (JSON.parse(appRaw)?.state    ?? {}) : {};
     health = healthRaw ? (JSON.parse(healthRaw)?.state ?? {}) : {};
   } catch (e: any) {
