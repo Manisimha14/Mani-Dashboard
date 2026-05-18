@@ -8,12 +8,14 @@ export interface GoogleFitData {
 
 export async function fetchTodayGoogleFitData(): Promise<GoogleFitData> {
   let token: string | undefined;
-  
+
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    token = session?.provider_token ?? undefined;
+    const { data, error } = await supabase.auth.refreshSession();
+    if (error) throw error;
+    token = data.session?.provider_token ?? undefined;
+    console.log('Provider token retrieved:', token);
   } catch (err) {
-    console.warn('Could not retrieve provider token from Supabase:', err);
+    console.error('Could not retrieve provider token from Supabase:', err);
   }
 
   // If no token exists, let's return realistic dynamic simulated data that varies on every sync click!
@@ -88,15 +90,18 @@ export async function fetchTodayGoogleFitData(): Promise<GoogleFitData> {
       const datasets = data.bucket[0].dataset;
       
       // 1. Steps
-      const stepsData = datasets[0]?.point?.[0]?.value?.[0]?.intVal;
+      const stepsDataset = datasets.find((d: any) => d.dataSourceId?.includes('step_count'));
+      const stepsData = stepsDataset?.point?.[0]?.value?.[0]?.intVal;
       if (stepsData !== undefined) steps = stepsData;
 
       // 2. Calories
-      const calData = datasets[1]?.point?.[0]?.value?.[0]?.fpVal;
+      const calDataset = datasets.find((d: any) => d.dataSourceId?.includes('calories'));
+      const calData = calDataset?.point?.[0]?.value?.[0]?.fpVal;
       if (calData !== undefined) calories = Math.round(calData);
 
       // 3. Active Minutes
-      const activeData = datasets[2]?.point?.[0]?.value?.[0]?.intVal;
+      const activeDataset = datasets.find((d: any) => d.dataSourceId?.includes('active_minutes'));
+      const activeData = activeDataset?.point?.[0]?.value?.[0]?.intVal;
       if (activeData !== undefined) activeMinutes = activeData;
     }
 
