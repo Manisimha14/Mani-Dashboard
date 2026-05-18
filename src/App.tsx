@@ -3,12 +3,13 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
+import AppQueryProvider from './components/AppQueryProvider';
 import { useAppStore } from './store/useAppStore';
 import { useAuth } from './contexts/AuthContext';
 import { applyTheme } from './lib/themes';
 
 const Layout = lazy(() => import('./components/Layout'));
-const AppQueryProvider = lazy(() => import('./components/AppQueryProvider'));
+
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Reading = lazy(() => import('./pages/Reading'));
 const LeetCode = lazy(() => import('./pages/LeetCode'));
