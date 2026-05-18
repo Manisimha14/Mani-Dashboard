@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Dumbbell, Plus, Trash2, Timer, Flame } from 'lucide-react';
-import { useWorkouts, useAddWorkout, useDeleteWorkout } from '../../hooks/useHealthQuery';
+import { Dumbbell, Plus, Trash2, Timer, Flame, Edit2, Check, X, Award } from 'lucide-react';
+import { useWorkouts, useAddWorkout, useDeleteWorkout, useHealthGoals, useAddGoal, useUpdateGoal } from '../../hooks/useHealthQuery';
 import type { WorkoutType } from '../../types/health';
+import { useSoundFX } from '../../hooks/useSoundFX';
 
 const WORKOUT_TYPES: WorkoutType[] = [
   'strength','cardio','running','walking','cycling','yoga','stretching','sports','custom'
@@ -16,14 +17,47 @@ const EMPTY = { name: '', type: 'strength' as WorkoutType, durationMinutes: '', 
 
 export default function WorkoutTracker({ today }: { today: string }) {
   const { data: workouts = [] } = useWorkouts(today);
+  const { data: allWorkouts = [] } = useWorkouts();
+  const { data: goals = [] } = useHealthGoals();
   const addWorkoutMut           = useAddWorkout();
   const deleteWorkoutMut        = useDeleteWorkout();
+  const addGoalMut              = useAddGoal();
+  const updateGoalMut           = useUpdateGoal();
+  const { play }                = useSoundFX();
+
   const [form, setForm] = useState(EMPTY);
   const [showForm, setShowForm] = useState(false);
+  const [isEditingGoal, setIsEditingGoal] = useState(false);
+  const [tempGoalVal, setTempGoalVal] = useState('');
 
   const todayWorkouts = workouts; // already filtered by date from the hook
   const totalMin    = todayWorkouts.reduce((a, w) => a + w.durationMinutes, 0);
   const totalBurned = todayWorkouts.reduce((a, w) => a + (w.caloriesBurned ?? 0), 0);
+
+  const workoutGoal = goals.find(g => g.type === 'workouts_per_week')?.targetValue ?? 5;
+
+  const currentWeekWorkouts = allWorkouts.filter(w => {
+    if (!w.date) return false;
+    const wDate = new Date(w.date);
+    const todayDate = new Date(today);
+    const diffTime = Math.abs(todayDate.getTime() - wDate.getTime());
+    const diffDays = diffTime / (1000 * 60 * 60 * 24);
+    return diffDays <= 7;
+  });
+  const weeklySessions = currentWeekWorkouts.length;
+
+  const saveGoal = () => {
+    const val = Number(tempGoalVal);
+    if (!val || val <= 0) return;
+    play('click');
+    const existing = goals.find(g => g.type === 'workouts_per_week');
+    if (existing) {
+      updateGoalMut.mutate({ id: existing.id, updates: { targetValue: val } });
+    } else {
+      addGoalMut.mutate({ label: 'Workouts / Week', type: 'workouts_per_week', targetValue: val, unit: 'sessions' });
+    }
+    setIsEditingGoal(false);
+  };
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,9 +80,9 @@ export default function WorkoutTracker({ today }: { today: string }) {
       {/* Summary */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: 'Sessions', val: todayWorkouts.length, unit: '', icon: '💪', color: '#fb923c' },
-          { label: 'Total Time', val: totalMin, unit: 'min', icon: '⏱️', color: '#a78bfa' },
-          { label: 'Cals Burned', val: totalBurned, unit: 'kcal', icon: '🔥', color: '#f43f5e' },
+          { label: 'Sessions Today', val: todayWorkouts.length, unit: '', icon: '💪', color: '#fb923c' },
+          { label: 'Total Time Today', val: totalMin, unit: 'min', icon: '⏱️', color: '#a78bfa' },
+          { label: 'Cals Burned Today', val: totalBurned, unit: 'kcal', icon: '🔥', color: '#f43f5e' },
         ].map(({ label, val, unit, icon, color }) => (
           <div key={label} className="glass-card p-5 flex flex-col gap-1">
             <span className="text-2xl">{icon}</span>
@@ -58,6 +92,64 @@ export default function WorkoutTracker({ today }: { today: string }) {
             <div className="text-[10px] text-white/30 uppercase tracking-widest font-bold">{label}</div>
           </div>
         ))}
+      </div>
+
+      {/* Weekly Goal Progress */}
+      <div className="glass-card p-5 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-xl">
+            🏆
+          </div>
+          <div>
+            <div className="text-[10px] text-white/30 uppercase tracking-widest font-bold">Weekly Workout Goal</div>
+            {isEditingGoal ? (
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className="text-sm font-semibold text-white/60">{weeklySessions} of</span>
+                <input
+                  type="number"
+                  value={tempGoalVal}
+                  onChange={e => setTempGoalVal(e.target.value)}
+                  className="input-glass px-2 py-0.5 text-xs w-16 font-bold text-center"
+                  placeholder={String(workoutGoal)}
+                  autoFocus
+                />
+                <span className="text-xs text-white/30">sessions</span>
+                <button onClick={saveGoal} className="p-1 rounded bg-orange-500/20 text-orange-400 border border-orange-500/20">
+                  <Check size={10} />
+                </button>
+                <button onClick={() => setIsEditingGoal(false)} className="p-1 rounded bg-white/5 text-white/40">
+                  <X size={10} />
+                </button>
+              </div>
+            ) : (
+              <div className="text-sm font-semibold text-white/80 flex items-center gap-1.5 mt-0.5">
+                <span>{weeklySessions} / {workoutGoal} sessions logged this week</span>
+                <button
+                  onClick={() => { setTempGoalVal(String(workoutGoal)); setIsEditingGoal(true); }}
+                  className="text-white/20 hover:text-white/50 transition-colors p-1"
+                >
+                  <Edit2 size={12} />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+        
+        {/* Progress Bar */}
+        <div className="w-48 hidden md:block">
+          <div className="flex justify-between text-[10px] text-white/30 uppercase tracking-widest font-bold mb-1">
+            <span>Progress</span>
+            <span>{Math.min(Math.round((weeklySessions / workoutGoal) * 100), 100)}%</span>
+          </div>
+          <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+            <motion.div
+              className="h-full bg-gradient-to-r from-orange-500 to-rose-400 rounded-full"
+              initial={{ width: 0 }}
+              animate={{ width: `${Math.min((weeklySessions / workoutGoal) * 100, 100)}%` }}
+              transition={{ duration: 0.5, ease: 'easeOut' }}
+            />
+          </div>
+        </div>
       </div>
 
       {/* Add button */}

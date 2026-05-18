@@ -109,7 +109,7 @@ export function useReminderEngine() {
       // 1. Focus Inactivity (Nudge at 2 PM if no focus)
       if (hours === 14 && (!today || today.focusMinutes < 15)) {
         const id = 'smart-focus-nudge';
-        if (!notifications.find(n => n.timestamp.startsWith(todayString()) && n.title.includes('Deep Work'))) {
+        if (!notifications.find(n => n.timestamp.startsWith(todayString()) && n.title.includes('Neural Engine Idle'))) {
           addNotification({
             title: 'Neural Engine Idle',
             message: 'No deep work detected today. Want a quick 15m startup session? 🌱',

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Target, Plus, Trash2, CheckCircle, AlertTriangle, ToggleLeft, ToggleRight } from 'lucide-react';
 import { 
-  useHealthGoals, useAddGoal, useDeleteGoal, 
+  useHealthGoals, useAddGoal, useUpdateGoal, useDeleteGoal, 
   useHealthRestrictions, useAddRestriction, useUpdateRestriction, useDeleteRestriction,
   useTodayHealthData 
 } from '../../hooks/useHealthQuery';
@@ -25,12 +25,14 @@ export default function GoalsPanel() {
   const { data: goals = [] } = useHealthGoals();
   const { data: restrictions = [] } = useHealthRestrictions();
   const addGoalMut = useAddGoal();
+  const updateGoalMut = useUpdateGoal();
   const deleteGoalMut = useDeleteGoal();
   const addRestMut = useAddRestriction();
   const updateRestMut = useUpdateRestriction();
   const deleteRestMut = useDeleteRestriction();
 
   const addGoal = (goal: any) => addGoalMut.mutate(goal);
+  const updateGoal = (id: string, updates: any) => updateGoalMut.mutate({ id, updates });
   const deleteGoal = (id: string) => deleteGoalMut.mutate(id);
   const addRestriction = (r: any) => addRestMut.mutate(r);
   const updateRestriction = (id: string, updates: any) => updateRestMut.mutate({ id, updates });
@@ -68,7 +70,12 @@ export default function GoalsPanel() {
   const submitGoal = (e: React.FormEvent) => {
     e.preventDefault();
     if (!gForm.label || !gForm.targetValue) return;
-    addGoal({ label: gForm.label, type: gForm.type, targetValue: Number(gForm.targetValue), unit: gForm.unit });
+    const existing = goals.find(g => g.type === gForm.type);
+    if (existing) {
+      updateGoal(existing.id, { targetValue: Number(gForm.targetValue), label: gForm.label, unit: gForm.unit });
+    } else {
+      addGoal({ label: gForm.label, type: gForm.type, targetValue: Number(gForm.targetValue), unit: gForm.unit });
+    }
     setGForm(EMPTY_GOAL);
     setShowGoalForm(false);
   };

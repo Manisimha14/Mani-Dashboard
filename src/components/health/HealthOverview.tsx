@@ -9,11 +9,12 @@ interface Props {
   todayData: ReturnType<typeof useTodayHealthData>;
   goals: HealthGoal[];
   today: string;
+  onTabChange?: (tab: string) => void;
 }
 
-export default function HealthOverview({ todayData, goals, today }: Props) {
-  const calorieGoal = goals.find(g => g.type === 'calories')?.targetValue ?? 2100;
-  const waterGoal   = goals.find(g => g.type === 'water')?.targetValue   ?? 3500;
+export default function HealthOverview({ todayData, goals, today, onTabChange }: Props) {
+  const calorieGoal = goals.find(g => g.type === 'calories')?.targetValue ?? 1700;
+  const waterGoal   = goals.find(g => g.type === 'water')?.targetValue   ?? 3000;
   const proteinGoal = goals.find(g => g.type === 'protein')?.targetValue ?? 120;
   const sleepGoal   = goals.find(g => g.type === 'sleep_hours')?.targetValue ?? 8;
   const stepsGoal   = goals.find(g => g.type === 'steps')?.targetValue   ?? 10000;
@@ -186,7 +187,20 @@ export default function HealthOverview({ todayData, goals, today }: Props) {
               initial={{ opacity: 0, scale: 0.85 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: i * 0.06 }}
-              className="glass-card p-4 flex flex-col items-center gap-2 text-center hover:border-white/10 transition-colors"
+              onClick={() => {
+                if (!onTabChange) return;
+                const tabMap: Record<string, string> = {
+                  'Calories': 'calories',
+                  'Water': 'water',
+                  'Protein': 'calories',
+                  'Steps': 'steps',
+                  'Sleep': 'sleep',
+                  'Workout': 'workout',
+                };
+                const tab = tabMap[m.label];
+                if (tab) onTabChange(tab);
+              }}
+              className="glass-card p-4 flex flex-col items-center gap-2 text-center hover:border-white/10 transition-colors cursor-pointer"
             >
               <div className="relative w-16 h-16">
                 <svg viewBox="0 0 72 72" className="w-full h-full -rotate-90">

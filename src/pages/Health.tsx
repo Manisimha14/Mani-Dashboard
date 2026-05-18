@@ -2,13 +2,14 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Heart, Droplets, Flame, Dumbbell, Moon, Target,
-  TrendingUp, Plus, Activity, Zap
+  TrendingUp, Plus, Activity, Zap, Footprints
 } from 'lucide-react';
 import { todayString } from '../lib/utils';
 import { useTodayHealthData, useHealthGoals } from '../hooks/useHealthQuery';
 import HealthOverview from '../components/health/HealthOverview';
 import CalorieTracker from '../components/health/CalorieTracker';
 import WaterTracker from '../components/health/WaterTracker';
+import StepsTracker from '../components/health/StepsTracker';
 import WorkoutTracker from '../components/health/WorkoutTracker';
 import SleepTracker from '../components/health/SleepTracker';
 import GoalsPanel from '../components/health/GoalsPanel';
@@ -17,6 +18,7 @@ const TABS = [
   { id: 'overview',  label: 'Overview',  icon: Activity },
   { id: 'calories',  label: 'Calories',  icon: Flame },
   { id: 'water',     label: 'Hydration', icon: Droplets },
+  { id: 'steps',     label: 'Steps',     icon: Footprints },
   { id: 'workout',   label: 'Workout',   icon: Dumbbell },
   { id: 'sleep',     label: 'Sleep',     icon: Moon },
   { id: 'goals',     label: 'Goals',     icon: Target },
@@ -32,8 +34,11 @@ export default function Health() {
 
   const calorieGoal = goals.find(g => g.type === 'calories')?.targetValue ?? 1700;
   const waterGoal   = goals.find(g => g.type === 'water')?.targetValue   ?? 3000;
-  const calPct  = Math.min(todayData.totalCalories / calorieGoal, 1);
+  const stepsGoal   = goals.find(g => g.type === 'steps')?.targetValue   ?? 10000;
+  
+  const calPct   = Math.min(todayData.totalCalories / calorieGoal, 1);
   const waterPct = Math.min(todayData.totalWaterMl / waterGoal, 1);
+  const stepsPct = Math.min(todayData.steps / stepsGoal, 1);
 
   return (
     <div className="page-enter space-y-6">
@@ -58,13 +63,13 @@ export default function Health() {
             pct={calPct} color="rose" icon="🔥" />
           <QuickKpi label="Water" value={`${(todayData.totalWaterMl / 1000).toFixed(1)}`} unit="L"
             pct={waterPct} color="cyan" icon="💧" />
-          <QuickKpi label="Workout" value={`${todayData.totalWorkoutMinutes}`} unit="min"
-            pct={todayData.totalWorkoutMinutes > 0 ? 1 : 0} color="violet" icon="💪" />
+          <QuickKpi label="Steps" value={`${todayData.steps.toLocaleString()}`} unit="steps"
+            pct={stepsPct} color="emerald" icon="👟" />
         </div>
       </div>
 
       {/* ── Tabs ──────────────────────────────────────── */}
-      <div className="flex gap-1 p-1 glass-card rounded-2xl w-fit">
+      <div className="flex gap-1 p-1 glass-card rounded-2xl w-fit flex-wrap">
         {TABS.map(tab => {
           const Icon = tab.icon;
           const active = activeTab === tab.id;
@@ -104,9 +109,17 @@ export default function Health() {
           exit={{ opacity: 0, y: -8 }}
           transition={{ duration: 0.2 }}
         >
-          {activeTab === 'overview'  && <HealthOverview todayData={todayData} goals={goals} today={today} />}
+          {activeTab === 'overview'  && (
+            <HealthOverview
+              todayData={todayData}
+              goals={goals}
+              today={today}
+              onTabChange={(t) => setActiveTab(t as Tab)}
+            />
+          )}
           {activeTab === 'calories'  && <CalorieTracker today={today} />}
           {activeTab === 'water'     && <WaterTracker today={today} />}
+          {activeTab === 'steps'     && <StepsTracker today={today} />}
           {activeTab === 'workout'   && <WorkoutTracker today={today} />}
           {activeTab === 'sleep'     && <SleepTracker today={today} />}
           {activeTab === 'goals'     && <GoalsPanel />}
@@ -119,17 +132,19 @@ export default function Health() {
 // ─── Quick KPI chip ──────────────────────────────────────────────────────────
 const QuickKpi = React.memo(function QuickKpi({ label, value, unit, pct, color, icon }: {
   label: string; value: string; unit: string; pct: number;
-  color: 'rose' | 'cyan' | 'violet'; icon: string;
+  color: 'rose' | 'cyan' | 'violet' | 'emerald'; icon: string;
 }) {
   const colors = {
     rose:   'from-rose-500/20 to-pink-600/10 border-rose-500/20',
     cyan:   'from-cyan-500/20 to-sky-600/10 border-cyan-500/20',
     violet: 'from-violet-500/20 to-purple-600/10 border-violet-500/20',
+    emerald: 'from-emerald-500/20 to-teal-600/10 border-emerald-500/20',
   };
   const fills = {
     rose:   'from-rose-500 to-pink-500',
     cyan:   'from-cyan-400 to-sky-500',
     violet: 'from-violet-500 to-purple-500',
+    emerald: 'from-emerald-400 to-teal-500',
   };
   return (
     <div className={`glass-card bg-gradient-to-br ${colors[color]} border px-4 py-2.5 min-w-[90px]`}>

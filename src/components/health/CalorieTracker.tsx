@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Flame, Plus, Trash2, Star, ChevronDown, ChevronUp } from 'lucide-react';
-import { useMeals, useHealthGoals, useAddMeal, useDeleteMeal, useToggleMealFavorite } from '../../hooks/useHealthQuery';
+import { Flame, Plus, Trash2, Star, ChevronDown, ChevronUp, Edit2, Check, X } from 'lucide-react';
+import { useMeals, useHealthGoals, useAddMeal, useDeleteMeal, useToggleMealFavorite, useAddGoal, useUpdateGoal } from '../../hooks/useHealthQuery';
 import type { MealType } from '../../types/health';
 import { parseNaturalLanguageNutrition, searchOpenFoodFacts, type OpenFoodFactsProduct } from '../../lib/nutritionParser';
 
@@ -123,9 +123,27 @@ export default function CalorieTracker({ today }: { today: string }) {
   const totalProt  = todayMeals.reduce((a, m) => a + m.protein, 0);
   const totalCarbs = todayMeals.reduce((a, m) => a + m.carbs, 0);
   const totalFat   = todayMeals.reduce((a, m) => a + m.fat, 0);
-  const calorieGoal = goals.find(g => g.type === 'calories')?.targetValue ?? 2100;
+  
+  const addGoalMut = useAddGoal();
+  const updateGoalMut = useUpdateGoal();
+  const [isEditingGoal, setIsEditingGoal] = useState(false);
+  const [tempGoalVal, setTempGoalVal] = useState('');
+
+  const calorieGoal = goals.find(g => g.type === 'calories')?.targetValue ?? 1700;
   const proteinGoal = goals.find(g => g.type === 'protein')?.targetValue ?? 120;
   const pct = Math.min(totalCal / calorieGoal, 1);
+
+  const saveGoal = () => {
+    const val = Number(tempGoalVal);
+    if (!val || val <= 0) return;
+    const existing = goals.find(g => g.type === 'calories');
+    if (existing) {
+      updateGoalMut.mutate({ id: existing.id, updates: { targetValue: val } });
+    } else {
+      addGoalMut.mutate({ label: 'Daily Calories', type: 'calories', targetValue: val, unit: 'kcal' });
+    }
+    setIsEditingGoal(false);
+  };
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -155,10 +173,39 @@ export default function CalorieTracker({ today }: { today: string }) {
         <div className="flex items-center justify-between mb-4">
           <div>
             <div className="text-xs text-white/30 uppercase tracking-widest font-bold">Calories Today</div>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-4xl font-black text-white">{totalCal.toLocaleString()}</span>
-              <span className="text-white/30 text-sm">/ {calorieGoal.toLocaleString()} kcal</span>
-            </div>
+            {isEditingGoal ? (
+              <div className="flex items-center gap-1.5 mt-1.5">
+                <span className="text-2xl font-black text-white">{totalCal.toLocaleString()}</span>
+                <span className="text-white/30 text-sm">/</span>
+                <input
+                  type="number"
+                  value={tempGoalVal}
+                  onChange={e => setTempGoalVal(e.target.value)}
+                  className="input-glass px-2 py-1 text-xs w-20 font-bold"
+                  placeholder={String(calorieGoal)}
+                  autoFocus
+                />
+                <button onClick={saveGoal} className="p-1.5 rounded-lg bg-rose-500/20 text-rose-400 border border-rose-500/20">
+                  <Check size={11} />
+                </button>
+                <button onClick={() => setIsEditingGoal(false)} className="p-1.5 rounded-lg bg-white/5 text-white/40">
+                  <X size={11} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-baseline gap-2 mt-1">
+                <span className="text-4xl font-black text-white">{totalCal.toLocaleString()}</span>
+                <span className="text-white/30 text-sm flex items-center gap-1">
+                  / {calorieGoal.toLocaleString()} kcal
+                  <button
+                    onClick={() => { setTempGoalVal(String(calorieGoal)); setIsEditingGoal(true); }}
+                    className="text-white/20 hover:text-white/50 transition-colors p-1"
+                  >
+                    <Edit2 size={12} />
+                  </button>
+                </span>
+              </div>
+            )}
           </div>
           <motion.button
             whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}

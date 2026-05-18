@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Droplets, Plus, Trash2, Waves } from 'lucide-react';
-import { useWater, useHealthGoals, useAddWater, useDeleteWater } from '../../hooks/useHealthQuery';
+import { Droplets, Plus, Trash2, Waves, Edit2, Check, X } from 'lucide-react';
+import { useWater, useHealthGoals, useAddWater, useDeleteWater, useAddGoal, useUpdateGoal } from '../../hooks/useHealthQuery';
 import { todayString } from '../../lib/utils';
 import { useSoundFX } from '../../hooks/useSoundFX';
 
@@ -20,10 +20,28 @@ export default function WaterTracker({ today }: { today: string }) {
   const [customMl, setCustomMl] = useState('');
   const { play } = useSoundFX();
 
+  const addGoalMut = useAddGoal();
+  const updateGoalMut = useUpdateGoal();
+  const [isEditingGoal, setIsEditingGoal] = useState(false);
+  const [tempGoalVal, setTempGoalVal] = useState('');
+
   const todayWater = water; // already filtered by date from the hook
   const totalMl = todayWater.reduce((a, w) => a + w.amount, 0);
-  const goalMl  = goals.find(g => g.type === 'water')?.targetValue ?? 3500;
+  const goalMl  = goals.find(g => g.type === 'water')?.targetValue ?? 3000;
   const pct = Math.min(totalMl / goalMl, 1);
+
+  const saveGoal = () => {
+    const val = Number(tempGoalVal);
+    if (!val || val <= 0) return;
+    play('click');
+    const existing = goals.find(g => g.type === 'water');
+    if (existing) {
+      updateGoalMut.mutate({ id: existing.id, updates: { targetValue: val } });
+    } else {
+      addGoalMut.mutate({ label: 'Daily Water', type: 'water', targetValue: val, unit: 'ml' });
+    }
+    setIsEditingGoal(false);
+  };
 
   const now = () => new Date().toTimeString().slice(0, 5);
 
@@ -78,12 +96,39 @@ export default function WaterTracker({ today }: { today: string }) {
                 />
               ))}
 
-              <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
-                <Droplets size={22} className="text-cyan-400 mb-1" />
-                <div className="text-2xl font-black text-white">
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-10 px-2 text-center">
+                <Droplets size={22} className="text-cyan-400 mb-1 pointer-events-none" />
+                <div className="text-2xl font-black text-white pointer-events-none">
                   {(totalMl / 1000).toFixed(1)}<span className="text-sm text-white/40 ml-0.5">L</span>
                 </div>
-                <div className="text-xs text-white/30">of {goalMl / 1000}L goal</div>
+                {isEditingGoal ? (
+                  <div className="flex items-center gap-1.5 mt-1 z-20">
+                    <input
+                      type="number"
+                      value={tempGoalVal}
+                      onChange={e => setTempGoalVal(e.target.value)}
+                      className="input-glass px-1 py-0.5 text-center text-xs w-16 font-bold"
+                      placeholder={String(goalMl)}
+                      autoFocus
+                    />
+                    <button onClick={saveGoal} className="p-1 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/20">
+                      <Check size={9} />
+                    </button>
+                    <button onClick={() => setIsEditingGoal(false)} className="p-1 rounded bg-white/5 text-white/40">
+                      <X size={9} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="text-xs text-white/30 flex items-center gap-1">
+                    <span>of {goalMl / 1000}L goal</span>
+                    <button
+                      onClick={() => { setTempGoalVal(String(goalMl)); setIsEditingGoal(true); }}
+                      className="text-white/20 hover:text-white/50 transition-colors p-0.5"
+                    >
+                      <Edit2 size={10} />
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
