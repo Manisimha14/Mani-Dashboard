@@ -10,17 +10,12 @@ export async function fetchTodayGoogleFitData(): Promise<GoogleFitData> {
   let token: string | undefined;
 
   try {
-    token = localStorage.getItem('google_provider_token') || undefined;
-    if (!token) {
-      const { data: { session } } = await supabase.auth.getSession();
-      token = session?.provider_token ?? undefined;
-      if (token) {
-        localStorage.setItem('google_provider_token', token);
-      }
-    }
-    console.log('Provider token retrieved:', token ? 'exists' : 'undefined');
+    const { data, error } = await supabase.auth.refreshSession();
+    if (error) throw error;
+    token = data.session?.provider_token ?? undefined;
+    console.log('Provider token retrieved:', token ? 'exists' : 'missing');
   } catch (err) {
-    console.error('Could not retrieve provider token from Supabase/localStorage:', err);
+    console.error('Could not retrieve provider token from Supabase:', err);
   }
 
   // If no token exists, let's return realistic dynamic simulated data that varies on every sync click!
@@ -47,18 +42,14 @@ export async function fetchTodayGoogleFitData(): Promise<GoogleFitData> {
     aggregateBy: [
       {
         dataTypeName: 'com.google.step_count.delta'
-      },
-      {
-        dataTypeName: 'com.google.calories.expended'
-      },
-      {
-        dataTypeName: 'com.google.active_minutes'
       }
     ],
     bucketByTime: { durationMillis: 86400000 },
     startTimeMillis,
     endTimeMillis
   };
+
+  console.log('Google Fit API Request:', JSON.stringify(requestBody, null, 2));
 
   try {
     const response = await fetch('https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate', {
