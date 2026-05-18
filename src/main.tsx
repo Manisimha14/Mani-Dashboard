@@ -4,6 +4,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from './App.tsx';
 import { AuthProvider } from './contexts/AuthContext.tsx';
 import './index.css';
+import { registerSW } from 'virtual:pwa-register';
+
+// Force PWA auto-update and instant activation on client load
+registerSW({ immediate: true });
 
 const queryClient = new QueryClient({
   defaultOptions: {
