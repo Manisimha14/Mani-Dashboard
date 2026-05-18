@@ -8,17 +8,17 @@ import { useAppStore } from './store/useAppStore';
 import { useAuth } from './contexts/AuthContext';
 import { applyTheme } from './lib/themes';
 
-const Layout = lazy(() => import('./components/Layout'));
+import Layout from './components/Layout';
+import Dashboard from './pages/Dashboard';
+import Reading from './pages/Reading';
+import LeetCode from './pages/LeetCode';
+import FocusMode from './pages/FocusMode';
+import Trackers from './pages/Trackers';
+import Health from './pages/Health';
 
-const Dashboard = lazy(() => import('./pages/Dashboard'));
-const Reading = lazy(() => import('./pages/Reading'));
-const LeetCode = lazy(() => import('./pages/LeetCode'));
-const FocusMode = lazy(() => import('./pages/FocusMode'));
 const Analytics = lazy(() => import('./pages/Analytics'));
 const Achievements = lazy(() => import('./pages/Achievements'));
 const Settings = lazy(() => import('./pages/Settings'));
-const Trackers = lazy(() => import('./pages/Trackers'));
-const Health = lazy(() => import('./pages/Health'));
 const Ambient = lazy(() => import('./pages/Ambient'));
 const Onboarding = lazy(() => import('./components/Onboarding'));
 
