@@ -37,8 +37,13 @@ export function useUpdateAchievement(): UseMutationResult<
       }
       return AchievementSvc.updateAchievement(user.id, id, updates);
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: achievementKeys.all(user?.id ?? 'local') });
+    onSuccess: (_, variables) => {
+      const qKey = achievementKeys.all(user?.id ?? 'local');
+      qc.setQueryData<Achievement[]>(qKey, (old) => {
+        if (!old) return old;
+        return old.map(ach => ach.id === variables.id ? { ...ach, ...variables.updates } : ach);
+      });
+      qc.invalidateQueries({ queryKey: qKey });
     },
   });
 }

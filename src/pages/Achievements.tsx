@@ -40,7 +40,7 @@ export default function Achievements() {
       {/* Progress Banner */}
       <div className="glass-card p-5 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-violet-600/10 to-transparent" />
-        <div className="relative flex items-center gap-6">
+        <div className="relative flex flex-col md:flex-row items-center md:items-center gap-6">
           <div className="text-5xl">🏆</div>
           <div className="flex-1">
             <div className="text-lg font-bold text-white mb-2">Achievement Progress</div>
@@ -54,7 +54,7 @@ export default function Achievements() {
             </div>
             <div className="text-sm text-white/40">{unlocked.length}/{achievements.length} achievements unlocked</div>
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-2 gap-2 w-full md:w-auto">
             {(['common', 'rare', 'epic', 'legendary'] as Achievement['rarity'][]).map(r => {
               const count = unlocked.filter(a => a.rarity === r).length;
               const total = achievements.filter(a => a.rarity === r).length;
@@ -72,7 +72,7 @@ export default function Achievements() {
       {byCategory.map(({ category, label, items }) => (
         <div key={category}>
           <h3 className="text-sm font-semibold text-white/60 uppercase tracking-widest mb-3">{label}</h3>
-          <motion.div variants={stagger} initial="hidden" animate="show" className="grid grid-cols-3 gap-3">
+          <motion.div variants={stagger} initial="hidden" animate="show" className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             {items.map(ach => (
               <motion.div key={ach.id} variants={item}>
                 <AchievementCard achievement={ach} />
@@ -112,7 +112,7 @@ function AchievementCard({ achievement: ach }: { achievement: Achievement }) {
         {ach.title}
       </div>
       
-      <div className="text-[10px] text-white/30 leading-relaxed font-medium max-w-[140px]">
+      <div className="text-[10px] text-white/30 leading-relaxed font-medium max-w-xs">
         {ach.description}
       </div>
 

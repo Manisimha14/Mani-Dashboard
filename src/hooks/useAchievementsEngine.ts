@@ -21,6 +21,7 @@ export function useAchievementsEngine() {
 
   // Keep a ref of currently updating achievements to avoid infinite rendering loop during concurrent mutations
   const updatingRefs = useRef<Set<string>>(new Set());
+  const celebratedRefs = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (achievements.length === 0) return;
@@ -78,7 +79,8 @@ export function useAchievementsEngine() {
           });
 
           // Trigger visual celebration for newly unlocked achievement!
-          if (newlyUnlocked) {
+          if (newlyUnlocked && !celebratedRefs.current.has(ach.id)) {
+            celebratedRefs.current.add(ach.id);
             play('achievement');
             // Set the store state to trigger global UI celebration modal
             useAppStore.setState({ celebratingAchievement: { ...ach, unlocked: true, unlockedAt: new Date().toISOString().split('T')[0], progress } });

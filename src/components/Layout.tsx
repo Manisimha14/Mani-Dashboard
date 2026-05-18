@@ -272,7 +272,7 @@ export default function Layout() {
         <div 
           className="p-4 md:p-8 pt-4 flex-1"
           style={{
-            paddingBottom: isMobile ? 'calc(env(safe-area-inset-bottom, 0px) + 88px)' : '32px'
+            paddingBottom: isMobile ? 'calc(env(safe-area-inset-bottom, 0px) + 96px)' : '32px'
           }}
         >
           <AnimatePresence mode="wait">
@@ -514,10 +514,9 @@ export default function Layout() {
       {/* Mobile Floating Bottom Navigation Bar */}
       {isMobile && (
         <div 
-          className="fixed bottom-0 left-0 right-0 w-full z-[48] rounded-t-2xl rounded-b-none border-t border-x-0 border-b-0 border-white/10 bg-[#090a12]/95 backdrop-blur-2xl shadow-[0_-8px_30px_rgba(0,0,0,0.7)] px-6 flex items-center justify-around"
+          className="fixed left-1/2 -translate-x-1/2 w-[92%] max-w-md z-[48] rounded-2xl border border-white/10 bg-[#0f101c]/80 backdrop-blur-xl shadow-[0_12px_40px_rgba(0,0,0,0.6),0_0_20px_rgba(139,92,246,0.1)] px-4 py-2.5 flex items-center justify-around animate-fade-in"
           style={{
-            paddingTop: '10px',
-            paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 10px)'
+            bottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)'
           }}
         >
           <MobileTabButton 
