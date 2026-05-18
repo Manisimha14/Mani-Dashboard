@@ -271,43 +271,46 @@ export default function FocusMode() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="w-full flex items-center justify-between mb-8 px-4"
+            className="w-full flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 px-4"
           >
             <div>
-              <h1 className="text-3xl font-bold tracking-tight text-white">Forest Mode</h1>
-              <p className="text-white/40 mt-1 text-sm font-medium">Deep work powered by Pomodoro</p>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">Forest Mode</h1>
+              <p className="text-white/40 mt-0.5 text-xs sm:text-sm font-medium">Deep work powered by Pomodoro</p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
               {/* Premium Tab Switcher */}
               <div className="bg-white/5 p-1 rounded-xl border border-white/10 flex">
                 <button 
                   onClick={() => setActiveTab('timer')}
-                  className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 ${activeTab === 'timer' ? 'bg-violet-600 text-white shadow-lg' : 'text-white/40 hover:text-white/70'}`}
+                  className={`px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 ${activeTab === 'timer' ? 'bg-violet-600 text-white shadow-lg' : 'text-white/40 hover:text-white/70'}`}
                 >
-                  <TimerIcon size={14} /> Timer
+                  <TimerIcon size={13} /> Timer
                 </button>
                 <button 
                   onClick={() => setActiveTab('analytics')}
-                  className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 ${activeTab === 'analytics' ? 'bg-violet-600 text-white shadow-lg' : 'text-white/40 hover:text-white/70'}`}
+                  className={`px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 ${activeTab === 'analytics' ? 'bg-violet-600 text-white shadow-lg' : 'text-white/40 hover:text-white/70'}`}
                 >
-                  <BarChart3 size={14} /> Analytics
+                  <BarChart3 size={13} /> Analytics
                 </button>
               </div>
 
-              <div className="h-8 w-[1px] bg-white/10 mx-1" />
+              <div className="h-6 w-[1px] bg-white/10 mx-0.5 hidden xs:block" />
 
-              <div className="flex gap-2">
+              <div className="flex gap-1.5 sm:gap-2">
                 <button onClick={() => setIsZen(true)}
-                  className="btn-ghost px-3 py-2 flex items-center gap-2 text-sm text-violet-400 border-violet-500/20">
-                  <Leaf size={14} /> <span className="hidden sm:inline">Zen Mode</span> <kbd className="text-[10px] opacity-40 ml-1">Z</kbd>
+                  title="Zen Mode (Z)"
+                  className="btn-ghost p-2 sm:px-3 sm:py-2 flex items-center gap-1.5 text-xs sm:text-sm text-violet-400 border-violet-500/20">
+                  <Leaf size={14} /> <span className="hidden md:inline">Zen Mode</span> <kbd className="hidden md:inline text-[10px] opacity-40 ml-1">Z</kbd>
                 </button>
                 <button onClick={() => setShowSettings(true)}
-                  className="btn-ghost px-3 py-2 flex items-center gap-2 text-sm">
-                  <Settings size={14} /> <span className="hidden sm:inline">Settings</span>
+                  title="Timer Settings"
+                  className="btn-ghost p-2 sm:px-3 sm:py-2 flex items-center gap-1.5 text-xs sm:text-sm">
+                  <Settings size={14} /> <span className="hidden md:inline">Settings</span>
                 </button>
                 <button onClick={() => setIsFullscreen(true)}
-                  className="btn-ghost px-3 py-2 flex items-center gap-2 text-sm">
-                  <Maximize2 size={14} /> <span className="hidden sm:inline">Immersive</span>
+                  title="Immersive Mode"
+                  className="btn-ghost p-2 sm:px-3 sm:py-2 flex items-center gap-1.5 text-xs sm:text-sm">
+                  <Maximize2 size={14} /> <span className="hidden md:inline">Immersive</span>
                 </button>
               </div>
             </div>
