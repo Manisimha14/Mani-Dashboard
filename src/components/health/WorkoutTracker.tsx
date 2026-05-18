@@ -131,6 +131,12 @@ export default function WorkoutTracker({ today }: { today: string }) {
           clearInterval(timer);
           
           setTimeout(() => {
+            // If the query failed and was stopped, don't write any steps or workouts
+            if (!fitSyncResultRef.current && isFitConnected) {
+              setIsSyncingFit(false);
+              return;
+            }
+
             const data = fitSyncResultRef.current || {
               steps: Math.round(6200 + Math.random() * 2800),
               calories: 220,
