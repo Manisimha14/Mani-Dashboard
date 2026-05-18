@@ -17,9 +17,34 @@ export default function QuickScratchpad() {
   const { mutate: updateProfile } = useUpdateProfile();
   const [activeTab, setActiveTab] = useState<'notes' | 'todos'>('notes');
   
-  // Memoize note and todo states from central database-synced store
-  const noteText = userSettings.scratchpadNote || '';
-  
+  // Local high-performance typing state
+  const [localNote, setLocalNote] = useState(() => userSettings.scratchpadNote || '');
+
+  // Synchronize localNote when the server-side value changes remotely
+  useEffect(() => {
+    const remote = userSettings.scratchpadNote || '';
+    if (remote !== localNote) {
+      setLocalNote(remote);
+    }
+  }, [userSettings.scratchpadNote]);
+
+  // Debounced auto-save effect to block excessive network mutations while typing
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const remote = userSettings.scratchpadNote || '';
+      if (localNote !== remote) {
+        updateProfile({
+          settings: {
+            ...userSettings,
+            scratchpadNote: localNote
+          }
+        });
+      }
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [localNote]);
+
   const todos = React.useMemo<QuickTodo[]>(() => {
     try {
       return JSON.parse(userSettings.scratchpadTodos || '[]');
@@ -30,16 +55,9 @@ export default function QuickScratchpad() {
 
   const [newTodo, setNewTodo] = useState('');
 
-  // Save Note to Database
+  // Save Note Local State Handler
   const handleNoteChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const text = e.target.value;
-    // Debounced or direct update - React Query is super efficient at merging
-    updateProfile({
-      settings: {
-        ...userSettings,
-        scratchpadNote: text
-      }
-    });
+    setLocalNote(e.target.value);
   };
 
   // Add Todo Item
@@ -138,14 +156,14 @@ export default function QuickScratchpad() {
               className="flex flex-col h-full gap-2"
             >
               <textarea
-                value={noteText}
+                value={localNote}
                 onChange={handleNoteChange}
                 placeholder="Type anything here... Your notes sync globally and auto-save to the cloud instantly."
                 className="w-full min-h-[130px] p-4 rounded-2xl bg-white/[0.02] border border-white/5 text-sm text-white/80 placeholder-white/20 focus:outline-none focus:border-violet-500/40 focus:bg-white/[0.04] transition-all resize-none leading-relaxed"
               />
               <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-widest text-white/20 px-1">
                 <span>Synchronized with Supabase Cloud</span>
-                <span>{noteText.length} characters</span>
+                <span>{localNote.length} characters</span>
               </div>
             </motion.div>
           ) : (

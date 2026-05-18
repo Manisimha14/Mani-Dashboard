@@ -25,18 +25,20 @@ export default function FinanceWidget() {
   
   // Memoize transactions and budgetLimit directly from database-synced profile
   const transactions = useMemo<Transaction[]>(() => {
+    if (userSettings.financeTransactions === undefined || userSettings.financeTransactions === '') {
+      // Beautiful default transactions
+      return [
+        { id: '1', title: 'Consulting Income', amount: 1250, type: 'income', date: '2026-05-18', category: 'Salary' },
+        { id: '2', title: 'Tech Hardware Upgrade', amount: 350, type: 'expense', date: '2026-05-17', category: 'Work' },
+        { id: '3', title: 'S&P 500 Dividend', amount: 80, type: 'income', date: '2026-05-16', category: 'Investment' },
+        { id: '4', title: 'Premium Subscription', amount: 20, type: 'expense', date: '2026-05-15', category: 'Software' },
+      ];
+    }
     try {
-      const parsed = JSON.parse(userSettings.financeTransactions || '[]');
-      if (parsed.length > 0) return parsed;
-    } catch (e) { /* ignore */ }
-    
-    // Beautiful default transactions
-    return [
-      { id: '1', title: 'Consulting Income', amount: 1250, type: 'income', date: '2026-05-18', category: 'Salary' },
-      { id: '2', title: 'Tech Hardware Upgrade', amount: 350, type: 'expense', date: '2026-05-17', category: 'Work' },
-      { id: '3', title: 'S&P 500 Dividend', amount: 80, type: 'income', date: '2026-05-16', category: 'Investment' },
-      { id: '4', title: 'Premium Subscription', amount: 20, type: 'expense', date: '2026-05-15', category: 'Software' },
-    ];
+      return JSON.parse(userSettings.financeTransactions);
+    } catch (e) {
+      return [];
+    }
   }, [userSettings.financeTransactions]);
 
   const budgetLimit = userSettings.financeBudgetLimit ?? 1000;

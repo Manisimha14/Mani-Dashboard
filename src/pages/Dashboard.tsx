@@ -234,17 +234,17 @@ export default function Dashboard() {
         </TiltCard>
       </motion.div>
 
-      {/* Contextual Awareness */}
-      <motion.div variants={item}>
-        <Suspense fallback={null}>
-          <QuickScratchpad />
-        </Suspense>
-      </motion.div>
-
       {/* Real-time System Space Clock */}
       <motion.div variants={item}>
         <Suspense fallback={null}>
           <SpaceClock />
+        </Suspense>
+      </motion.div>
+
+      {/* Contextual Awareness */}
+      <motion.div variants={item}>
+        <Suspense fallback={null}>
+          <QuickScratchpad />
         </Suspense>
       </motion.div>
 
