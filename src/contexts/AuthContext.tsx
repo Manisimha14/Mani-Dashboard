@@ -52,9 +52,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     // Listen for auth state changes
+    let previousUser: User | null = null;
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
+      const currentUser = newSession?.user ?? null;
       setSession(newSession);
       setLoading(false);
+      
       if (newSession) {
         setAuthError(null); // clear error once successfully signed in
         if (newSession.provider_token) {
@@ -65,19 +68,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (event === 'SIGNED_OUT') {
         localStorage.removeItem('google_provider_token');
         localStorage.removeItem('google_provider_token_saved_at');
-        // Purge stores
-        useAppStore.getState().resetData();
-        useHealthStore.setState({
-          meals: [],
-          water: [],
-          workouts: [],
-          sleep: [],
-          weight: [],
-          steps: {},
-        });
-        localStorage.removeItem('dashboard-storage');
-        localStorage.removeItem('health-storage-v2');
+        
+        // Only clear stores and local storage if we actually had a previous authenticated user session.
+        // This stops the initial passive unauthenticated load from destroying local guest data.
+        if (previousUser) {
+          useAppStore.getState().resetData();
+          useHealthStore.setState({
+            meals: [],
+            water: [],
+            workouts: [],
+            sleep: [],
+            weight: [],
+            steps: {},
+          });
+          localStorage.removeItem('dashboard-storage');
+          localStorage.removeItem('health-storage-v2');
+        }
       }
+      previousUser = currentUser;
     });
 
     return () => subscription.unsubscribe();
