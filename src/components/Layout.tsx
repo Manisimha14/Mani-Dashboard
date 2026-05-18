@@ -1,8 +1,8 @@
 import React, { Suspense, lazy, useState, useCallback } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X } from 'lucide-react';
+import { X, LayoutDashboard, Timer, Heart, Target, Menu } from 'lucide-react';
 import Sidebar from './Sidebar';
 import TopHeader from './TopHeader';
 import InteractiveGrid from './InteractiveGrid';
@@ -29,8 +29,39 @@ const QuickLauncherModal = lazy(() => import('./QuickLauncherModal'));
 const CompanionTerminal = lazy(() => import('./analytics/CompanionTerminal'));
 const Confetti = lazy(() => import('react-confetti'));
 
+function MobileTabButton({ to, icon: Icon, label, isActive, onClick }: {
+  to: string;
+  icon: any;
+  label: string;
+  isActive: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex flex-col items-center justify-center py-1 relative flex-1 gap-1 transition-all duration-300 ${
+        isActive ? 'text-violet-400 font-bold scale-105' : 'text-white/40 hover:text-white/70'
+      }`}
+    >
+      <div className={`relative transition-all duration-300 ${isActive ? 'drop-shadow-[0_0_8px_rgba(139,92,246,0.6)]' : ''}`}>
+        <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
+      </div>
+      <span className="text-[9px] font-bold uppercase tracking-wider">{label}</span>
+      
+      {isActive && (
+        <motion.div
+          layoutId="mobile-nav-indicator"
+          className="absolute -bottom-1.5 w-1.5 h-1.5 rounded-full bg-violet-400 shadow-[0_0_8px_rgba(139,92,246,0.8)]"
+          transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+        />
+      )}
+    </button>
+  );
+}
+
 export default function Layout() {
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
   const [cmdOpen, setCmdOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [remModalOpen, setRemModalOpen] = useState(false);
@@ -208,6 +239,8 @@ export default function Layout() {
               scale: [1, 1.1, 1],
               opacity: [0.1, 0.3, 0.1],
             }}
+      
+
             transition={{ duration: 12, repeat: Infinity, ease: "easeInOut", delay: 5 }}
             className="ambient-blob w-[600px] h-[600px] blur-[150px] rounded-full fixed bottom-[-10%] left-[20%] bg-fuchsia-900 pointer-events-none z-0" 
           />
@@ -236,7 +269,12 @@ export default function Layout() {
  
       <main className="main-content flex flex-col min-h-screen relative z-10">
         <TopHeader onToggleSidebar={() => setSidebarOpen(true)} />
-        <div className="p-4 md:p-8 pt-4 flex-1">
+        <div 
+          className="p-4 md:p-8 pt-4 flex-1"
+          style={{
+            paddingBottom: isMobile ? 'calc(env(safe-area-inset-bottom, 0px) + 96px)' : '32px'
+          }}
+        >
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}
@@ -473,9 +511,54 @@ export default function Layout() {
         )}
       </AnimatePresence>
 
+      {/* Mobile Floating Bottom Navigation Bar */}
+      {isMobile && (
+        <div 
+          className="fixed left-1/2 -translate-x-1/2 w-[92%] max-w-md z-[48] rounded-2xl border border-white/10 bg-[#0f101c]/80 backdrop-blur-xl shadow-[0_12px_40px_rgba(0,0,0,0.6),0_0_20px_rgba(139,92,246,0.1)] px-4 py-2.5 flex items-center justify-around"
+          style={{
+            bottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)'
+          }}
+        >
+          <MobileTabButton 
+            to="/" 
+            icon={LayoutDashboard} 
+            label="Home" 
+            isActive={location.pathname === '/'} 
+            onClick={() => { play('click'); navigate('/'); }}
+          />
+          <MobileTabButton 
+            to="/focus" 
+            icon={Timer} 
+            label="Focus" 
+            isActive={location.pathname === '/focus'} 
+            onClick={() => { play('click'); navigate('/focus'); }}
+          />
+          <MobileTabButton 
+            to="/health" 
+            icon={Heart} 
+            label="Health" 
+            isActive={location.pathname === '/health'} 
+            onClick={() => { play('click'); navigate('/health'); }}
+          />
+          <MobileTabButton 
+            to="/trackers" 
+            icon={Target} 
+            label="Trackers" 
+            isActive={location.pathname === '/trackers'} 
+            onClick={() => { play('click'); navigate('/trackers'); }}
+          />
+          <button
+            onClick={() => { play('click'); setSidebarOpen(true); }}
+            className="flex flex-col items-center justify-center py-1 text-white/40 hover:text-white transition-all relative flex-1 gap-1"
+          >
+            <Menu size={20} strokeWidth={2} />
+            <span className="text-[9px] font-bold uppercase tracking-wider">More</span>
+          </button>
+        </div>
+      )}
+
       {/* Global Grain Texture - The 'Award Winning' secret sauce */}
       <div className="fixed inset-0 pointer-events-none z-[999] opacity-[0.08] mix-blend-overlay bg-noise" />
     </div>
   );
 }
-

@@ -76,31 +76,31 @@ export default function Reading() {
       {showConfetti && <Confetti width={windowSize.width} height={windowSize.height} recycle={false} numberOfPieces={300} />}
 
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Reading Tracker</h1>
-          <p className="text-white/40 mt-1 text-sm">Track your journey through {totalChapters} chapters</p>
+          <h1 className="text-2xl md:text-3xl font-black tracking-tight text-white uppercase">Reading Forge</h1>
+          <p className="text-white/40 text-xs md:text-sm mt-0.5">Track your journey through {totalChapters} chapters</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 self-start md:self-auto flex-wrap">
           {readingStreak.currentStreak > 0 && (
-            <div className={`glass-card px-3 py-2 flex items-center gap-2 border ${isTodayDone ? 'border-orange-500/30' : 'border-white/5 opacity-60'}`}>
-              <Flame size={14} className={isTodayDone ? 'text-orange-400' : 'text-white/20'} />
-              <span className={`text-sm font-semibold ${isTodayDone ? 'text-orange-400' : 'text-white/20'}`}>{readingStreak.currentStreak}d</span>
-              {isTodayDone && <div className="w-1 h-1 rounded-full bg-orange-400 animate-pulse" />}
+            <div className={`glass-card px-3 py-1.5 flex items-center gap-1.5 border ${isTodayDone ? 'border-orange-500/30' : 'border-white/5 opacity-60'}`}>
+              <Flame size={13} className={isTodayDone ? 'text-orange-400' : 'text-white/20'} />
+              <span className={`text-xs font-bold ${isTodayDone ? 'text-orange-400' : 'text-white/20'}`}>{readingStreak.currentStreak}d</span>
+              {isTodayDone && <div className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse" />}
             </div>
           )}
           <button
             onClick={() => setShowReader(true)}
-            className="btn-glow px-4 py-2 flex items-center gap-2 text-sm font-semibold"
+            className="btn-glow px-4 py-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider"
           >
-            <BookOpen size={14} />
+            <BookOpen size={13} />
             Read Book
           </button>
           <button
             onClick={handleOpenEdit}
-            className="btn-ghost px-3 py-2 flex items-center gap-2 text-sm"
+            className="btn-ghost px-3 py-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider hover:bg-white/5"
           >
-            <Edit3 size={14} />
+            <Edit3 size={13} />
             Edit Info
           </button>
         </div>

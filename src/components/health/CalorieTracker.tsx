@@ -324,14 +324,14 @@ export default function CalorieTracker({ today }: { today: string }) {
         </div>
 
         {/* Calorie bar */}
-        <div className="h-3 bg-white/5 rounded-full overflow-hidden mb-4">
+        <div className="h-3 bg-white/5 rounded-full overflow-hidden mb-4 relative shadow-[inset_0_1px_3px_rgba(0,0,0,0.4)]">
           <motion.div
-            className="h-full rounded-full bg-gradient-to-r from-rose-500 to-orange-400 relative overflow-hidden"
+            className="h-full rounded-full bg-gradient-to-r from-rose-500 via-pink-500 to-orange-400 relative overflow-hidden shadow-[0_0_12px_rgba(244,63,94,0.6)]"
             initial={{ width: 0 }}
             animate={{ width: `${Math.round(pct * 100)}%` }}
             transition={{ duration: 1.2, ease: 'circOut' }}
           >
-            <div className="absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white/30 to-transparent" />
+            <div className="absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-white/40 to-transparent" />
           </motion.div>
         </div>
 
@@ -347,9 +347,12 @@ export default function CalorieTracker({ today }: { today: string }) {
                 <span className="text-[10px] text-white/30 uppercase tracking-widest font-bold">{m.label}</span>
                 <span className="text-xs font-bold text-white/70">{m.val}<span className="text-white/30 text-[10px]">/{m.goal}{m.unit}</span></span>
               </div>
-              <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+              <div className="h-1.5 bg-white/5 rounded-full overflow-hidden relative">
                 <motion.div className="h-full rounded-full"
-                  style={{ background: m.color }}
+                  style={{ 
+                    background: `linear-gradient(90deg, ${m.color}88, ${m.color})`,
+                    boxShadow: `0 0 8px ${m.color}a0`
+                  }}
                   initial={{ width: 0 }}
                   animate={{ width: `${Math.min(m.val / m.goal, 1) * 100}%` }}
                   transition={{ duration: 1.2, ease: 'circOut' }}
@@ -440,7 +443,7 @@ export default function CalorieTracker({ today }: { today: string }) {
                   fat: p.fat,
                 });
               }}
-              className="glass-card p-3 flex flex-col items-center gap-1 bg-white/[0.01] hover:bg-white/[0.04] hover:border-rose-500/20 transition-all text-center group"
+              className="glass-card p-3 flex flex-col items-center gap-1 bg-white/[0.01] hover:bg-white/[0.03] hover:border-rose-500/30 hover:shadow-[0_0_15px_rgba(244,63,94,0.12)] transition-all text-center group rounded-2xl"
             >
               <span className="text-2xl group-hover:scale-110 transition-transform duration-200">{p.emoji}</span>
               <div className="text-xs font-bold text-white tracking-tight mt-1 truncate w-full">{p.name}</div>

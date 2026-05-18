@@ -200,16 +200,16 @@ export default function Trackers() {
     <div className="flex flex-col lg:flex-row gap-8 max-w-7xl mx-auto pb-20">
       {/* Left Column: List */}
       <div className="flex-1 space-y-8">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-black tracking-tight text-white">Trackers</h1>
-            <p className="text-white/40 text-sm mt-1">Track anything that matters to you.</p>
+            <h1 className="text-2xl md:text-3xl font-black tracking-tight text-white uppercase">Trackers</h1>
+            <p className="text-white/40 text-xs md:text-sm mt-0.5">Track anything that matters to you.</p>
           </div>
           <button 
             onClick={() => { setForm({ ...form, title: '' }); setStep(1); setShowCreate(true); }} 
-            className="btn-glow px-4 py-2.5 flex items-center gap-2 text-sm font-black uppercase tracking-widest"
+            className="btn-glow px-4 py-2.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider self-start md:self-auto"
           >
-            <Plus size={16} /> New Tracker
+            <Plus size={14} /> New Tracker
           </button>
         </div>
 

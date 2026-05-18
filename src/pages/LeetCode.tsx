@@ -139,35 +139,35 @@ export default function LeetCode() {
   return (
     <div className="max-w-6xl space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">LeetCode Tracker</h1>
-          <p className="text-white/40 mt-1 text-sm">Daily problem solving log</p>
+          <h1 className="text-2xl md:text-3xl font-black tracking-tight text-white uppercase">LeetCode Forge</h1>
+          <p className="text-white/40 text-xs md:text-sm mt-0.5">Daily problem solving log</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 self-start md:self-auto">
           {codingStreak.currentStreak > 0 && (
-            <div className="glass-card px-3 py-2 flex items-center gap-2">
-              <Flame size={14} className="text-orange-400" />
-              <span className="text-sm font-semibold text-orange-400">{codingStreak.currentStreak}d streak</span>
+            <div className="glass-card px-3 py-1.5 flex items-center gap-1.5">
+              <Flame size={13} className="text-orange-400" />
+              <span className="text-xs font-bold text-orange-400">{codingStreak.currentStreak}d streak</span>
             </div>
           )}
-          <button onClick={() => { setForm(f => ({ ...f, date: todayString() })); setShowForm(true); }} className="btn-glow px-4 py-2 flex items-center gap-2 text-sm">
-            <Plus size={16} /> Log Problem
+          <button onClick={() => { setForm(f => ({ ...f, date: todayString() })); setShowForm(true); }} className="btn-glow px-4 py-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider">
+            <Plus size={14} /> Log Problem
           </button>
         </div>
       </div>
 
       {/* Stats Row */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         {[
           { label: 'Total Solved', value: solved.length, color: 'text-white' },
           { label: 'Easy', value: easy, color: 'text-emerald-400' },
           { label: 'Medium', value: medium, color: 'text-yellow-400' },
           { label: 'Hard', value: hard, color: 'text-red-400' },
         ].map(s => (
-          <div key={s.label} className="glass-card p-5">
-            <div className={`text-3xl font-black ${s.color}`}>{s.value}</div>
-            <div className="text-xs text-white/40 mt-1">{s.label}</div>
+          <div key={s.label} className="glass-card p-4 md:p-5 flex flex-col justify-between">
+            <div className={`text-2xl md:text-3xl font-black ${s.color}`}>{s.value}</div>
+            <div className="text-[10px] md:text-xs text-white/40 uppercase tracking-widest font-bold mt-1">{s.label}</div>
           </div>
         ))}
       </div>
@@ -189,20 +189,20 @@ export default function LeetCode() {
           </div>
         </div>
 
-        <div className="grid grid-cols-7 sm:grid-cols-14 gap-3">
+        <div className="grid grid-cols-7 sm:grid-cols-14 gap-1.5 xs:gap-2 sm:gap-3">
           {last14Days.map((day) => (
             <motion.div
               key={day.date}
               whileHover={{ scale: 1.08, y: -2 }}
-              className={`p-3 rounded-xl flex flex-col items-center justify-between min-h-[70px] transition-all relative group/cell cursor-pointer ${
+              className={`p-1.5 sm:p-3 rounded-xl flex flex-col items-center justify-between min-h-[50px] sm:min-h-[70px] transition-all relative group/cell cursor-pointer ${
                 day.count === 0 ? 'bg-white/[0.02] border border-white/5 hover:bg-white/[0.04]' :
                 day.count === 1 ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400' :
                 day.count === 2 ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300' :
                 'bg-emerald-500/40 border border-emerald-500/60 text-emerald-100'
               }`}
             >
-              <span className="text-[9px] font-black uppercase tracking-wider text-white/40">{day.displayDate}</span>
-              <span className="text-lg font-black">{day.count}</span>
+              <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-wider text-white/40">{day.displayDate}</span>
+              <span className="text-sm sm:text-lg font-black">{day.count}</span>
               
               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1 rounded bg-[#0f101c] border border-white/10 text-[10px] text-white font-bold whitespace-nowrap opacity-0 pointer-events-none group-hover/cell:opacity-100 transition-opacity z-10 shadow-xl">
                 {day.count} {day.count === 1 ? 'problem' : 'problems'} solved
@@ -223,34 +223,36 @@ export default function LeetCode() {
       </DeferredOnVisible>
 
       {/* Filters */}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
         <div className="flex-1 relative">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
           <input
-            className="input-glass w-full pl-9 pr-3 py-2 text-sm"
+            className="input-glass w-full pl-9 pr-3 py-2 text-xs md:text-sm"
             placeholder="Search problems or topics... (N for new)"
             value={searchInput}
             onChange={e => setSearchInput(e.target.value)}
           />
         </div>
-        <select
-          className="input-glass px-3 py-2 text-sm"
-          value={filterDiff}
-          onChange={e => setFilterDiff(e.target.value as any)}
-        >
-          <option value="All">All Difficulties</option>
-          {DIFFICULTIES.map(d => <option key={d} value={d}>{d}</option>)}
-        </select>
-        <select
-          className="input-glass px-3 py-2 text-sm"
-          value={filterStatus}
-          onChange={e => setFilterStatus(e.target.value as any)}
-        >
-          <option value="All">All Status</option>
-          <option value="solved">Solved</option>
-          <option value="attempted">Attempted</option>
-          <option value="todo">Todo</option>
-        </select>
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+          <select
+            className="input-glass px-3 py-2 text-xs md:text-sm bg-transparent w-full sm:w-auto"
+            value={filterDiff}
+            onChange={e => setFilterDiff(e.target.value as any)}
+          >
+            <option className="bg-[#10111a] text-white" value="All">All Difficulties</option>
+            {DIFFICULTIES.map(d => <option className="bg-[#10111a] text-white" key={d} value={d}>{d}</option>)}
+          </select>
+          <select
+            className="input-glass px-3 py-2 text-xs md:text-sm bg-transparent w-full sm:w-auto"
+            value={filterStatus}
+            onChange={e => setFilterStatus(e.target.value as any)}
+          >
+            <option className="bg-[#10111a] text-white" value="All">All Status</option>
+            <option className="bg-[#10111a] text-white" value="solved">Solved</option>
+            <option className="bg-[#10111a] text-white" value="attempted">Attempted</option>
+            <option className="bg-[#10111a] text-white" value="todo">Todo</option>
+          </select>
+        </div>
       </div>
 
       {/* Problem List */}

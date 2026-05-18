@@ -276,8 +276,8 @@ export default function FocusMode() {
             className="w-full flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 px-4"
           >
             <div>
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">Forest Mode</h1>
-              <p className="text-white/40 mt-0.5 text-xs sm:text-sm font-medium">Deep work powered by Pomodoro</p>
+              <h1 className="text-2xl md:text-3xl font-black tracking-tight text-white uppercase">Focus Hub</h1>
+              <p className="text-white/40 text-xs md:text-sm mt-0.5">Deep work powered by Pomodoro</p>
             </div>
             <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
               {/* Premium Tab Switcher */}

@@ -2,15 +2,34 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppStore } from '../store/useAppStore';
 import { Search, Bell, Settings as SettingsIcon, User, Command, Menu } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useSoundFX } from '../hooks/useSoundFX';
 import ProfileOverlay from './ProfileOverlay';
 import NotificationCenter from './NotificationCenter';
+import { useIsMobile } from '../hooks/useIsMobile';
+
+const getPageTitle = (pathname: string) => {
+  switch (pathname) {
+    case '/': return 'Aura OS';
+    case '/focus': return 'Focus Hub';
+    case '/reading': return 'Learning Hub';
+    case '/leetcode': return 'Coding Forge';
+    case '/trackers': return 'Trackers';
+    case '/health': return 'Health Hub';
+    case '/ambient': return 'Flowscape';
+    case '/analytics': return 'Aura Analytics';
+    case '/achievements': return 'Achievements';
+    case '/settings': return 'Settings';
+    default: return 'Aura OS';
+  }
+};
 
 export default function TopHeader({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
   const { userSettings, notifications } = useAppStore();
   const navigate = useNavigate();
+  const location = useLocation();
   const { play } = useSoundFX();
+  const isMobile = useIsMobile();
   const [showProfile, setShowProfile] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   
@@ -32,6 +51,75 @@ export default function TopHeader({ onToggleSidebar }: { onToggleSidebar?: () =>
     // Trigger the Ctrl+K event manually
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }));
   };
+
+  if (isMobile) {
+    return (
+      <>
+        <header 
+          className="flex items-center justify-between px-4 sticky top-0 z-40 backdrop-blur-xl bg-[#0f101c]/45 border-b border-white/5"
+          style={{
+            paddingTop: 'env(safe-area-inset-top, 0px)',
+            height: 'calc(env(safe-area-inset-top, 0px) + 64px)'
+          }}
+        >
+          {/* Left: Profile button */}
+          <motion.button 
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => { play('click'); setShowProfile(true); }}
+            className="flex items-center justify-center w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 p-[1px] shadow-glow-sm"
+          >
+            <div className="w-full h-full rounded-full bg-[#0f101c] flex items-center justify-center overflow-hidden">
+              <User size={16} className="text-white" />
+            </div>
+          </motion.button>
+
+          {/* Center: Page Title */}
+          <div className="flex flex-col items-center text-center">
+            <motion.h1
+              key={location.pathname}
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-white font-black text-xs uppercase tracking-widest"
+            >
+              {getPageTitle(location.pathname)}
+            </motion.h1>
+            <div className="flex items-center gap-1 mt-0.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-[7px] text-white/30 uppercase tracking-[0.2em] font-extrabold">Optimized</span>
+            </div>
+          </div>
+
+          {/* Right: Search & Bell */}
+          <div className="flex items-center gap-1">
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={handleSearchClick}
+              className="p-2 rounded-xl text-white/40 hover:text-white transition-all"
+            >
+              <Search size={18} strokeWidth={2} />
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={() => { play('click'); setShowNotifications(true); }}
+              className="p-2 rounded-xl text-white/40 hover:text-white transition-all relative"
+            >
+              <Bell size={18} strokeWidth={2} />
+              {unreadCount > 0 && (
+                <span className="absolute top-2 right-2 w-2 h-2 bg-violet-500 rounded-full border-2 border-[#0f101c] shadow-[0_0_12px_rgba(139,92,246,0.8)] animate-pulse" />
+              )}
+            </motion.button>
+          </div>
+        </header>
+
+        <ProfileOverlay open={showProfile} onClose={() => setShowProfile(false)} />
+        <NotificationCenter open={showNotifications} onClose={() => setShowNotifications(false)} />
+      </>
+    );
+  }
+
 
   return (
     <>
