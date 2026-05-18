@@ -93,14 +93,6 @@ export async function fetchTodayGoogleFitData(): Promise<GoogleFitData> {
       if (activeData !== undefined) activeMinutes = activeData;
     }
 
-    // If API succeeds but today has 0 recorded steps, generate a high-fidelity dynamic estimation
-    if (steps === 0) {
-      const hour = new Date().getHours();
-      steps = Math.round(4200 + (hour * 260) + Math.random() * 1200);
-      calories = Math.round(140 + (steps * 0.04));
-      activeMinutes = Math.round(15 + (steps / 150));
-    }
-
     return { steps, calories, activeMinutes };
   } catch (error) {
     console.warn('Google Fit API call failed, falling back to dynamic simulated sync:', error);
