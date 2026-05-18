@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppStore } from '../store/useAppStore';
 import { Zap, BookOpen, Code2, Timer, ChevronRight, Check } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { useProfile, useUpdateProfile } from '../hooks/useProfileQuery';
+import { useSetBookMeta } from '../hooks/useBookQuery';
 
 const STEPS = [
   {
@@ -45,19 +48,39 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
   const [bookAuthor, setBookAuthor] = useState('');
   const { updateUserSettings, setBookMeta } = useAppStore();
 
+  const { user } = useAuth();
+  const { data: profile } = useProfile();
+  const { mutate: updateProfile } = useUpdateProfile();
+  const { mutate: setBookMetaMutate } = useSetBookMeta();
+
   const currentStep = STEPS[step];
   const isLast = step === STEPS.length - 1;
 
   const handleNext = () => {
     if (step === 1 && name) {
       updateUserSettings({ name });
+      if (user && profile) {
+        updateProfile({ settings: { ...profile.settings, name } });
+      }
     }
     if (step === 2) {
-      if (bookTitle) setBookMeta({ title: bookTitle });
-      if (bookAuthor) setBookMeta({ author: bookAuthor });
+      const meta: any = {};
+      if (bookTitle) meta.title = bookTitle;
+      if (bookAuthor) meta.author = bookAuthor;
+      
+      if (Object.keys(meta).length > 0) {
+        if (user) {
+          setBookMetaMutate(meta);
+        } else {
+          setBookMeta(meta);
+        }
+      }
     }
     if (isLast) {
       updateUserSettings({ onboardingComplete: true });
+      if (user && profile) {
+        updateProfile({ settings: { ...profile.settings, onboardingComplete: true } });
+      }
       onComplete();
     } else {
       setStep(s => s + 1);
