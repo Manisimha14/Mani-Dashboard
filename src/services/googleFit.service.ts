@@ -68,7 +68,14 @@ export async function fetchTodayGoogleFitData(): Promise<GoogleFitData> {
     });
 
     if (!response.ok) {
-      throw new Error(`Fit API error: ${response.status}`);
+      let errorText = '';
+      try {
+        const errorJson = await response.json();
+        errorText = errorJson?.error?.message || JSON.stringify(errorJson);
+      } catch {
+        errorText = await response.text();
+      }
+      throw new Error(`Fit API error ${response.status}: ${errorText}`);
     }
 
     const data = await response.json();

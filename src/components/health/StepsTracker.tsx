@@ -74,9 +74,7 @@ export default function StepsTracker({ today }: { today: string }) {
       console.error('Failed to fetch Google Fit data:', err);
       setTimeout(() => {
         setIsSyncingFit(false);
-        setSyncError(
-          'Google Fit API Error: 403 Forbidden. This means your current session is not authorized to read fitness data. Please Sign Out of the dashboard (using the sidebar button) and Sign In with Google again to grant fitness permissions!'
-        );
+        setSyncError(err.message || 'Unknown Google Fit API error occurred.');
         play('click');
       }, 1200);
     }
