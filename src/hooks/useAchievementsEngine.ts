@@ -83,21 +83,7 @@ export function useAchievementsEngine() {
           if (newlyUnlocked && !celebratedRefs.current.has(ach.id)) {
             celebratedRefs.current.add(ach.id);
             play('achievement');
-            // Fire premium custom-styled toast notification
-            toast.success(`Mission Cleared: ${ach.title}\n${ach.description}`, {
-              duration: 4500,
-              icon: ach.icon,
-              style: {
-                background: 'rgba(15, 16, 28, 0.95)',
-                border: '1px solid rgba(245, 158, 11, 0.3)',
-                color: 'white',
-                backdropFilter: 'blur(20px)',
-                borderRadius: '12px',
-                fontSize: '12px',
-                fontWeight: 'bold',
-                boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
-              }
-            });
+// Silent unlock - Claimable on achievements page
           }
         } catch (err) {
           console.error(`Failed to update achievement ${ach.id}:`, err);

@@ -271,7 +271,7 @@ export default function Layout() {
         <div 
           className="p-4 md:p-8 pt-4 flex-1"
           style={{
-            paddingBottom: isMobile ? 'calc(env(safe-area-inset-bottom, 0px) + 96px)' : '32px'
+            paddingBottom: isMobile ? 'calc(env(safe-area-inset-bottom, 0px) + 24px)' : '32px'
           }}
         >
           <AnimatePresence mode={isMobile ? undefined : "wait"}>
@@ -416,59 +416,7 @@ export default function Layout() {
         )}
       </AnimatePresence>
 
-      {/* Mobile Floating Bottom Navigation Bar (Dribbble Symmetrical Layout) */}
-      {isMobile && (
-        <div 
-          className="fixed left-1/2 -translate-x-1/2 w-[92%] max-w-sm z-[48] rounded-full border border-white/10 bg-black/60 backdrop-blur-xl shadow-[0_15px_45px_rgba(0,0,0,0.85),0_0_30px_rgba(139,92,246,0.08)] px-4 py-1.5 flex items-center justify-between animate-fade-in"
-          style={{
-            bottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)'
-          }}
-        >
-          <MobileTabButton 
-            to="/" 
-            icon={LayoutDashboard} 
-            label="Home" 
-            isActive={location.pathname === '/'} 
-            onClick={() => { play('click'); navigate('/'); }}
-          />
-          <MobileTabButton 
-            to="/focus" 
-            icon={Timer} 
-            label="Focus" 
-            isActive={location.pathname === '/focus'} 
-            onClick={() => { play('click'); navigate('/focus'); }}
-          />
-          
-          {/* Symmetrical Center Circular Action Button */}
-          <div className="flex-1 flex items-center justify-center relative -top-3">
-            <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => { play('success'); setCmdOpen(true); }}
-              className="w-12 h-12 rounded-full bg-gradient-to-tr from-violet-500 to-fuchsia-600 flex items-center justify-center text-white shadow-[0_0_15px_rgba(139,92,246,0.6)] cursor-pointer"
-            >
-              <Plus size={22} strokeWidth={3} />
-            </motion.button>
-          </div>
-
-          <MobileTabButton 
-            to="/health" 
-            icon={Heart} 
-            label="Health" 
-            isActive={location.pathname === '/health'} 
-            onClick={() => { play('click'); navigate('/health'); }}
-          />
-          <MobileTabButton 
-            to="/trackers" 
-            icon={Target} 
-            label="Trackers" 
-            isActive={location.pathname === '/trackers'} 
-            onClick={() => { play('click'); navigate('/trackers'); }}
-          />
-        </div>
-      )}
-
-      {/* Global Grain Texture - The 'Award Winning' secret sauce */}
+            {/* Global Grain Texture - The 'Award Winning' secret sauce */}
       <div className="fixed inset-0 pointer-events-none z-[999] opacity-[0.08] mix-blend-overlay bg-noise" />
     </div>
   );

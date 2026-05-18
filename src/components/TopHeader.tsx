@@ -62,16 +62,14 @@ export default function TopHeader({ onToggleSidebar }: { onToggleSidebar?: () =>
             height: 'calc(env(safe-area-inset-top, 0px) + 64px)'
           }}
         >
-          {/* Left: Profile button */}
+          {/* Left: Three-line Hamburger Menu Toggle button */}
           <motion.button 
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            onClick={() => { play('click'); setShowProfile(true); }}
-            className="flex items-center justify-center w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 p-[1px] shadow-glow-sm"
+            onClick={() => { play('click'); onToggleSidebar?.(); }}
+            className="p-2 rounded-xl bg-white/5 border border-white/10 text-white/70 hover:text-white transition-colors flex-shrink-0"
           >
-            <div className="w-full h-full rounded-full bg-[#0f101c] flex items-center justify-center overflow-hidden">
-              <User size={16} className="text-white" />
-            </div>
+            <Menu size={18} />
           </motion.button>
 
           {/* Center: Page Title */}
@@ -90,7 +88,7 @@ export default function TopHeader({ onToggleSidebar }: { onToggleSidebar?: () =>
             </div>
           </div>
 
-          {/* Right: Search & Bell */}
+          {/* Right: Search, Bell & Profile */}
           <div className="flex items-center gap-1">
             <motion.button
               whileHover={{ scale: 1.1 }}
@@ -104,12 +102,22 @@ export default function TopHeader({ onToggleSidebar }: { onToggleSidebar?: () =>
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
               onClick={() => { play('click'); setShowNotifications(true); }}
-              className="p-2 rounded-xl text-white/40 hover:text-white transition-all relative"
+              className="p-2 rounded-xl text-white/40 hover:text-white transition-all relative mr-1"
             >
               <Bell size={18} strokeWidth={2} />
               {unreadCount > 0 && (
                 <span className="absolute top-2 right-2 w-2 h-2 bg-violet-500 rounded-full border-2 border-[#0f101c] shadow-[0_0_12px_rgba(139,92,246,0.8)] animate-pulse" />
               )}
+            </motion.button>
+            <motion.button 
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => { play('click'); setShowProfile(true); }}
+              className="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 p-[1px] shadow-glow-sm"
+            >
+              <div className="w-full h-full rounded-full bg-[#0f101c] flex items-center justify-center overflow-hidden">
+                <User size={14} className="text-white" />
+              </div>
             </motion.button>
           </div>
         </header>
