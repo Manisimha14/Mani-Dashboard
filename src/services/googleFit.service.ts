@@ -42,6 +42,12 @@ export async function fetchTodayGoogleFitData(): Promise<GoogleFitData> {
     aggregateBy: [
       {
         dataTypeName: 'com.google.step_count.delta'
+      },
+      {
+        dataTypeName: 'com.google.calories.expended'
+      },
+      {
+        dataTypeName: 'com.google.active_minutes'
       }
     ],
     bucketByTime: { durationMillis: 86400000 },
