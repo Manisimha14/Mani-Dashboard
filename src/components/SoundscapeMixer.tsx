@@ -84,7 +84,7 @@ export default function SoundscapeMixer() {
   }, []);
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-4">
+    <div className="fixed md:bottom-6 md:right-6 bottom-24 right-4 z-50 flex flex-col items-end gap-4">
       <AnimatePresence>
         {isOpen && (
           <motion.div

@@ -181,8 +181,7 @@ export default function Layout() {
 
   const dailyActivity = useAppStore(s => s.dailyActivity);
   const userSettings = useAppStore(s => s.userSettings);
-  const celebratingAchievement = useAppStore(s => s.celebratingAchievement);
-  const setCelebratingAchievement = (ach: any) => useAppStore.setState({ celebratingAchievement: ach });
+
 
   const todayActivity = dailyActivity.find(a => a.date === todayString());
   const prodScore = getProductivityScore(
@@ -275,24 +274,26 @@ export default function Layout() {
             paddingBottom: isMobile ? 'calc(env(safe-area-inset-bottom, 0px) + 96px)' : '32px'
           }}
         >
-          <AnimatePresence mode="wait">
+          <AnimatePresence mode={isMobile ? undefined : "wait"}>
             <motion.div
               key={location.pathname}
               initial={{ 
                 opacity: 0, 
-                y: isMobile ? 8 : 12 
+                y: isMobile ? 0 : 12 
               }}
               animate={{ 
                 opacity: 1, 
                 y: 0 
               }}
-              exit={{ 
+              exit={isMobile ? {
+                opacity: 0
+              } : { 
                 opacity: 0, 
-                y: isMobile ? -8 : -12 
+                y: -12 
               }}
               transition={{ 
-                duration: isMobile ? 0.15 : 0.22, 
-                ease: [0.22, 1, 0.36, 1] 
+                duration: isMobile ? 0.08 : 0.22, 
+                ease: "easeOut"
               }}
             >
               <Outlet />
@@ -370,103 +371,7 @@ export default function Layout() {
         <ProductivityPet />
       </Suspense>
 
-      {/* Confetti Celebration */}
-      {celebratingAchievement && (
-        <Suspense fallback={null}>
-          <Confetti
-            width={window.innerWidth}
-            height={window.innerHeight}
-            recycle={false}
-            numberOfPieces={400}
-          />
-        </Suspense>
-      )}
 
-      {/* Achievement Unlocked Immersive Dialog */}
-      <AnimatePresence>
-        {celebratingAchievement && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-2xl"
-          >
-            <motion.div
-              initial={{ scale: 0.9, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
-              transition={{ type: 'spring', damping: 15 }}
-              className="w-full max-w-md glass-card p-8 border border-amber-500/30 text-center relative overflow-hidden shadow-[0_0_50px_rgba(245,158,11,0.2)] bg-gradient-to-b from-amber-950/20 via-black/90 to-black/95"
-            >
-              {/* Decorative light beams */}
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(245,158,11,0.15),transparent_60%)]" />
-              
-              {/* Rotating background light shield */}
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ duration: 15, repeat: Infinity, ease: 'linear' }}
-                className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 border-2 border-dashed border-amber-500/10 rounded-full pointer-events-none"
-              />
-
-              <div className="relative space-y-6">
-                {/* Big Glowing Trophy / Icon */}
-                <motion.div
-                  initial={{ rotate: -15, scale: 0.5 }}
-                  animate={{ rotate: [0, -10, 10, 0], scale: 1 }}
-                  transition={{ duration: 0.8, type: 'spring' }}
-                  className="text-7xl drop-shadow-[0_0_35px_rgba(245,158,11,0.8)] filter"
-                >
-                  {celebratingAchievement.icon}
-                </motion.div>
-
-                <div>
-                  <motion.div
-                    initial={{ letterSpacing: '0.1em', opacity: 0 }}
-                    animate={{ letterSpacing: '0.3em', opacity: 1 }}
-                    transition={{ delay: 0.3 }}
-                    className="text-[10px] font-black uppercase text-amber-400 tracking-[0.3em]"
-                  >
-                    🏆 ACHIEVEMENT UNLOCKED 🏆
-                  </motion.div>
-                  <h2 className="text-2xl font-black italic uppercase tracking-tight text-white mt-1">
-                    {celebratingAchievement.title}
-                  </h2>
-                </div>
-
-                {/* Rarity Pill */}
-                <div className="flex justify-center">
-                  <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-[0.2em] bg-amber-500/20 border border-amber-500/40 text-amber-400">
-                    {celebratingAchievement.rarity}
-                  </span>
-                </div>
-
-                {/* Description */}
-                <p className="text-sm text-white/70 max-w-xs mx-auto leading-relaxed">
-                  {celebratingAchievement.description}
-                </p>
-
-                {/* Nice meta note */}
-                <div className="text-[10px] text-white/30 uppercase tracking-widest font-bold">
-                  Unlocked on {celebratingAchievement.unlockedAt}
-                </div>
-
-                {/* Action CTA Button */}
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => {
-                    play('click');
-                    setCelebratingAchievement(null);
-                  }}
-                  className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-black font-black uppercase tracking-widest text-xs hover:from-amber-400 hover:to-orange-400 shadow-[0_0_20px_rgba(245,158,11,0.4)] active:scale-98 transition-all"
-                >
-                  CLAIM REWARD
-                </motion.button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* PWA Install Banner */}
       <AnimatePresence>

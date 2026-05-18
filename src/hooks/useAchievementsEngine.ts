@@ -6,6 +6,7 @@ import { useFocusSessions } from './useFocusQuery';
 import { useProfile } from './useProfileQuery';
 import { useAchievements, useUpdateAchievement, achievementKeys } from './useAchievementQuery';
 import { useAppStore } from '../store/useAppStore';
+import { toast } from 'react-hot-toast';
 import { useSoundFX } from './useSoundFX';
 
 export function useAchievementsEngine() {
@@ -82,8 +83,21 @@ export function useAchievementsEngine() {
           if (newlyUnlocked && !celebratedRefs.current.has(ach.id)) {
             celebratedRefs.current.add(ach.id);
             play('achievement');
-            // Set the store state to trigger global UI celebration modal
-            useAppStore.setState({ celebratingAchievement: { ...ach, unlocked: true, unlockedAt: new Date().toISOString().split('T')[0], progress } });
+            // Fire premium custom-styled toast notification
+            toast.success(`Mission Cleared: ${ach.title}\n${ach.description}`, {
+              duration: 4500,
+              icon: ach.icon,
+              style: {
+                background: 'rgba(15, 16, 28, 0.95)',
+                border: '1px solid rgba(245, 158, 11, 0.3)',
+                color: 'white',
+                backdropFilter: 'blur(20px)',
+                borderRadius: '12px',
+                fontSize: '12px',
+                fontWeight: 'bold',
+                boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+              }
+            });
           }
         } catch (err) {
           console.error(`Failed to update achievement ${ach.id}:`, err);
