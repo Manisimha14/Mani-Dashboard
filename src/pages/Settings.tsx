@@ -13,6 +13,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { migrateLocalStorageToSupabase, isMigrationDone, markMigrationComplete } from '../lib/migration';
 import { useProfile, useUpdateProfile } from '../hooks/useProfileQuery';
 import { useHealthStore } from '../store/useHealthStore';
+import { getAppVersion } from '../lib/appVersion';
 
 type SettingsTab = 'general' | 'appearance' | 'controls' | 'notifications' | 'privacy' | 'labs';
 
@@ -135,7 +136,7 @@ export default function Settings() {
       <div className="w-full md:w-64 flex flex-col gap-1">
         <div className="mb-6 px-2">
           <h1 className="text-2xl font-black tracking-tighter text-white">SYSTEM</h1>
-          <div className="text-[10px] font-black text-white/20 uppercase tracking-[0.3em]">Antigravity Config v1.2</div>
+          <div className="text-[10px] font-black text-white/20 uppercase tracking-[0.3em]">Antigravity Config {getAppVersion()}</div>
         </div>
 
         <NavButton 

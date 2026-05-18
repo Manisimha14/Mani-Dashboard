@@ -550,11 +550,9 @@ export default function Analytics() {
           {/* Time Series trends + Goal forecasts */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2">
-              <DeferredOnVisible minHeight={420} fallback={<div className="glass-card h-[420px]" />}>
-                <Suspense fallback={<div className="glass-card h-[420px]" />}>
-                  <TrendAnalytics activityData={activityData} />
-                </Suspense>
-              </DeferredOnVisible>
+              <Suspense fallback={<div className="glass-card h-[420px]" />}>
+                <TrendAnalytics activityData={activityData} />
+              </Suspense>
             </div>
             <GoalTracking
               stats={stats}

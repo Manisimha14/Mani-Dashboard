@@ -17,6 +17,7 @@ import { useRealtimeSync } from '../hooks/useRealtimeSync';
 import { useAchievementsEngine } from '../hooks/useAchievementsEngine';
 import { useExtensionSync } from '../hooks/useExtensionSync';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { getAppVersion } from '../lib/appVersion';
 
 const CommandPalette = lazy(() => import('./CommandPalette'));
 const WeatherOverlay = lazy(() => import('./WeatherOverlay'));
@@ -91,7 +92,6 @@ export default function Layout() {
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
-    console.log(`PWA install prompt outcome: ${outcome}`);
     setDeferredPrompt(null);
     setShowPWAInstall(false);
   };
@@ -450,6 +450,7 @@ export default function Layout() {
                   ? 'Tap the Share button 📤 then "Add to Home Screen" ➕' 
                   : 'Install our App on your phone for a premium, native-grade experience!'}
               </p>
+              <p className="text-[10px] text-white/30 font-mono mt-1">Version {getAppVersion()}</p>
             </div>
 
             <div className="flex items-center gap-2 flex-shrink-0">
