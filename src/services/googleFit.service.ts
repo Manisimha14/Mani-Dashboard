@@ -10,12 +10,17 @@ export async function fetchTodayGoogleFitData(): Promise<GoogleFitData> {
   let token: string | undefined;
 
   try {
-    const { data, error } = await supabase.auth.refreshSession();
-    if (error) throw error;
-    token = data.session?.provider_token ?? undefined;
-    console.log('Provider token retrieved:', token);
+    token = localStorage.getItem('google_provider_token') || undefined;
+    if (!token) {
+      const { data: { session } } = await supabase.auth.getSession();
+      token = session?.provider_token ?? undefined;
+      if (token) {
+        localStorage.setItem('google_provider_token', token);
+      }
+    }
+    console.log('Provider token retrieved:', token ? 'exists' : 'undefined');
   } catch (err) {
-    console.error('Could not retrieve provider token from Supabase:', err);
+    console.error('Could not retrieve provider token from Supabase/localStorage:', err);
   }
 
   // If no token exists, let's return realistic dynamic simulated data that varies on every sync click!

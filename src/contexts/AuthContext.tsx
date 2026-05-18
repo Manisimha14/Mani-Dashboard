@@ -44,6 +44,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Fetch initial session
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
+      if (data.session?.provider_token) {
+        localStorage.setItem('google_provider_token', data.session.provider_token);
+      }
       setLoading(false);
     });
 
@@ -53,8 +56,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
       if (newSession) {
         setAuthError(null); // clear error once successfully signed in
+        if (newSession.provider_token) {
+          localStorage.setItem('google_provider_token', newSession.provider_token);
+        }
       }
       if (event === 'SIGNED_OUT') {
+        localStorage.removeItem('google_provider_token');
         // Purge stores
         useAppStore.getState().resetData();
         useHealthStore.setState({
