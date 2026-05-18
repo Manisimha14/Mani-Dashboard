@@ -25,6 +25,7 @@ import MissionControl from '../components/MissionControl';
 import QuickLauncher from '../components/QuickLauncher';
 import { useMemo } from 'react';
 import DeferredOnVisible from '../components/DeferredOnVisible';
+import FinanceWidget from '../components/dashboard/FinanceWidget';
 
 const ProductivityInsights = lazy(() => import('../components/ProductivityInsights'));
 const ContextualAlerts = lazy(() => import('../components/ContextualAlerts'));
@@ -455,8 +456,8 @@ export default function Dashboard() {
 
       {/* Two-column: Chart + Next Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        {/* Activity Chart */}
-        <motion.div variants={item} className="col-span-1 lg:col-span-3">
+        {/* Activity Chart + Finance Console */}
+        <motion.div variants={item} className="col-span-1 lg:col-span-3 flex flex-col gap-6">
           <DeferredOnVisible
             minHeight={252}
             fallback={<div className="glass-card p-5 h-[252px]" />}
@@ -465,6 +466,7 @@ export default function Dashboard() {
               <DashboardActivityChart data={last7} />
             </Suspense>
           </DeferredOnVisible>
+          <FinanceWidget />
         </motion.div>
 
         {/* Right column */}
