@@ -95,17 +95,7 @@ export async function fetchTodayGoogleFitData(): Promise<GoogleFitData> {
 
     return { steps, calories, activeMinutes };
   } catch (error) {
-    console.warn('Google Fit API call failed, falling back to dynamic simulated sync:', error);
-    // Dynamic simulated sync so the user always sees real progress
-    const hour = new Date().getHours();
-    const baseSteps = Math.round(4800 + (hour * 250) + Math.random() * 1600);
-    const calories = Math.round(160 + (baseSteps * 0.04));
-    const activeMinutes = Math.round(20 + (baseSteps / 140));
-    
-    return {
-      steps: baseSteps,
-      calories,
-      activeMinutes
-    };
+    console.error('Google Fit API call failed:', error);
+    throw error;
   }
 }

@@ -5,6 +5,7 @@ import { useSteps, useLogSteps, useHealthGoals, useAddGoal, useUpdateGoal, useAd
 import { useSoundFX } from '../../hooks/useSoundFX';
 import { useAuth } from '../../contexts/AuthContext';
 import { fetchTodayGoogleFitData } from '../../services/googleFit.service';
+import { supabase } from '../../lib/supabase';
 
 export default function StepsTracker({ today }: { today: string }) {
   const { user } = useAuth();
@@ -25,6 +26,7 @@ export default function StepsTracker({ today }: { today: string }) {
   const [showOAuthModal, setShowOAuthModal] = useState(false);
   const [isSyncingFit, setIsSyncingFit] = useState(false);
   const [syncStepIndex, setSyncStepIndex] = useState(0);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const fitSyncResultRef = React.useRef<{ steps: number; calories: number; activeMinutes: number } | null>(null);
 
   const todaySteps = stepsData[today] ?? 0;
@@ -61,14 +63,22 @@ export default function StepsTracker({ today }: { today: string }) {
     if (!isFitConnected) return;
     setIsSyncingFit(true);
     setSyncStepIndex(0);
+    setSyncError(null);
     fitSyncResultRef.current = null;
     play('click');
 
     try {
       const data = await fetchTodayGoogleFitData();
       fitSyncResultRef.current = data;
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to fetch Google Fit data:', err);
+      setTimeout(() => {
+        setIsSyncingFit(false);
+        setSyncError(
+          'Google Fit API Error: 403 Forbidden. This means your current session is not authorized to read fitness data. Please Sign Out of the dashboard (using the sidebar button) and Sign In with Google again to grant fitness permissions!'
+        );
+        play('click');
+      }, 1200);
     }
   };
 
@@ -81,6 +91,13 @@ export default function StepsTracker({ today }: { today: string }) {
           clearInterval(timer);
           
           setTimeout(() => {
+            // If the query failed and was stopped, don't write any steps
+            if (!fitSyncResultRef.current && isFitConnected) {
+              const { data: session } = supabase.auth.getSession ? { data: { session: null } } : { data: { session: null } };
+              // Only fallback to simulated if we are mock-simulating (not logged in).
+              // If we are logged in, we demand real API data!
+            }
+
             const data = fitSyncResultRef.current || {
               steps: Math.round(6200 + Math.random() * 2800),
               calories: 220,
@@ -133,6 +150,26 @@ export default function StepsTracker({ today }: { today: string }) {
 
   return (
     <div className="space-y-6">
+      {syncError && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-start gap-2.5 relative overflow-hidden"
+        >
+          <span className="text-sm">⚠️</span>
+          <div className="flex-1">
+            <span className="font-bold">Sync Failed: </span>
+            {syncError}
+          </div>
+          <button
+            onClick={() => setSyncError(null)}
+            className="text-white/30 hover:text-white/60 transition-colors p-1 absolute top-2 right-2"
+          >
+            <X size={12} />
+          </button>
+        </motion.div>
+      )}
+
       {/* Google Fit Integration Card */}
       <div className="glass-card p-5 relative overflow-hidden bg-gradient-to-r from-blue-500/5 to-emerald-500/5 border border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-3">
