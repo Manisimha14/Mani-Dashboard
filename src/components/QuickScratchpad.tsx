@@ -4,6 +4,7 @@ import { useAppStore } from '../store/useAppStore';
 import { useUpdateProfile } from '../hooks/useProfileQuery';
 import { useSoundFX } from '../hooks/useSoundFX';
 import { Plus, Trash2, StickyNote, ListTodo, CheckCircle } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 interface QuickTodo {
   id: string;
@@ -95,14 +96,48 @@ export default function QuickScratchpad() {
     });
   };
 
-  // Delete Todo Item
+  // Delete Todo Item with Premium Undo Safeguard
   const deleteTodoItem = (id: string) => {
     play('click');
+    const target = todos.find(t => t.id === id);
+    if (!target) return;
+
     const updated = todos.filter(todo => todo.id !== id);
     updateProfile({
       settings: {
         ...userSettings,
         scratchpadTodos: JSON.stringify(updated)
+      }
+    });
+
+    toast((t) => (
+      <div className="flex items-center gap-4 text-xs font-medium">
+        <span className="text-white/80 font-bold">Task deleted</span>
+        <button
+          onClick={() => {
+            updateProfile({
+              settings: {
+                ...userSettings,
+                scratchpadTodos: JSON.stringify(todos)
+              }
+            });
+            play('success');
+            toast.dismiss(t.id);
+          }}
+          className="ml-auto bg-violet-600 hover:bg-violet-700 px-3 py-1 rounded-xl text-[10px] text-white uppercase font-black tracking-widest transition-all"
+        >
+          Undo
+        </button>
+      </div>
+    ), {
+      duration: 5000,
+      position: 'bottom-center',
+      style: {
+        background: '#131524',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        borderRadius: '16px',
+        padding: '8px 16px',
+        boxShadow: '0 12px 32px rgba(0,0,0,0.6)'
       }
     });
   };

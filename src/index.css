@@ -24,6 +24,12 @@
     box-sizing: border-box;
   }
 
+  *:focus-visible {
+    outline: 2px solid hsl(258, 80%, 57%) !important;
+    outline-offset: 2px !important;
+    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.2) !important;
+  }
+
   html {
     scroll-behavior: smooth;
   }

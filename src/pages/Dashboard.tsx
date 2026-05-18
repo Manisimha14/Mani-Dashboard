@@ -18,7 +18,6 @@ import {
 import { formatDuration, todayString, getProductivityScore } from '../lib/utils';
 import { format, parseISO } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
-import { PRODUCTIVITY_QUOTES } from '../lib/data';
 import TiltCard from '../components/TiltCard';
 import Skeleton, { StatCardSkeleton, InsightSkeleton } from '../components/Skeleton';
 import MissionControl from '../components/MissionControl';
@@ -121,10 +120,41 @@ export default function Dashboard() {
   const nextChapter = book.chapters.find(c => !c.completed);
   const recentAchievements = useMemo(() => achievements.filter(a => a.unlocked).slice(0, 3), [achievements]);
   
-  const rawQuote = PRODUCTIVITY_QUOTES[new Date().getDay() % PRODUCTIVITY_QUOTES.length];
-  const [quoteText, quoteAuthor] = rawQuote.includes('—') 
-    ? rawQuote.split('—').map(s => s.trim()) 
-    : [rawQuote, 'Unknown'];
+  const dynamicInsight = useMemo(() => {
+    const focusTotal = focusSessions.filter(s => s.completed).length;
+    const problemsTotal = problems.filter(p => p.completed).length;
+    const chaptersTotal = book.chapters.filter(c => c.completed).length;
+
+    // Premium Telemetry Heuristics
+    if (problemsTotal > 0 && focusTotal === 0) {
+      return {
+        title: "Optimize Focus Sprints",
+        desc: `You have completed ${problemsTotal} coding tasks but no structured focus sprints. Try pairing code with Forest sessions to improve depth.`
+      };
+    }
+    if (focusMinutesToday > 0 && todayHealth.totalWaterMl < 500) {
+      return {
+        title: "Cognitive Hydration Warning",
+        desc: `Great focus velocity (${focusMinutesToday}m)! However, your water intake is low. Sip 250ml now to prevent cognitive fatigue.`
+      };
+    }
+    if (problemsToday >= 2) {
+      return {
+        title: "Elite Coding Velocity",
+        desc: `You have solved ${problemsToday} LeetCode problems today! Dynamic mental momentum is extremely high right now.`
+      };
+    }
+    if (focusMinutesToday >= 50) {
+      return {
+        title: "Deep Work Flowstate",
+        desc: `You have locked in ${focusMinutesToday} minutes of focus today. Excellent deep work consistency, legend!`
+      };
+    }
+    return {
+      title: "Core Operations Online",
+      desc: "Maintain your daily reading and coding commitments to unlock compounding cognitive gains."
+    };
+  }, [focusSessions, problems, book.chapters, focusMinutesToday, todayHealth.totalWaterMl, problemsToday]);
 
   // Last 7 days activity
   const last7 = Array.from({ length: 7 }, (_, i) => {
@@ -160,15 +190,15 @@ export default function Dashboard() {
           </p>
         </div>
         <motion.div 
-          whileHover={{ scale: 1.05 }}
-          className="glass-card px-5 py-3 flex items-center gap-3 text-sm text-white/70 italic border-white/10 shadow-xl max-w-md w-full md:w-auto bg-white/[0.02]"
+          whileHover={{ y: -2 }}
+          className="glass-card px-5 py-3.5 flex items-center gap-3 text-sm border-white/10 shadow-xl max-w-md w-full md:w-auto bg-white/[0.02] cursor-default"
         >
-          <div className="w-8 h-8 rounded-full bg-violet-500/20 flex items-center justify-center shrink-0">
-            <Star size={16} className="text-violet-400" />
+          <div className="w-8 h-8 rounded-full bg-violet-500/10 flex items-center justify-center shrink-0 border border-violet-500/20">
+            <Sparkles size={16} className="text-violet-400 animate-pulse" />
           </div>
-          <div className="flex flex-col">
-            <span className="line-clamp-1 leading-relaxed text-sm font-medium">"{quoteText}"</span>
-            <span className="text-[10px] text-white/30 font-bold uppercase tracking-wider">— {quoteAuthor}</span>
+          <div className="flex flex-col min-w-0">
+            <span className="text-[10px] text-violet-400 font-black uppercase tracking-widest leading-none mb-1">{dynamicInsight.title}</span>
+            <span className="text-xs text-white/60 font-medium leading-relaxed line-clamp-2">{dynamicInsight.desc}</span>
           </div>
         </motion.div>
       </motion.div>

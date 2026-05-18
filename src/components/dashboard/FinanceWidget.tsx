@@ -107,9 +107,12 @@ export default function FinanceWidget() {
     toast.success(type === 'income' ? 'Income Logged! 💰' : 'Expense Logged! 💸');
   };
 
-  // Delete Transaction from Database
+  // Delete Transaction from Database with Premium Undo Safeguard
   const handleDeleteTransaction = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    const target = transactions.find(t => t.id === id);
+    if (!target) return;
+
     const updated = transactions.filter(t => t.id !== id);
     updateProfile({
       settings: {
@@ -118,7 +121,37 @@ export default function FinanceWidget() {
       }
     });
     play('click');
-    toast.success('Transaction removed');
+
+    toast((t) => (
+      <div className="flex items-center gap-4 text-xs font-medium">
+        <span className="text-white/80 font-bold">Transaction removed</span>
+        <button
+          onClick={() => {
+            updateProfile({
+              settings: {
+                ...userSettings,
+                financeTransactions: JSON.stringify(transactions)
+              }
+            });
+            play('success');
+            toast.dismiss(t.id);
+          }}
+          className="ml-auto bg-violet-600 hover:bg-violet-700 px-3 py-1 rounded-xl text-[10px] text-white uppercase font-black tracking-widest transition-all"
+        >
+          Undo
+        </button>
+      </div>
+    ), {
+      duration: 5000,
+      position: 'bottom-center',
+      style: {
+        background: '#131524',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        borderRadius: '16px',
+        padding: '8px 16px',
+        boxShadow: '0 12px 32px rgba(0,0,0,0.6)'
+      }
+    });
   };
 
   return (

@@ -1,13 +1,15 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useDeferredValue } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { 
   Search, ArrowRight, Timer, BookOpen, Code2, BarChart3, 
   Trophy, Target, FileText, LayoutDashboard, Settings, Sparkles,
-  Command, Terminal, Zap, Calendar
+  Command, Terminal, Zap, Calendar, Droplets
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { useSoundFX } from '../hooks/useSoundFX';
+import { useAddWater } from '../hooks/useHealthQuery';
+import toast from 'react-hot-toast';
 
 interface CommandItem {
   id: string;
@@ -31,6 +33,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const navigate = useNavigate();
   const { play } = useSoundFX();
   const { book, problems, trackers, achievements, userSettings, updateUserSettings } = useAppStore();
+  const { mutate: addWater } = useAddWater();
 
   const commands = useMemo(() => {
     const items: CommandItem[] = [
@@ -44,6 +47,15 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
       { id: 'settings', label: 'Settings', category: 'Actions', icon: <Settings size={14} />, action: () => navigate('/settings'), shortcut: 'G S' },
       { id: 'create-reminder', label: 'Schedule Intelligence', description: 'Create a smart reminder', category: 'Actions', icon: <Calendar size={14} />, action: () => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'R', ctrlKey: true, shiftKey: true })); } },
       { id: 'theme-toggle', label: 'Toggle Appearance', description: `Switch to ${userSettings.theme === 'dark_pro' ? 'OLED' : 'Pro Dark'}`, category: 'Actions', icon: <Zap size={14} />, action: () => updateUserSettings({ theme: userSettings.theme === 'dark_pro' ? 'oled' : 'dark_pro' }) },
+      { id: 'quick-water', label: 'Log 250ml Water', description: 'Log 250ml water immediately', category: 'Actions', icon: <Droplets size={14} className="text-cyan-400" />, action: () => {
+        addWater({
+          amount: 250,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          date: new Date().toISOString().split('T')[0]
+        });
+        play('success');
+        toast.success('Logged 250ml Water! 💧');
+      }, shortcut: 'W A' },
       
       // Dynamic: Books
       ...(book?.chapters.filter(c => c.status !== 'not_started').map(c => ({
@@ -75,17 +87,19 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
       }))
     ];
     return items;
-  }, [book, problems, achievements, userSettings, navigate, updateUserSettings]);
+  }, [book, problems, achievements, userSettings, navigate, updateUserSettings, addWater, play]);
+
+  const deferredQuery = useDeferredValue(query);
 
   const filtered = useMemo(() => {
-    if (!query) return commands.filter(c => c.category === 'Navigation');
-    const q = query.toLowerCase();
+    if (!deferredQuery) return commands.filter(c => c.category === 'Navigation');
+    const q = deferredQuery.toLowerCase();
     return commands.filter(c => 
       c.label.toLowerCase().includes(q) || 
       c.description?.toLowerCase().includes(q) ||
       c.category.toLowerCase().includes(q)
-    ).slice(0, 10);
-  }, [commands, query]);
+    ).slice(0, 6);
+  }, [commands, deferredQuery]);
 
   useEffect(() => {
     if (open) {
