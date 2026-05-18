@@ -50,36 +50,39 @@ export default function App() {
   }, [userSettings.theme, userSettings.accentColor]);
 
   return (
-    <ErrorBoundary>
-      <BrowserRouter>
-        <Suspense fallback={<RouteFallback />}>
-          {showOnboarding ? (
-            <Onboarding onComplete={() => setShowOnboarding(false)} />
-          ) : (
-            <Routes>
-              {/* Public route */}
-              <Route path="/login" element={<Login />} />
+    <AppQueryProvider>
+      <ErrorBoundary>
+        <BrowserRouter>
+          <Suspense fallback={<RouteFallback />}>
+            {showOnboarding ? (
+              <Onboarding onComplete={() => setShowOnboarding(false)} />
+            ) : (
+              <Routes>
+                {/* Public route */}
+                <Route path="/login" element={<Login />} />
 
-              {/* Protected routes */}
-              <Route element={<ProtectedRoute />}>
-                <Route path="/" element={<AppQueryProvider><Layout /></AppQueryProvider>}>
-                  <Route index element={<Dashboard />} />
-                  <Route path="focus" element={<FocusMode />} />
-                  <Route path="reading" element={<Reading />} />
-                  <Route path="leetcode" element={<LeetCode />} />
-                  <Route path="trackers" element={<Trackers />} />
-                  <Route path="health" element={<Health />} />
-                  <Route path="ambient" element={<Ambient />} />
-                  <Route path="analytics" element={<Analytics />} />
-                  <Route path="achievements" element={<Achievements />} />
-                  <Route path="settings" element={<Settings />} />
-                  <Route path="*" element={<Navigate to="/" replace />} />
+                {/* Protected routes */}
+                <Route element={<ProtectedRoute />}>
+                  <Route path="/" element={<Layout />}>
+                    <Route index element={<Dashboard />} />
+                    <Route path="focus" element={<FocusMode />} />
+                    <Route path="reading" element={<Reading />} />
+                    <Route path="leetcode" element={<LeetCode />} />
+                    <Route path="trackers" element={<Trackers />} />
+                    <Route path="health" element={<Health />} />
+                    <Route path="ambient" element={<Ambient />} />
+                    <Route path="analytics" element={<Analytics />} />
+                    <Route path="achievements" element={<Achievements />} />
+                    <Route path="settings" element={<Settings />} />
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                  </Route>
                 </Route>
-              </Route>
-            </Routes>
-          )}
-        </Suspense>
-      </BrowserRouter>
-    </ErrorBoundary>
+              </Routes>
+            )}
+          </Suspense>
+        </BrowserRouter>
+      </ErrorBoundary>
+    </AppQueryProvider>
   );
 }
+
