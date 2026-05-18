@@ -93,9 +93,8 @@ export default function StepsTracker({ today }: { today: string }) {
           setTimeout(() => {
             // If the query failed and was stopped, don't write any steps
             if (!fitSyncResultRef.current && isFitConnected) {
-              const { data: session } = supabase.auth.getSession ? { data: { session: null } } : { data: { session: null } };
-              // Only fallback to simulated if we are mock-simulating (not logged in).
-              // If we are logged in, we demand real API data!
+              setIsSyncingFit(false);
+              return;
             }
 
             const data = fitSyncResultRef.current || {
