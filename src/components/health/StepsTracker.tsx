@@ -3,8 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Footprints, Plus, Trash2, Edit2, Check, X, Award } from 'lucide-react';
 import { useSteps, useLogSteps, useHealthGoals, useAddGoal, useUpdateGoal, useAddWorkout } from '../../hooks/useHealthQuery';
 import { useSoundFX } from '../../hooks/useSoundFX';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function StepsTracker({ today }: { today: string }) {
+  const { user } = useAuth();
   const { data: stepsData = {} } = useSteps();
   const { data: goals = [] } = useHealthGoals();
   const logStepsMut = useLogSteps();
@@ -388,11 +390,11 @@ export default function StepsTracker({ today }: { today: string }) {
               <div className="space-y-2 mb-4">
                 <div className="p-3 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-blue-500/30 transition-all flex items-center gap-3 cursor-pointer">
                   <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-sm font-black text-white">
-                    M
+                    {(user?.user_metadata?.full_name ?? user?.email ?? 'Mani').charAt(0).toUpperCase()}
                   </div>
                   <div className="text-left">
-                    <div className="text-xs font-bold text-white">Mani Simha</div>
-                    <div className="text-[10px] text-white/40">manisimha14@gmail.com</div>
+                    <div className="text-xs font-bold text-white">{user?.user_metadata?.full_name ?? 'Mani Simha'}</div>
+                    <div className="text-[10px] text-white/40">{user?.email ?? 'manisimha14@gmail.com'}</div>
                   </div>
                   <div className="ml-auto w-1.5 h-1.5 rounded-full bg-emerald-400" />
                 </div>
