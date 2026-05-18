@@ -2,7 +2,7 @@ import React, { Suspense, lazy, useState, useCallback } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, LayoutDashboard, Timer, Heart, Target, Menu } from 'lucide-react';
+import { X, LayoutDashboard, Timer, Heart, Target, Menu, Plus, Sparkles } from 'lucide-react';
 import Sidebar from './Sidebar';
 import TopHeader from './TopHeader';
 import InteractiveGrid from './InteractiveGrid';
@@ -39,19 +39,19 @@ function MobileTabButton({ to, icon: Icon, label, isActive, onClick }: {
   return (
     <button
       onClick={onClick}
-      className={`flex flex-col items-center justify-center py-1 relative flex-1 gap-1 transition-all duration-300 ${
+      className={`flex flex-col items-center justify-center py-1 relative flex-1 gap-0.5 transition-all duration-300 ${
         isActive ? 'text-violet-400 font-bold scale-105' : 'text-white/40 hover:text-white/70'
       }`}
     >
       <div className={`relative transition-all duration-300 ${isActive ? 'drop-shadow-[0_0_8px_rgba(139,92,246,0.6)]' : ''}`}>
-        <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
+        <Icon size={18} strokeWidth={isActive ? 2.5 : 2} />
       </div>
-      <span className="text-[9px] font-bold uppercase tracking-wider">{label}</span>
+      <span className="text-[8px] font-black tracking-[0.15em] uppercase">{label}</span>
       
       {isActive && (
         <motion.div
           layoutId="mobile-nav-indicator"
-          className="absolute -bottom-1.5 w-1.5 h-1.5 rounded-full bg-violet-400 shadow-[0_0_8px_rgba(139,92,246,0.8)]"
+          className="absolute -bottom-1 w-1 h-1 rounded-full bg-violet-400 shadow-[0_0_8px_rgba(139,92,246,0.8)]"
           transition={{ type: 'spring', stiffness: 380, damping: 30 }}
         />
       )}
@@ -511,10 +511,10 @@ export default function Layout() {
         )}
       </AnimatePresence>
 
-      {/* Mobile Floating Bottom Navigation Bar */}
+      {/* Mobile Floating Bottom Navigation Bar (Dribbble Symmetrical Layout) */}
       {isMobile && (
         <div 
-          className="fixed left-1/2 -translate-x-1/2 w-[92%] max-w-md z-[48] rounded-2xl border border-white/10 bg-[#0f101c]/80 backdrop-blur-xl shadow-[0_12px_40px_rgba(0,0,0,0.6),0_0_20px_rgba(139,92,246,0.1)] px-4 py-2.5 flex items-center justify-around animate-fade-in"
+          className="fixed left-1/2 -translate-x-1/2 w-[92%] max-w-sm z-[48] rounded-full border border-white/10 bg-black/60 backdrop-blur-xl shadow-[0_15px_45px_rgba(0,0,0,0.85),0_0_30px_rgba(139,92,246,0.08)] px-4 py-1.5 flex items-center justify-between animate-fade-in"
           style={{
             bottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)'
           }}
@@ -533,6 +533,19 @@ export default function Layout() {
             isActive={location.pathname === '/focus'} 
             onClick={() => { play('click'); navigate('/focus'); }}
           />
+          
+          {/* Symmetrical Center Circular Action Button */}
+          <div className="flex-1 flex items-center justify-center relative -top-3">
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => { play('success'); setCmdOpen(true); }}
+              className="w-12 h-12 rounded-full bg-gradient-to-tr from-violet-500 to-fuchsia-600 flex items-center justify-center text-white shadow-[0_0_15px_rgba(139,92,246,0.6)] cursor-pointer"
+            >
+              <Plus size={22} strokeWidth={3} />
+            </motion.button>
+          </div>
+
           <MobileTabButton 
             to="/health" 
             icon={Heart} 
@@ -547,13 +560,6 @@ export default function Layout() {
             isActive={location.pathname === '/trackers'} 
             onClick={() => { play('click'); navigate('/trackers'); }}
           />
-          <button
-            onClick={() => { play('click'); setSidebarOpen(true); }}
-            className="flex flex-col items-center justify-center py-1 text-white/40 hover:text-white transition-all relative flex-1 gap-1"
-          >
-            <Menu size={20} strokeWidth={2} />
-            <span className="text-[9px] font-bold uppercase tracking-wider">More</span>
-          </button>
         </div>
       )}
 
