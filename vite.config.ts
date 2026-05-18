@@ -74,3 +74,6 @@ export default defineConfig({
     },
   },
 });
+
+// Trigger Vercel rebuild for pwa-2 fullscreen improvements
+
