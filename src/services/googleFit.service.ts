@@ -10,27 +10,38 @@ export async function fetchTodayGoogleFitData(): Promise<GoogleFitData> {
   let token: string | undefined;
 
   try {
-    const { data, error } = await supabase.auth.refreshSession();
-    if (error) throw error;
-    token = data.session?.provider_token ?? undefined;
+    const storedToken = localStorage.getItem('google_provider_token');
+    const savedAtStr = localStorage.getItem('google_provider_token_saved_at');
+
+    if (storedToken && savedAtStr) {
+      const savedAt = parseInt(savedAtStr, 10);
+      const isExpired = Date.now() - savedAt > 3600 * 1000;
+
+      if (!isExpired) {
+        token = storedToken;
+      } else {
+        console.warn('Persisted Google Fit token in localStorage has expired.');
+        localStorage.removeItem('google_provider_token');
+        localStorage.removeItem('google_provider_token_saved_at');
+      }
+    }
+
+    if (!token) {
+      const { data: { session } } = await supabase.auth.getSession();
+      token = session?.provider_token ?? undefined;
+      if (token) {
+        localStorage.setItem('google_provider_token', token);
+        localStorage.setItem('google_provider_token_saved_at', Date.now().toString());
+      }
+    }
+
     console.log('Provider token retrieved:', token ? 'exists' : 'missing');
   } catch (err) {
-    console.error('Could not retrieve provider token from Supabase:', err);
+    console.error('Could not retrieve provider token:', err);
   }
 
-  // If no token exists, let's return realistic dynamic simulated data that varies on every sync click!
   if (!token) {
-    const hour = new Date().getHours();
-    // Realistic daily steps baseline based on current hour
-    const baseSteps = Math.round(3500 + (hour * 280) + Math.random() * 1500);
-    const calories = Math.round(120 + (baseSteps * 0.038) + Math.random() * 50);
-    const activeMinutes = Math.round(15 + (baseSteps / 160) + Math.random() * 10);
-    
-    return {
-      steps: baseSteps,
-      calories,
-      activeMinutes
-    };
+    throw new Error('Google Fit authorization token has expired or is missing. Please Sign Out of the dashboard (using the sidebar button) and Sign In with Google again to grant fitness permissions!');
   }
 
   const startOfToday = new Date();
