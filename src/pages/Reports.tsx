@@ -5,7 +5,7 @@ import {
   Sparkles, BookOpen, Code2, Flame, TrendingUp, 
   Activity, Award, Zap, BarChart3, AlertTriangle, 
   Droplet, Bed, Footprints, Dumbbell, TrendingDown, Info,
-  CheckCircle2
+  CheckCircle2, Trash2
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useBook } from '../hooks/useBookQuery';
@@ -14,6 +14,7 @@ import { useFocusSessions } from '../hooks/useFocusQuery';
 import { useHealthGoals, useWater, useSleepEntries, useWorkouts, useSteps, useMeals } from '../hooks/useHealthQuery';
 import { useTrackers } from '../hooks/useTrackerQuery';
 import { useSoundFX } from '../hooks/useSoundFX';
+import { useAppStore } from '../store/useAppStore';
 import { normalizeToLocalDateString } from '../utils/dateNormalization';
 import { calculateWeeklyReport } from '../services/reports/weeklyReportCalculator';
 import { generateWeeklyReportPDF } from '../services/reports/weeklyReportPdf';
@@ -89,10 +90,12 @@ const ConsistencyRing = ({ score }: { score: number }) => {
 
 export default function Reports() {
   const { play } = useSoundFX();
+  const { deletedReports, deleteReport } = useAppStore();
   const [countdown, setCountdown] = useState(() => getNextMondayCountdown());
   const [selectedWeeksAgo, setSelectedWeeksAgo] = useState<number | null>(null);
   const [pdfGeneratingWeek, setPdfGeneratingWeek] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<'cycles' | 'trends' | 'biometrics'>('cycles');
+  const [confirmDeleteKey, setConfirmDeleteKey] = useState<string | null>(null);
 
   // Queries for data streams to support instant calculations
   const { data: book = { id: 'main-book', title: 'My Book', author: 'Author', chapters: [], startDate: '', coverColor: '#7c3aed' } } = useBook();
@@ -137,17 +140,29 @@ export default function Reports() {
     return { last7Days, prev7Days, startDateStr, endDateStr };
   };
 
-  // Compile list of past 6 weeks
+  // Compile list of past weeks
   const pastWeeks = useMemo(() => {
-    return Array.from({ length: 6 }).map((_, idx) => {
+    const generated = Array.from({ length: 20 }).map((_, idx) => {
       const { last7Days, prev7Days, startDateStr, endDateStr } = getWeekCycleInfo(idx);
-      return { weeksAgo: idx, last7Days, prev7Days, startDateStr, endDateStr };
+      const weekKey = `${last7Days[0]}_${last7Days[6]}`;
+      return { weeksAgo: idx, last7Days, prev7Days, startDateStr, endDateStr, weekKey };
     });
-  }, []);
 
-  // Compile calculated aggregates for each of the 6 weeks
+    const ongoingWeek = generated.find(w => w.weeksAgo === 0)!;
+    const completedWeeks = generated.filter(w => w.weeksAgo > 0);
+
+    // Filter out deleted completed reports
+    const activeCompletedWeeks = completedWeeks.filter(w => !deletedReports.includes(w.weekKey));
+
+    // Limit to the last 5 completed reports
+    const limitedCompletedWeeks = activeCompletedWeeks.slice(0, 5);
+
+    return [ongoingWeek, ...limitedCompletedWeeks];
+  }, [deletedReports]);
+
+  // Compile calculated aggregates for each of the weeks
   const weeklyAggregates = useMemo(() => {
-    return pastWeeks.map(({ weeksAgo, last7Days, prev7Days, startDateStr, endDateStr }) => {
+    return pastWeeks.map(({ weeksAgo, last7Days, prev7Days, startDateStr, endDateStr, weekKey }) => {
       const stats = calculateWeeklyReport({
         focusSessions,
         problems,
@@ -168,6 +183,7 @@ export default function Reports() {
         endDateStr,
         last7Days,
         prev7Days,
+        weekKey,
         stats
       };
     });
@@ -504,44 +520,40 @@ export default function Reports() {
         >
           {/* TAB 1: WEEKLY CYCLES */}
           {activeTab === 'cycles' && (
-            <div className="space-y-6">
-              <div className="flex items-center gap-2 text-white/40">
-                <CalendarRange size={16} />
-                <h3 className="text-xs font-black uppercase tracking-widest">Available Weekly Ledger</h3>
-              </div>
+            <div className="space-y-8">
+              {/* Ongoing Report Section */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-white/40">
+                  <Hourglass size={16} className="text-violet-400" />
+                  <h3 className="text-xs font-black uppercase tracking-widest text-white/50">Ongoing Week Cycle</h3>
+                </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {weeklyAggregates.map(({ weeksAgo, startDateStr, endDateStr, last7Days, prev7Days, stats }) => {
-                  const isCurrent = weeksAgo === 0;
+                {(() => {
+                  const ongoing = weeklyAggregates.find(w => w.weeksAgo === 0);
+                  if (!ongoing) return null;
+                  const { weeksAgo, startDateStr, endDateStr, last7Days, prev7Days, stats } = ongoing;
 
                   return (
                     <div 
-                      key={weeksAgo}
-                      className={`p-5 rounded-3xl bg-white/[0.01] hover:bg-white/[0.03] border transition-all flex flex-col justify-between gap-5 relative group ${
-                        isCurrent ? 'border-violet-500/30 bg-gradient-to-br from-violet-600/[0.02] to-transparent' : 'border-white/5'
-                      }`}
+                      className="p-6 rounded-3xl border border-violet-500/20 bg-gradient-to-br from-violet-600/[0.02] to-transparent relative overflow-hidden group max-w-xl"
                     >
-                      {isCurrent && (
-                        <span className="absolute top-4 right-4 px-2 py-0.5 rounded text-[8px] font-black bg-violet-500/10 text-violet-400 border border-violet-500/20 uppercase tracking-wider">
-                          Active Cycle
-                        </span>
-                      )}
-
+                      <div className="absolute top-0 right-0 w-48 h-48 bg-violet-600/5 rounded-full blur-[60px] pointer-events-none" />
                       <div className="flex justify-between items-start gap-4">
                         <div className="space-y-1">
-                          <div className="text-[10px] font-black text-white/30 uppercase tracking-wider">
-                            {isCurrent ? 'Current Week Cycle' : `Prior Week -${weeksAgo}`}
-                          </div>
-                          <h4 className="text-base font-black text-white uppercase tracking-wider mt-0.5">
+                          <span className="px-2 py-0.5 rounded text-[8px] font-black bg-violet-500/10 text-violet-400 border border-violet-500/20 uppercase tracking-wider">
+                            Active Ongoing
+                          </span>
+                          <h4 className="text-lg font-black text-white uppercase tracking-wider mt-2.5">
                             {startDateStr} – {endDateStr}
                           </h4>
+                          <p className="text-[10px] text-white/30 font-semibold uppercase mt-1">Calculates dynamically in real time</p>
                         </div>
                         {/* Interactive watch style Consistency Ring */}
                         <ConsistencyRing score={stats.focusQualityScore} />
                       </div>
 
                       {/* Stat badges comparison */}
-                      <div className="grid grid-cols-3 gap-2 py-3 border-y border-white/5">
+                      <div className="grid grid-cols-3 gap-2 py-4 border-y border-white/5 my-4">
                         <div className="flex flex-col gap-0.5">
                           <span className="text-[8px] font-bold text-white/30 uppercase flex items-center gap-1">
                             <Clock size={8} className="text-violet-400" /> Focus
@@ -595,7 +607,156 @@ export default function Reports() {
                       </div>
                     </div>
                   );
-                })}
+                })()}
+              </div>
+
+              {/* Completed Reports Section */}
+              <div className="space-y-4 pt-4 border-t border-white/5">
+                <div className="flex items-center gap-2 text-white/40">
+                  <CheckCircle2 size={16} className="text-emerald-400" />
+                  <h3 className="text-xs font-black uppercase tracking-widest text-white/50">Completed Weekly Reports</h3>
+                </div>
+
+                {weeklyAggregates.filter(w => w.weeksAgo > 0).length === 0 ? (
+                  <div className="p-8 rounded-3xl border border-white/5 bg-white/[0.01] text-center max-w-xl">
+                    <p className="text-xs text-white/40 font-semibold uppercase">No completed reports found.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                    {weeklyAggregates.filter(w => w.weeksAgo > 0).map(({ weeksAgo, startDateStr, endDateStr, last7Days, prev7Days, weekKey, stats }) => {
+                      return (
+                        <div 
+                          key={weeksAgo}
+                          className="p-5 rounded-3xl bg-white/[0.01] hover:bg-white/[0.03] border border-white/5 transition-all flex flex-col justify-between gap-5 relative group"
+                        >
+                          {/* Hover Trash Delete button */}
+                          <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
+                            <button
+                              onClick={() => {
+                                play('click');
+                                setConfirmDeleteKey(weekKey);
+                              }}
+                              className="p-2 rounded-xl bg-white/[0.02] hover:bg-red-500/10 text-white/40 hover:text-red-400 border border-white/5 hover:border-red-500/20 transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
+                              title="Delete Report"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+
+                          {/* Beautiful Glassmorphic Absolute Confirmation Overlay */}
+                          <AnimatePresence>
+                            {confirmDeleteKey === weekKey && (
+                              <motion.div 
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                className="absolute inset-0 bg-zinc-950/95 backdrop-blur-md rounded-3xl p-5 flex flex-col justify-between z-20 border border-red-500/30"
+                              >
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-2 text-red-400">
+                                    <AlertTriangle size={14} />
+                                    <span className="text-[9px] font-black uppercase tracking-widest">Delete Report?</span>
+                                  </div>
+                                  <p className="text-[11px] text-white/70 font-semibold leading-relaxed">
+                                    Are you sure you want to delete the report for <span className="text-white font-bold">{startDateStr} – {endDateStr}</span>? This will permanently filter it out from your analytics, charts, peaks, and comparisons.
+                                  </p>
+                                </div>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => {
+                                      play('click');
+                                      setConfirmDeleteKey(null);
+                                    }}
+                                    className="flex-1 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white text-xs font-black uppercase tracking-wider transition-all"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      play('error');
+                                      deleteReport(weekKey);
+                                      setConfirmDeleteKey(null);
+                                    }}
+                                    className="flex-1 py-2 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/25 text-xs font-black uppercase tracking-wider transition-all"
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+
+                          <div className="flex justify-between items-start gap-4">
+                            <div className="space-y-1">
+                              <div className="text-[10px] font-black text-white/30 uppercase tracking-wider">
+                                Completed Cycle
+                              </div>
+                              <h4 className="text-base font-black text-white uppercase tracking-wider mt-0.5">
+                                {startDateStr} – {endDateStr}
+                              </h4>
+                            </div>
+                            {/* Interactive watch style Consistency Ring */}
+                            <ConsistencyRing score={stats.focusQualityScore} />
+                          </div>
+
+                          {/* Stat badges comparison */}
+                          <div className="grid grid-cols-3 gap-2 py-3 border-y border-white/5">
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-[8px] font-bold text-white/30 uppercase flex items-center gap-1">
+                                <Clock size={8} className="text-violet-400" /> Focus
+                              </span>
+                              <span className="text-[11px] font-bold text-white/80">
+                                {(stats.focusMinutes / 60).toFixed(1)}h <span className="text-[8px] text-white/40">({stats.completedSessions}s)</span>
+                              </span>
+                            </div>
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-[8px] font-bold text-white/30 uppercase flex items-center gap-1">
+                                <Code2 size={8} className="text-cyan-400" /> Code
+                              </span>
+                              <span className="text-[11px] font-bold text-white/80">
+                                {stats.problemsSolved} solved
+                              </span>
+                            </div>
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-[8px] font-bold text-white/30 uppercase flex items-center gap-1">
+                                <BookOpen size={8} className="text-amber-400" /> Reading
+                              </span>
+                              <span className="text-[11px] font-bold text-white/80">
+                                {stats.chaptersRead} ch
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Double button layout */}
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={() => {
+                                play('click');
+                                setSelectedWeeksAgo(weeksAgo);
+                              }}
+                              className="flex-1 btn-glow py-2 text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5"
+                            >
+                              <Eye size={12} /> View
+                            </button>
+                            <button
+                              onClick={() => triggerPdfGeneration(weeksAgo, last7Days, prev7Days)}
+                              disabled={pdfGeneratingWeek === weeksAgo}
+                              className="flex-1 btn-ghost py-2 text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 disabled:opacity-40"
+                            >
+                              {pdfGeneratingWeek === weeksAgo ? (
+                                <span className="w-3 h-3 rounded-full border-2 border-t-transparent border-white animate-spin" />
+                              ) : (
+                                <>
+                                  <Download size={12} /> Export
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -612,7 +773,7 @@ export default function Reports() {
                     <h4 className="text-xs font-black text-white/40 uppercase tracking-widest flex items-center gap-2">
                       <Clock size={14} className="text-violet-400" /> Focus Duration Trend
                     </h4>
-                    <span className="text-[10px] font-black text-violet-400 bg-violet-500/10 px-2 py-0.5 rounded">Avg: {(weeklyAggregates.reduce((acc, w) => acc + w.stats.focusMinutes / 60, 0) / 6).toFixed(1)}h</span>
+                    <span className="text-[10px] font-black text-violet-400 bg-violet-500/10 px-2 py-0.5 rounded">Avg: {(weeklyAggregates.reduce((acc, w) => acc + w.stats.focusMinutes / 60, 0) / (weeklyAggregates.length || 1)).toFixed(1)}h</span>
                   </div>
                   <div className="flex items-end justify-between h-44 gap-3 pt-4 px-2">
                     {chronologicalWeeks.map((item, idx) => {

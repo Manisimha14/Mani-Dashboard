@@ -76,9 +76,23 @@ export function useAddTrackerItem(): UseMutationResult<unknown, Error, { tracker
   const localStore = useAppStore();
 
   return useMutation({
-    mutationFn: async ({ trackerId, item }) => user
-      ? TrackerSvc.insertTrackerItem(user.id, trackerId, item)
-      : localStore.addTrackerItem(trackerId, item),
+    mutationFn: async ({ trackerId, item }) => {
+      if (user) {
+        const res = await TrackerSvc.insertTrackerItem(user.id, trackerId, item);
+        const trackers = qc.getQueryData<Tracker[]>(trackerKeys.all(user.id)) || [];
+        const tracker = trackers.find(t => t.id === trackerId);
+        localStore.addXp(50, 'tracker', `Logged item for tracker: ${tracker?.title ?? 'Custom Tracker'}`);
+        localStore.addNotification({
+          title: 'Tracker Item Logged',
+          message: `Logged entry: "${item.value}" in "${tracker?.title ?? 'Custom Tracker'}". +50 XP rewarded!`,
+          category: 'reminders',
+          priority: 'normal'
+        });
+        return res;
+      } else {
+        return localStore.addTrackerItem(trackerId, item);
+      }
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: trackerKeys.all(user?.id ?? 'local') });
     },

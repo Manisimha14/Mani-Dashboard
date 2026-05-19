@@ -87,7 +87,7 @@ interface AppStore {
   addReminder: (reminder: Omit<Reminder, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateReminder: (id: string, updates: Partial<Reminder>) => void;
   deleteReminder: (id: string) => void;
-  addNotification: (notification: Omit<AppNotification, 'id' | 'timestamp' | 'read'>) => void;
+  addNotification: (notification: Omit<AppNotification, 'id' | 'timestamp' | 'read' | 'createdAt' | 'updatedAt'> & Partial<Pick<AppNotification, 'createdAt' | 'updatedAt'>>) => void;
   markNotificationRead: (id: string) => void;
   clearNotifications: () => void;
   updateReminderSettings: (settings: Partial<ReminderSettings>) => void;
@@ -105,6 +105,8 @@ interface AppStore {
   // Undo support
   lastAction: UndoAction | null;
   undoLastAction: () => void;
+  deletedReports: string[];
+  deleteReport: (reportKey: string) => void;
 }
 
 const DEFAULT_BOOK: Book = {
@@ -199,6 +201,13 @@ export const useAppStore = create<AppStore>()(
       },
       trackers: [],
       celebratingAchievement: null,
+      deletedReports: [],
+
+      deleteReport: (reportKey) => {
+        set(state => ({
+          deletedReports: [...state.deletedReports, reportKey]
+        }));
+      },
 
       addTracker: (tracker) => {
         set(state => ({
@@ -224,6 +233,12 @@ export const useAppStore = create<AppStore>()(
           } : t)
         }));
         get().addXp(50, 'tracker', `Logged item for tracker: ${tracker?.title ?? 'Custom Tracker'}`);
+        get().addNotification({
+          title: 'Tracker Item Logged',
+          message: `Logged entry: "${item.value}" in "${tracker?.title ?? 'Custom Tracker'}". +50 XP rewarded!`,
+          category: 'reminders',
+          priority: 'normal'
+        });
       },
       updateTrackerItem: (trackerId, itemId, updates) => {
         set(state => ({
@@ -322,6 +337,12 @@ export const useAppStore = create<AppStore>()(
           const ch = get().book.chapters.find(c => c.id === chapterId);
           if (updates.completed) {
             get().addXp(200, 'reading', `Completed Chapter ${ch?.number ?? chapterId}: ${ch?.title ?? ''}`);
+            get().addNotification({
+              title: 'Chapter Completed!',
+              message: `Great read! You finished "Chapter ${ch?.number ?? chapterId}: ${ch?.title ?? ''}". +200 XP rewarded!`,
+              category: 'reminders',
+              priority: 'normal'
+            });
           } else {
             get().addXp(-200, 'reading', `Uncompleted Chapter ${ch?.number ?? chapterId}`);
           }
@@ -348,6 +369,12 @@ export const useAppStore = create<AppStore>()(
         if (problem.completed) {
           get().logActivity('coding', 1);
           get().addXp(150, 'coding', `Solved problem: ${problem.name}`);
+          get().addNotification({
+            title: 'LeetCode Problem Solved',
+            message: `"${problem.name}" [${problem.difficulty}] logged successfully. +150 XP rewarded!`,
+            category: 'streak',
+            priority: 'normal'
+          });
         }
         get().checkAndUnlockAchievements();
       },
@@ -415,6 +442,12 @@ export const useAppStore = create<AppStore>()(
         get().logActivity('coding', isCompleting ? 1 : -1);
         if (isCompleting) {
           get().addXp(150, 'coding', `Solved problem: ${problem.name}`);
+          get().addNotification({
+            title: 'LeetCode Problem Solved',
+            message: `"${problem.name}" [${problem.difficulty}] logged successfully. +150 XP rewarded!`,
+            category: 'streak',
+            priority: 'normal'
+          });
         } else {
           get().addXp(-150, 'coding', `Unsolved problem: ${problem.name}`);
         }
@@ -436,6 +469,12 @@ export const useAppStore = create<AppStore>()(
         if (session.completed && session.actualDuration) {
           get().logActivity('focus', session.actualDuration);
           get().addXp(session.actualDuration * 10, 'focus', `Completed Pomodoro session: ${session.actualDuration} min focused`);
+          get().addNotification({
+            title: 'Focus Cycle Complete',
+            message: `Superb! You finished your "${session.taskName || 'Pomodoro'}" focus block. Tree planted successfully.`,
+            category: 'focus',
+            priority: 'normal'
+          });
         }
         get().checkAndUnlockAchievements();
       },
@@ -516,6 +555,16 @@ export const useAppStore = create<AppStore>()(
         if (newlyUnlocked.length > 0) {
           newlyUnlocked.forEach(ach => {
             showAchievementToast(ach.title, ach.icon);
+            get().addNotification({
+              title: 'Achievement Unlocked!',
+              message: `Spectacular! You unlocked "${ach.title}": ${ach.description} ${ach.icon}`,
+              category: 'achievements',
+              priority: 'normal',
+              metadata: {
+                type: 'achievement',
+                id: ach.id
+              }
+            });
           });
         }
         return newlyUnlocked;
@@ -682,9 +731,13 @@ export const useAppStore = create<AppStore>()(
           Notification.permission === 'granted' &&
           get().reminderSettings.browserNotificationsEnabled
         ) {
+          const tag = notification.metadata && 'reminderId' in notification.metadata
+            ? (notification.metadata as any).reminderId
+            : undefined;
           new Notification(notification.title, {
             body: notification.message,
-            icon: '/favicon.ico',
+            icon: '/pwa-192x192.png',
+            tag: tag,
           });
         }
 
@@ -756,7 +809,8 @@ export const useAppStore = create<AppStore>()(
           reminders: state.reminders,
           notifications: state.notifications,
           reminderSettings: state.reminderSettings,
-          launcher: state.launcher
+          launcher: state.launcher,
+          deletedReports: state.deletedReports
         };
       },
 
@@ -794,7 +848,8 @@ export const useAppStore = create<AppStore>()(
           reminders: d.reminders || [],
           notifications: d.notifications || [],
           reminderSettings: d.reminderSettings || get().reminderSettings,
-          launcher: d.launcher || DEFAULT_LAUNCHER_STATE
+          launcher: d.launcher || DEFAULT_LAUNCHER_STATE,
+          deletedReports: d.deletedReports || []
         });
       },
 
@@ -813,7 +868,8 @@ export const useAppStore = create<AppStore>()(
           notifications: [],
           pomodoroSettings: DEFAULT_POMODORO,
           userSettings: DEFAULT_USER_SETTINGS,
-          launcher: DEFAULT_LAUNCHER_STATE
+          launcher: DEFAULT_LAUNCHER_STATE,
+          deletedReports: []
         });
       },
     }),

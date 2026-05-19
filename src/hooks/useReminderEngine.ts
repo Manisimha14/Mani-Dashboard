@@ -38,14 +38,7 @@ export function useReminderEngine() {
       if (inQuietHours) return;
     }
 
-    // 2. Browser Notification
-    if (reminderSettings.browserNotificationsEnabled && Notification.permission === 'granted') {
-      new Notification(reminder.title, {
-        body: reminder.message,
-        icon: '/favicon.ico',
-        tag: reminder.id,
-      });
-    }
+
 
     // 3. In-App Notification
     addNotification({

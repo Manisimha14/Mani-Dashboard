@@ -74,6 +74,20 @@ export function useUpdateChapter(): UseMutationResult<
 
         if (prevCompleted !== newCompleted) {
           const delta = newCompleted ? 1 : -1;
+          
+          if (newCompleted) {
+            localStore.addXp(200, 'reading', `Completed Chapter ${prevChapter?.number ?? chapterId}: ${prevChapter?.title ?? ''}`);
+            localStore.addNotification({
+              title: 'Chapter Completed!',
+              message: `Great read! You finished "Chapter ${prevChapter?.number ?? chapterId}: ${prevChapter?.title ?? ''}". +200 XP rewarded!`,
+              category: 'reminders',
+              priority: 'normal'
+            });
+          } else {
+            localStore.addXp(-200, 'reading', `Uncompleted Chapter ${prevChapter?.number ?? chapterId}`);
+          }
+          localStore.checkAndUnlockAchievements();
+
           const today = todayString();
 
           let todayAct: DailyActivity = {

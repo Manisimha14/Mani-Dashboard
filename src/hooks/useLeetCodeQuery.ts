@@ -65,8 +65,14 @@ export function useAddProblem(): UseMutationResult<unknown, Error, Omit<LeetCode
 
         await ActivitySvc.upsertDailyActivity(user.id, todayAct);
 
-        // Award XP for authenticated LeetCode solves
+        // Award XP and dispatch notification for authenticated LeetCode solves
         useAppStore.getState().addXp(150, 'coding', `Solved problem: ${problem.name}`);
+        useAppStore.getState().addNotification({
+          title: 'LeetCode Problem Solved',
+          message: `"${problem.name}" [${problem.difficulty}] logged successfully. +150 XP rewarded!`,
+          category: 'streak',
+          priority: 'normal'
+        });
       }
       
       return res;
@@ -198,6 +204,24 @@ export function useToggleProblem(): UseMutationResult<void, Error, { id: string,
       );
 
       await ActivitySvc.upsertDailyActivity(user.id, todayAct);
+
+      // Award XP and dispatch notification for authenticated LeetCode solves
+      const currentProblems = qc.getQueryData<LeetCodeProblem[]>(leetcodeKeys.all(user.id)) || [];
+      const problem = currentProblems.find(p => p.id === id);
+      const problemName = problem?.name ?? 'LeetCode Problem';
+      const difficulty = problem?.difficulty ?? 'Medium';
+
+      if (newCompleted) {
+        useAppStore.getState().addXp(150, 'coding', `Solved problem: ${problemName}`);
+        useAppStore.getState().addNotification({
+          title: 'LeetCode Problem Solved',
+          message: `"${problemName}" [${difficulty}] logged successfully. +150 XP rewarded!`,
+          category: 'streak',
+          priority: 'normal'
+        });
+      } else {
+        useAppStore.getState().addXp(-150, 'coding', `Unsolved problem: ${problemName}`);
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: leetcodeKeys.all(user?.id ?? 'local') });

@@ -38,6 +38,17 @@ export function useAddFocusSession(): UseMutationResult<FocusSession | void, Err
 
       if (session.completed) {
         const duration = session.actualDuration || session.duration;
+        
+        // Award XP and dispatch notification in the local store
+        localStore.addXp(duration * 10, 'focus', `Completed Pomodoro session: ${duration} min focused`);
+        localStore.addNotification({
+          title: 'Focus Cycle Complete',
+          message: `Superb! You finished your "${session.taskName || 'Pomodoro'}" focus block. Tree planted successfully.`,
+          category: 'focus',
+          priority: 'normal'
+        });
+        localStore.checkAndUnlockAchievements();
+
         const today = todayString();
         
         let todayAct: DailyActivity = {
@@ -103,6 +114,19 @@ export function useUpdateFocusSession(): UseMutationResult<void, Error, { id: st
       if (isCompletedNow || isUncompletedNow) {
         const today = todayString();
         const duration = updates.actualDuration || updates.duration || session?.actualDuration || session?.duration || 0;
+        
+        if (isCompletedNow) {
+          localStore.addXp(duration * 10, 'focus', `Completed Pomodoro session: ${duration} min focused`);
+          localStore.addNotification({
+            title: 'Focus Cycle Complete',
+            message: `Superb! You finished your "${updates.taskName || session?.taskName || 'Pomodoro'}" focus block. Tree planted successfully.`,
+            category: 'focus',
+            priority: 'normal'
+          });
+        } else {
+          localStore.addXp(-duration * 10, 'focus', `Uncompleted Pomodoro session`);
+        }
+        localStore.checkAndUnlockAchievements();
         
         let todayAct: DailyActivity = {
           date: today,
