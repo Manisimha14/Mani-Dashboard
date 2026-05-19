@@ -89,14 +89,27 @@ export default function Dashboard() {
   const [loading, setLoading] = React.useState(true);
   const [showScoreDetails, setShowScoreDetails] = React.useState(false);
 
-  // SaaS Weekly Executive Performance Report states
+  // SaaS Weekly Performance Report Monday triggers
+  const currentMondayStr = useMemo(() => {
+    const d = new Date();
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(d.setDate(diff));
+    const yyyy = monday.getFullYear();
+    const mm = String(monday.getMonth() + 1).padStart(2, '0');
+    const dd = String(monday.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }, []);
+
   const [showWeeklyModal, setShowWeeklyModal] = useState(false);
-  const [weeklyReportDismissed, setWeeklyReportDismissed] = useState(() => 
-    localStorage.getItem('weekly_report_dismissed_v1') === 'true'
-  );
-  const [weeklyReportViewed, setWeeklyReportViewed] = useState(() => 
-    localStorage.getItem('weekly_report_viewed_v1') === 'true'
-  );
+  const [weeklyReportDismissed, setWeeklyReportDismissed] = useState(() => {
+    if (new Date().getDay() !== 1) return true; // Keep hidden if not Monday
+    return localStorage.getItem(`weekly_report_dismissed_${currentMondayStr}`) === 'true';
+  });
+  const [weeklyReportViewed, setWeeklyReportViewed] = useState(() => {
+    if (new Date().getDay() !== 1) return true; // Keep viewed state high if not Monday
+    return localStorage.getItem(`weekly_report_viewed_${currentMondayStr}`) === 'true';
+  });
 
   React.useEffect(() => {
     // Immediate load if data is ready, but keep a tiny gap for mount animations
@@ -323,7 +336,7 @@ export default function Dashboard() {
                 onClick={() => {
                   setShowWeeklyModal(true);
                   setWeeklyReportViewed(true);
-                  localStorage.setItem('weekly_report_viewed_v1', 'true');
+                  localStorage.setItem(`weekly_report_viewed_${currentMondayStr}`, 'true');
                 }}
                 className="btn-glow px-4 py-2.5 text-xs font-black uppercase tracking-wider flex items-center gap-1.5"
               >
@@ -333,7 +346,7 @@ export default function Dashboard() {
               <button
                 onClick={() => {
                   setWeeklyReportViewed(true);
-                  localStorage.setItem('weekly_report_viewed_v1', 'true');
+                  localStorage.setItem(`weekly_report_viewed_${currentMondayStr}`, 'true');
                   setShowWeeklyModal(true);
                 }}
                 className="btn-ghost px-4 py-2.5 text-xs font-black uppercase tracking-wider flex items-center gap-1.5"
@@ -346,7 +359,7 @@ export default function Dashboard() {
           <button 
             onClick={() => {
               setWeeklyReportDismissed(true);
-              localStorage.setItem('weekly_report_dismissed_v1', 'true');
+              localStorage.setItem(`weekly_report_dismissed_${currentMondayStr}`, 'true');
             }}
             className="absolute top-3.5 right-3.5 text-white/20 hover:text-white/60 transition-colors p-1"
             title="Dismiss Notification"
@@ -801,6 +814,7 @@ export default function Dashboard() {
         waterEntries={waterEntries}
         sleepEntries={sleepEntries}
         workoutEntries={workoutEntries}
+        bookChapters={book?.chapters ?? []}
         stepsData={stepsData}
         healthGoals={healthGoals}
       />

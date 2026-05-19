@@ -15,12 +15,14 @@ export interface WeeklyReportStats {
   completionRate: number;
   focusQualityScore: number;
   problemsSolved: number;
+  chaptersRead: number;
   waterAverageL: string;
   sleepAverageH: string;
   workoutCount: number;
   stepsAverage: number;
   focusChange: number;
   codingChange: number;
+  readingChange: number;
   waterChange: number;
   sleepChange: number;
   bestFocusDay: string;
@@ -38,9 +40,11 @@ export interface WeeklyReportStats {
   waterDaysHit: number;
   sleepDaysHit: number;
   problemsDaysHit: number;
+  readingDaysHit: number;
   focusChartData: number[];
   codingChartData: number[];
   waterChartData: number[];
   sleepChartData: number[];
+  readingChartData: number[];
   sleepDaysWithData: number;
 }

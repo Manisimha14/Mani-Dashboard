@@ -32,6 +32,13 @@ export default function TrendInsightsPanel({
           unit="solved" 
         />
         <MiniChart 
+          label="Book Chapters Completed" 
+          dataPoints={stats.readingChartData} 
+          cycleDates={cycleDates} 
+          colorClass="bg-amber-500" 
+          unit="ch" 
+        />
+        <MiniChart 
           label="Hydration Volumes" 
           dataPoints={stats.waterChartData} 
           cycleDates={cycleDates} 

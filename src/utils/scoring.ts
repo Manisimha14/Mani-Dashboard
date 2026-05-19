@@ -12,6 +12,7 @@ export const calculateFocusQualityScore = (params: {
   totalSessionsCount: number;
   focusMinutes: number;
   problemsSolvedList: LeetCodeProblem[];
+  chaptersRead: number;
   consistencyDays: number;
   averageSleepMinutes: number;
   sleepGoalMinutes: number;
@@ -23,6 +24,7 @@ export const calculateFocusQualityScore = (params: {
     totalSessionsCount,
     focusMinutes,
     problemsSolvedList,
+    chaptersRead,
     consistencyDays,
     averageSleepMinutes,
     sleepGoalMinutes,
@@ -49,11 +51,19 @@ export const calculateFocusQualityScore = (params: {
 
   const codingTargetScore = Math.min((weightedCodingPoints / codingGoalPoints) * 100, 100);
 
+  // Chapters read target score (target: 3 chapters completed per week)
+  const chaptersTargetScore = Math.min((chaptersRead / 3) * 100, 100);
+
   // Focus duration score scaled by completion rate percentage (preventing endless idle starts)
   const baseDurationScore = Math.min((focusMinutes / focusGoalMinutes) * 100, 120); // capped at 120%
   const focusTargetScore = baseDurationScore * (completionRate / 100);
 
-  const combinedOutputScore = Math.min((focusTargetScore * 0.6) + (codingTargetScore * 0.4), 100);
+  const combinedOutputScore = Math.min(
+    (focusTargetScore * 0.4) + 
+    (codingTargetScore * 0.4) + 
+    (chaptersTargetScore * 0.2), 
+    100
+  );
 
   // 4. Sleep Recovery (20% Weight)
   const sleepAvgScore = Math.min((averageSleepMinutes / sleepGoalMinutes) * 100, 100);

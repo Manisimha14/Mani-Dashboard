@@ -14,6 +14,7 @@ export function calculateWeeklyReport(params: {
   waterEntries: WaterEntry[];
   sleepEntries: SleepEntry[];
   workoutEntries: WorkoutEntry[];
+  bookChapters: any[]; // Array of completed chapters
   stepsData: Record<string, number>;
   healthGoals: HealthGoal[];
   last7Days: string[];
@@ -25,6 +26,7 @@ export function calculateWeeklyReport(params: {
     waterEntries,
     sleepEntries,
     workoutEntries,
+    bookChapters,
     stepsData,
     healthGoals,
     last7Days,
@@ -91,6 +93,7 @@ export function calculateWeeklyReport(params: {
     completedSessions: 0,
     totalSessions: 0,
     problemsSolved: 0,
+    chaptersRead: 0,
     waterMl: 0,
     sleepMinutes: 0,
     sleepDaysWithData: 0,
@@ -99,6 +102,7 @@ export function calculateWeeklyReport(params: {
     waterDaysHit: 0,
     sleepDaysHit: 0,
     problemsDaysHit: 0,
+    readingDaysHit: 0,
     consistencyDays: 0,
   };
 
@@ -148,6 +152,13 @@ export function calculateWeeklyReport(params: {
       if (daySleep.totalMinutes >= sleepGoalMin) currentWeekStats.sleepDaysHit++;
     }
 
+    // Book chapters completed
+    const dayChapters = bookChapters.filter(
+      c => c.completed && normalizeToLocalDateString(c.dateCompleted) === date
+    ).length;
+    currentWeekStats.chaptersRead += dayChapters;
+    if (dayChapters > 0) currentWeekStats.readingDaysHit++;
+
     // Workouts
     currentWeekStats.workoutsCount += (indexed.workoutsMap.get(date) || []).length;
     
@@ -160,6 +171,7 @@ export function calculateWeeklyReport(params: {
     focusMinutes: 0,
     completedSessions: 0,
     problemsSolved: 0,
+    chaptersRead: 0,
     waterMl: 0,
     sleepMinutes: 0,
     sleepDaysWithData: 0,
@@ -184,6 +196,11 @@ export function calculateWeeklyReport(params: {
     const dayProblems = indexed.problemsMap.get(date) || [];
     prevWeekStats.problemsSolved += dayProblems.reduce((acc, p) => acc + (p.completed ? 1 : 0), 0);
 
+    const dayChapters = bookChapters.filter(
+      c => c.completed && normalizeToLocalDateString(c.dateCompleted) === date
+    ).length;
+    prevWeekStats.chaptersRead += dayChapters;
+
     const dayWater = indexed.waterMap.get(date) || [];
     prevWeekStats.waterMl += dayWater.reduce((acc, w) => acc + w.amount, 0);
 
@@ -204,6 +221,7 @@ export function calculateWeeklyReport(params: {
 
   const focusChange = getChangePct(currentWeekStats.focusMinutes, prevWeekStats.focusMinutes);
   const codingChange = getChangePct(currentWeekStats.problemsSolved, prevWeekStats.problemsSolved);
+  const readingChange = getChangePct(currentWeekStats.chaptersRead, prevWeekStats.chaptersRead);
   const waterChange = getChangePct(currentWeekStats.waterMl, prevWeekStats.waterMl);
   
   const currSleepAvg = currentWeekStats.sleepDaysWithData > 0 ? currentWeekStats.sleepMinutes / currentWeekStats.sleepDaysWithData : 0;
@@ -283,6 +301,7 @@ export function calculateWeeklyReport(params: {
     totalSessionsCount: currentWeekStats.totalSessions,
     focusMinutes: currentWeekStats.focusMinutes,
     problemsSolvedList: currentProblemsList,
+    chaptersRead: currentWeekStats.chaptersRead,
     consistencyDays: currentWeekStats.consistencyDays,
     averageSleepMinutes: currSleepAvg,
     sleepGoalMinutes: sleepGoalMin,
@@ -305,7 +324,11 @@ export function calculateWeeklyReport(params: {
     const dayWorkout = (indexed.workoutsMap.get(date) || []).length > 0;
     const problemsSolved = (indexed.problemsMap.get(date) || []).reduce((acc, p) => acc + (p.completed ? 1 : 0), 0);
 
-    return { focusMin, sleepMin, waterTotal, dayWorkout, problemsSolved };
+    const dayChapters = bookChapters.filter(
+      c => c.completed && normalizeToLocalDateString(c.dateCompleted) === date
+    ).length;
+
+    return { focusMin, sleepMin, waterTotal, dayWorkout, problemsSolved, dayChapters };
   });
 
   const sleepFocusData = dailyData.filter(d => d.sleepMin > 0 && d.focusMin > 0);
@@ -358,12 +381,14 @@ export function calculateWeeklyReport(params: {
   // Wins
   if (completionRate >= 80 && currentWeekStats.totalSessions > 0) wins.push("Strong consistency: maintained a focus session completion rate above 80%.");
   if (currentWeekStats.problemsSolved >= 4) wins.push(`Problem-solving activity: successfully resolved ${currentWeekStats.problemsSolved} coding exercises.`);
+  if (currentWeekStats.chaptersRead >= 3) wins.push(`Excellent reading habits: completed ${currentWeekStats.chaptersRead} book chapters this week.`);
   if (currentWeekStats.focusMinutes >= focusGoalMin) wins.push(`Focused for over ${Math.round(currentWeekStats.focusMinutes / 60)} hours this week.`);
   if (avgWater >= waterGoalMl) wins.push("Consistent hydration: daily water targets were fully achieved.");
 
   // Concerns
   if (avgSleep < sleepGoalMin && currentWeekStats.sleepDaysWithData > 0) risks.push(`Average daily sleep fell below your ${(sleepGoalMin / 60).toFixed(1)}h rest target.`);
   if (avgWater < waterGoalMl * 0.9) risks.push(`Average hydration fell below your ${(waterGoalMl / 1000).toFixed(1)}L target.`);
+  if (currentWeekStats.chaptersRead === 0) risks.push("Zero reading activity: no book chapters completed this week.");
   if (completionRate < 70 && currentWeekStats.totalSessions > 0) risks.push("Focus routine interrupted by multiple early session abandonments.");
   if (currentWeekStats.totalSessions < 3) risks.push("Weekly logged focus sessions are below your target frequency.");
 
@@ -375,6 +400,10 @@ export function calculateWeeklyReport(params: {
   if (avgSleep < sleepGoalMin + 30) {
     recommendations.push("Prioritize sleep hygiene to support recovery.");
     actionPlan.push(`Wind down 45 minutes before sleep and aim for ${(sleepGoalMin / 60).toFixed(1)}h rest.`);
+  }
+  if (currentWeekStats.chaptersRead < 3) {
+    recommendations.push("Dedicate 15 minutes of quiet reading to rebuild your routine.");
+    actionPlan.push("Complete at least 3 chapters in your current book next week.");
   }
   if (completionRate < 80) {
     recommendations.push("Break work into smaller intervals to manage distraction triggers.");
@@ -390,6 +419,7 @@ export function calculateWeeklyReport(params: {
   const codingChartData = dailyData.map(d => d.problemsSolved);
   const waterChartData = dailyData.map(d => d.waterTotal);
   const sleepChartData = dailyData.map(d => d.sleepMin);
+  const readingChartData = dailyData.map(d => d.dayChapters);
 
   return {
     focusMinutes: currentWeekStats.focusMinutes,
@@ -397,12 +427,14 @@ export function calculateWeeklyReport(params: {
     completionRate,
     focusQualityScore,
     problemsSolved: currentWeekStats.problemsSolved,
+    chaptersRead: currentWeekStats.chaptersRead,
     waterAverageL: (avgWater / 1000).toFixed(1),
     sleepAverageH: (avgSleep / 60).toFixed(1),
     workoutCount: currentWeekStats.workoutsCount,
     stepsAverage: Math.round(currentWeekStats.steps / 7),
     focusChange,
     codingChange,
+    readingChange,
     waterChange,
     sleepChange,
     bestFocusDay,
@@ -420,10 +452,12 @@ export function calculateWeeklyReport(params: {
     waterDaysHit: currentWeekStats.waterDaysHit,
     sleepDaysHit: currentWeekStats.sleepDaysHit,
     problemsDaysHit: currentWeekStats.problemsDaysHit,
+    readingDaysHit: currentWeekStats.readingDaysHit,
     focusChartData,
     codingChartData,
     waterChartData,
     sleepChartData,
+    readingChartData,
     sleepDaysWithData: currentWeekStats.sleepDaysWithData
   };
 }

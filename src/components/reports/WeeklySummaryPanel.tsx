@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Award, CheckSquare, Clock, HelpCircle } from 'lucide-react';
+import { Award, CheckSquare, Clock, HelpCircle, BookOpen } from 'lucide-react';
 import type { WeeklyReportStats } from '../../types/report';
 
 interface WeeklySummaryPanelProps {
@@ -22,7 +22,7 @@ export default function WeeklySummaryPanel({
     <div className="space-y-6">
       
       {/* Top executive row with focus quality score index */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         
         {/* Focus Quality Score Widget */}
         <div className="p-5 rounded-2xl bg-gradient-to-br from-violet-600/10 via-indigo-600/5 to-transparent border border-violet-500/15 flex flex-col justify-between hover:bg-violet-900/5 transition-all">
@@ -43,7 +43,7 @@ export default function WeeklySummaryPanel({
             <Award size={16} className="text-violet-400" />
           </div>
           <div className="mt-3 flex items-baseline gap-1.5">
-            <span className="text-4xl font-black text-white tracking-tight">{stats.focusQualityScore}</span>
+            <span className="text-3xl font-black text-white tracking-tight">{stats.focusQualityScore}</span>
             <span className="text-xs text-white/40 font-bold">/ 100</span>
           </div>
           <span className="text-[9px] text-white/40 font-bold mt-2 leading-snug">
@@ -58,7 +58,7 @@ export default function WeeklySummaryPanel({
             <CheckSquare size={16} className="text-cyan-400" />
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-4xl font-black text-white tracking-tight">{stats.problemsSolved}</span>
+            <span className="text-3xl font-black text-white tracking-tight">{stats.problemsSolved}</span>
             {stats.codingChange !== 0 && (
               <span className={`text-[10px] font-bold ${stats.codingChange > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                 {stats.codingChange > 0 ? '↑' : '↓'} {Math.abs(stats.codingChange)}%
@@ -66,7 +66,26 @@ export default function WeeklySummaryPanel({
             )}
           </div>
           <span className="text-[9px] text-white/40 font-bold mt-2">
-            Weekly algorithmic exercises solved
+            Weekly exercises completed
+          </span>
+        </div>
+
+        {/* Book Chapters Completed */}
+        <div className="p-5 rounded-2xl bg-white/[0.02] border border-white/5 flex flex-col justify-between hover:bg-white/[0.04] transition-all">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest">Chapters Done</span>
+            <BookOpen size={16} className="text-amber-400" />
+          </div>
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="text-3xl font-black text-white tracking-tight">{stats.chaptersRead}</span>
+            {stats.readingChange !== 0 && (
+              <span className={`text-[10px] font-bold ${stats.readingChange > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                {stats.readingChange > 0 ? '↑' : '↓'} {Math.abs(stats.readingChange)}%
+              </span>
+            )}
+          </div>
+          <span className="text-[9px] text-white/40 font-bold mt-2">
+            Book chapters completed
           </span>
         </div>
 
@@ -77,7 +96,7 @@ export default function WeeklySummaryPanel({
             <Clock size={16} className="text-emerald-400" />
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-4xl font-black text-white tracking-tight">{(stats.focusMinutes / 60).toFixed(1)}h</span>
+            <span className="text-3xl font-black text-white tracking-tight">{(stats.focusMinutes / 60).toFixed(1)}h</span>
             {stats.focusChange !== 0 && (
               <span className={`text-[10px] font-bold ${stats.focusChange > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                 {stats.focusChange > 0 ? '↑' : '↓'} {Math.abs(stats.focusChange)}%
@@ -85,7 +104,7 @@ export default function WeeklySummaryPanel({
             )}
           </div>
           <span className="text-[9px] text-white/40 font-bold mt-2">
-            Total work focus duration
+            Total focus duration
           </span>
         </div>
 
@@ -103,9 +122,9 @@ export default function WeeklySummaryPanel({
             <h5 className="font-black text-violet-400 uppercase tracking-wider text-[10px]">How your Focus Score is calculated:</h5>
             <p>The score is a composite formula representing self-tracking metrics across four key pillars:</p>
             <ul className="list-disc pl-4 space-y-1 text-white/60">
-              <li><strong className="text-white/80">30% Completion Rate:</strong> Calculated sessions completed versus total focus blocks initialized.</li>
+              <li><strong className="text-white/80">30% Completion Rate:</strong> Completed focus sessions versus total focus blocks initialized.</li>
               <li><strong className="text-white/80">25% Consistency:</strong> Score representing the ratio of active focus days logged out of 7.</li>
-              <li><strong className="text-white/80">25% Output Target:</strong> Total learning output, built features, and problems solved vs targets.</li>
+              <li><strong className="text-white/80">25% Output Target:</strong> Balanced metrics of focus minutes, coding point weights, and book chapters read.</li>
               <li><strong className="text-white/80">20% Rest & Recovery:</strong> Average daily sleep duration relative to sleep targets.</li>
             </ul>
           </motion.div>
@@ -113,7 +132,7 @@ export default function WeeklySummaryPanel({
       </AnimatePresence>
 
       {/* Comparison Cards for Daily Habit Averages */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
           { 
             label: 'Daily Water Avg', 
@@ -135,6 +154,13 @@ export default function WeeklySummaryPanel({
             change: 0, 
             color: 'text-rose-400', 
             desc: 'Physical fitness habits' 
+          },
+          { 
+            label: 'Daily Steps Avg', 
+            value: stats.stepsAverage.toLocaleString(), 
+            change: 0, 
+            color: 'text-emerald-400', 
+            desc: 'Average daily steps' 
           }
         ].map(item => (
           <div key={item.label} className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 flex flex-col gap-1 hover:bg-white/[0.04] transition-all">
@@ -171,11 +197,12 @@ export default function WeeklySummaryPanel({
       {/* Goal Progress Section */}
       <div className="space-y-3">
         <h4 className="text-xs font-black text-white/40 uppercase tracking-widest">Goal Progress</h4>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           {[
             { title: 'Hydration Target', progress: stats.waterDaysHit, desc: `Days logged >= ${(waterGoalMl/1000).toFixed(1)}L` },
             { title: 'Sleep Target', progress: stats.sleepDaysHit, desc: `Days recovery >= ${sleepHours}h` },
-            { title: 'Coding Activity', progress: stats.problemsDaysHit, desc: 'Days solving problems' }
+            { title: 'Coding Activity', progress: stats.problemsDaysHit, desc: 'Days solving problems' },
+            { title: 'Reading Status', progress: stats.readingDaysHit, desc: 'Days completing chapters' }
           ].map((hab, idx) => (
             <div key={idx} className="p-4 rounded-xl bg-white/[0.02] border border-white/5 flex flex-col gap-1">
               <span className="text-xs font-bold text-white">{hab.title}</span>

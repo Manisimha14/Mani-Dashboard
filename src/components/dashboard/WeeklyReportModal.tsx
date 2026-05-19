@@ -25,6 +25,7 @@ interface WeeklyReportModalProps {
   waterEntries: WaterEntry[];
   sleepEntries: SleepEntry[];
   workoutEntries: WorkoutEntry[];
+  bookChapters: any[];
   stepsData: Record<string, number>;
   healthGoals: HealthGoal[];
 }
@@ -37,6 +38,7 @@ export default function WeeklyReportModal({
   waterEntries,
   sleepEntries,
   workoutEntries,
+  bookChapters,
   stepsData,
   healthGoals
 }: WeeklyReportModalProps) {
@@ -87,6 +89,7 @@ export default function WeeklyReportModal({
             waterEntries,
             sleepEntries,
             workoutEntries,
+            bookChapters,
             stepsData,
             healthGoals,
             last7Days,
@@ -111,6 +114,7 @@ export default function WeeklyReportModal({
     waterEntries,
     sleepEntries,
     workoutEntries,
+    bookChapters,
     stepsData,
     healthGoals,
     last7Days,
