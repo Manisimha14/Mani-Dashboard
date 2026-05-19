@@ -734,11 +734,25 @@ export const useAppStore = create<AppStore>()(
           const tag = notification.metadata && 'reminderId' in notification.metadata
             ? (notification.metadata as any).reminderId
             : undefined;
-          new Notification(notification.title, {
-            body: notification.message,
-            icon: '/pwa-192x192.png',
-            tag: tag,
-          });
+
+          try {
+            if ('serviceWorker' in navigator) {
+              navigator.serviceWorker.ready.then((registration) => {
+                registration.showNotification(notification.title, {
+                  body: notification.message,
+                  icon: '/pwa-192x192.png',
+                  tag: tag,
+                });
+              }).catch(() => {
+                // Fallback
+                new Notification(notification.title, { body: notification.message, icon: '/pwa-192x192.png', tag: tag });
+              });
+            } else {
+              new Notification(notification.title, { body: notification.message, icon: '/pwa-192x192.png', tag: tag });
+            }
+          } catch (e) {
+            console.error('Failed to show notification', e);
+          }
         }
 
         // Toast alert with CTA callback if backup nudge
