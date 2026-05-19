@@ -150,7 +150,7 @@ export const COMMAND_REGISTRY: Record<string, CommandHandler> = {
     name = name.replace(/^['"]|['"]$/g, '');
     const todayStr = new Date().toISOString().slice(0, 10);
     
-    useAppStore.getState().addProblem({
+    ctx.onAddProblem({
       name,
       difficulty: diff,
       completed: true,

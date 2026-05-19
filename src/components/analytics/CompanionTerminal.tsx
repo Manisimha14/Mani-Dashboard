@@ -4,7 +4,7 @@ import type { Variants } from 'framer-motion';
 import { format, subDays, parseISO } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { useFocusSessions } from '../../hooks/useFocusQuery';
-import { useProblems } from '../../hooks/useLeetCodeQuery';
+import { useProblems, useAddProblem } from '../../hooks/useLeetCodeQuery';
 import { useProfile } from '../../hooks/useProfileQuery';
 import {
   useAddWater,
@@ -58,9 +58,10 @@ export default function CompanionTerminal({
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // Health mutations
+  // Health and coding mutations
   const addWaterMut = useAddWater();
   const addMealMut  = useAddMeal();
+  const addProblemMut = useAddProblem();
 
   // Compute biometric statistics dynamically
   const biometricStats = useMemo<BiometricStats>(() => {
@@ -168,6 +169,9 @@ export default function CompanionTerminal({
           time: format(new Date(), 'HH:mm'),
         });
       },
+      onAddProblem: (problem) => {
+        addProblemMut.mutate(problem);
+      },
     };
 
     const handler = COMMAND_REGISTRY[resolvedCommand];
@@ -190,7 +194,7 @@ export default function CompanionTerminal({
       return merged.slice(-60);
     });
     setCommandHistory(prev => [...prev, cmdRaw]);
-  }, [focusSessions, problems, biometricStats, focusStreak, navigate, onClose, addWaterMut, addMealMut]);
+  }, [focusSessions, problems, biometricStats, focusStreak, navigate, onClose, addWaterMut, addMealMut, addProblemMut]);
 
   // Stable Callback Refs to completely isolate TerminalInput from parent re-renders
   const executeRef = useRef(handleExecuteCommand);

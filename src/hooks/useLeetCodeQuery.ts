@@ -64,6 +64,9 @@ export function useAddProblem(): UseMutationResult<unknown, Error, Omit<LeetCode
         );
 
         await ActivitySvc.upsertDailyActivity(user.id, todayAct);
+
+        // Award XP for authenticated LeetCode solves
+        useAppStore.getState().addXp(150, 'coding', `Solved problem: ${problem.name}`);
       }
       
       return res;

@@ -1,4 +1,5 @@
 import type { Variants } from 'framer-motion';
+import type { LeetCodeProblem } from '../../../types';
 
 export interface FocusSession {
   id: string;
@@ -47,4 +48,5 @@ export interface TerminalContext {
   onNavigate: (path: string) => void;
   onLogWater: (amount: number) => void;
   onLogCalories: (amount: number) => void;
+  onAddProblem: (problem: Omit<LeetCodeProblem, 'id'>) => void;
 }
