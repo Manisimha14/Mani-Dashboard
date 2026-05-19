@@ -32,7 +32,7 @@ export default function WorkoutTracker({ today }: { today: string }) {
   const [isEditingGoal, setIsEditingGoal] = useState(false);
   const [tempGoalVal, setTempGoalVal] = useState('');
 
-  const { user } = useAuth();
+  const { user, signInWithGoogle } = useAuth();
   const logStepsMut = useLogSteps();
 
   const todayWorkouts = workouts; // already filtered by date from the hook
@@ -170,11 +170,24 @@ export default function WorkoutTracker({ today }: { today: string }) {
           <span className="text-sm">⚠️</span>
           <div className="flex-1">
             <span className="font-bold">Sync Failed: </span>
-            {syncError}
+            <span className="block mt-0.5 whitespace-pre-wrap">{syncError}</span>
+            {(syncError.includes('401') || syncError.toLowerCase().includes('credential') || syncError.toLowerCase().includes('auth') || syncError.toLowerCase().includes('sign in')) && (
+              <div className="mt-2.5">
+                <button
+                  onClick={() => {
+                    play('click');
+                    signInWithGoogle();
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/35 border border-rose-500/30 text-white font-bold transition-all text-[11px] flex items-center gap-1.5 cursor-pointer"
+                >
+                  🔐 Renew Google Fit Authentication
+                </button>
+              </div>
+            )}
           </div>
           <button
             onClick={() => setSyncError(null)}
-            className="text-white/30 hover:text-white/60 transition-colors p-1 absolute top-2 right-2"
+            className="text-white/30 hover:text-white/60 transition-colors p-1 absolute top-2 right-2 cursor-pointer"
           >
             <X size={12} />
           </button>
