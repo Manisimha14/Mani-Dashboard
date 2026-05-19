@@ -94,7 +94,7 @@ export default function Reports() {
   const [countdown, setCountdown] = useState(() => getNextMondayCountdown());
   const [selectedWeeksAgo, setSelectedWeeksAgo] = useState<number | null>(null);
   const [pdfGeneratingWeek, setPdfGeneratingWeek] = useState<number | null>(null);
-  const [activeTab, setActiveTab] = useState<'cycles' | 'trends' | 'biometrics'>('cycles');
+  const [activeTab, setActiveTab] = useState<'cycles' | 'trends'>('cycles');
   const [confirmDeleteKey, setConfirmDeleteKey] = useState<string | null>(null);
 
   // Queries for data streams to support instant calculations
@@ -140,8 +140,8 @@ export default function Reports() {
     return { last7Days, prev7Days, startDateStr, endDateStr };
   };
 
-  // Compile list of past weeks
-  const pastWeeks = useMemo(() => {
+  // Compile list of weeks for UI report cards (filtered by deletedReports, up to 5 completed + ongoing)
+  const uiReportWeeks = useMemo(() => {
     const generated = Array.from({ length: 20 }).map((_, idx) => {
       const { last7Days, prev7Days, startDateStr, endDateStr } = getWeekCycleInfo(idx);
       const weekKey = `${last7Days[0]}_${last7Days[6]}`;
@@ -160,9 +160,9 @@ export default function Reports() {
     return [ongoingWeek, ...limitedCompletedWeeks];
   }, [deletedReports]);
 
-  // Compile calculated aggregates for each of the weeks
-  const weeklyAggregates = useMemo(() => {
-    return pastWeeks.map(({ weeksAgo, last7Days, prev7Days, startDateStr, endDateStr, weekKey }) => {
+  // Compile calculated aggregates for each of the UI report weeks (filtered)
+  const uiReportAggregates = useMemo(() => {
+    return uiReportWeeks.map(({ weeksAgo, last7Days, prev7Days, startDateStr, endDateStr, weekKey }) => {
       const stats = calculateWeeklyReport({
         focusSessions,
         problems,
@@ -187,108 +187,47 @@ export default function Reports() {
         stats
       };
     });
-  }, [pastWeeks, focusSessions, problems, waterEntries, sleepEntries, workoutEntries, book, stepsData, healthGoals, meals, trackers]);
+  }, [uiReportWeeks, focusSessions, problems, waterEntries, sleepEntries, workoutEntries, book, stepsData, healthGoals, meals, trackers]);
 
-  // Compute all-time / 6-week peak scores
-  const peaks = useMemo(() => {
-    if (weeklyAggregates.length === 0) {
-      return { focusHours: 0, codingSolves: 0, readingChapters: 0, avgConsistency: 0 };
-    }
-    const focusHours = Math.max(...weeklyAggregates.map(w => w.stats.focusMinutes / 60));
-    const codingSolves = Math.max(...weeklyAggregates.map(w => w.stats.problemsSolved));
-    const readingChapters = Math.max(...weeklyAggregates.map(w => w.stats.chaptersRead));
-    const avgConsistency = Math.round(
-      weeklyAggregates.reduce((acc, w) => acc + w.stats.focusQualityScore, 0) / weeklyAggregates.length
-    );
-    return { focusHours, codingSolves, readingChapters, avgConsistency };
-  }, [weeklyAggregates]);
+  // Compile list of past weeks for analytics charts (always rolling 6 weeks, unfiltered by deletedReports)
+  const analyticsWeeks = useMemo(() => {
+    return Array.from({ length: 6 }).map((_, idx) => {
+      const { last7Days, prev7Days, startDateStr, endDateStr } = getWeekCycleInfo(idx);
+      const weekKey = `${last7Days[0]}_${last7Days[6]}`;
+      return { weeksAgo: idx, last7Days, prev7Days, startDateStr, endDateStr, weekKey };
+    });
+  }, []);
 
-  // Custom diagnostic smart insight builder
-  const diagnosticInsights = useMemo(() => {
-    if (weeklyAggregates.length === 0) return [];
-    const current = weeklyAggregates[0].stats;
-    
-    const insights: Array<{
-      title: string;
-      text: string;
-      type: 'warning' | 'success' | 'info';
-    }> = [];
-
-    // Rule 1: High focus duration but low sleep average (Burnout risk)
-    const currentSleepAvgHours = parseFloat(current.sleepAverageH) || 0;
-    if (current.focusMinutes > 600 && currentSleepAvgHours > 0 && currentSleepAvgHours < 6.5) {
-      insights.push({
-        title: 'High Cognitive Load, Low Sleep Recovery',
-        text: `Your focus duration is exceptional at ${(current.focusMinutes / 60).toFixed(1)}h, but your sleep average has dropped to ${current.sleepAverageH}h. Guard your rest blocks to prevent cognitive fatigue!`,
-        type: 'warning'
+  // Compile calculated aggregates for each of the weeks for analytics (unfiltered by deletedReports)
+  const weeklyAggregates = useMemo(() => {
+    return analyticsWeeks.map(({ weeksAgo, last7Days, prev7Days, startDateStr, endDateStr, weekKey }) => {
+      const stats = calculateWeeklyReport({
+        focusSessions,
+        problems,
+        waterEntries,
+        sleepEntries,
+        workoutEntries,
+        bookChapters: book?.chapters ?? [],
+        stepsData,
+        healthGoals,
+        last7Days,
+        prev7Days,
+        meals,
+        trackers
       });
-    }
+      return {
+        weeksAgo,
+        startDateStr,
+        endDateStr,
+        last7Days,
+        prev7Days,
+        weekKey,
+        stats
+      };
+    });
+  }, [analyticsWeeks, focusSessions, problems, waterEntries, sleepEntries, workoutEntries, book, stepsData, healthGoals, meals, trackers]);
 
-    // Rule 2: Active fitness training but low daily steps (Low background mobility)
-    if (current.workoutCount >= 3 && current.stepsAverage < 5000 && current.stepsAverage > 0) {
-      insights.push({
-        title: 'Active Workouts, Low Background Mobility',
-        text: `You logged ${current.workoutCount} workouts, but your daily average step count is only ${current.stepsAverage.toLocaleString()} steps. Consider adding brief active walking breaks between deep coding focus blocks.`,
-        type: 'info'
-      });
-    }
 
-    // Rule 3: Hydration deficit relative to daily cognitive effort
-    const currentWaterL = parseFloat(current.waterAverageL);
-    if (currentWaterL > 0 && currentWaterL < 2.2) {
-      insights.push({
-        title: 'Hydration Deficit Detected',
-        text: `Your water average is currently ${currentWaterL}L/day, running below your target. Proper hydration directly maintains executive brain function and focus endurance during task cycles.`,
-        type: 'warning'
-      });
-    }
-
-    // Rule 4: Perfect cognitive habit balance (Sleep, Hydration, Focus)
-    if (current.focusQualityScore >= 80 && currentSleepAvgHours >= 7.5 && currentWaterL >= 2.8) {
-      insights.push({
-        title: 'Peak Performance Calibration',
-        text: `Outstanding! You've achieved elite cognitive focus (${current.focusQualityScore}%) while fully preserving rest and hydration targets this cycle. You are in optimal flow state.`,
-        type: 'success'
-      });
-    }
-
-    // Rule 5: Coding solves vs Focus block consistency
-    if (current.problemsSolved >= 5 && current.completionRate < 70) {
-      insights.push({
-        title: 'High Code Yield vs Low Pomodoro Completion',
-        text: `You completed ${current.problemsSolved} coding solves, but your Pomodoro focus block completion rate fell to ${current.completionRate}%. Try to decrease distraction triggers during active work cycles.`,
-        type: 'info'
-      });
-    }
-
-    // Rule 6: Heavy technical focus but zero reading
-    if (current.problemsSolved >= 4 && current.chaptersRead === 0) {
-      insights.push({
-        title: 'Technical Bias vs Reading Deficit',
-        text: `Excellent coding output this week (${current.problemsSolved} solved exercises). However, reading habits are dormant. Aim for at least 1 chapter next week to diversify cognitive stimulation.`,
-        type: 'info'
-      });
-    }
-
-    // Fallback if no issues:
-    if (insights.length === 0) {
-      if (current.focusQualityScore >= 70) {
-        insights.push({
-          title: 'Strong Consistency Maintained',
-          text: `Your focus and health baselines are well aligned this week. Keep up the active tracking streaks!`,
-          type: 'success'
-        });
-      } else {
-        insights.push({
-          title: 'Awaiting Diagnostic Metrics',
-          text: `Continue logging focus blocks, sleep durations, and hydration in the dashboard to generate advanced heuristic diagnostic insights.`,
-          type: 'info'
-        });
-      }
-    }
-
-    return insights;
-  }, [weeklyAggregates]);
 
   // Programmatic direct PDF compiler without modal overlays
   const triggerPdfGeneration = (weeksAgo: number, last7Days: string[], prev7Days: string[]) => {
@@ -338,29 +277,6 @@ export default function Reports() {
     return [...weeklyAggregates].reverse();
   }, [weeklyAggregates]);
 
-  // Biometrics Matrix Trajectory Icon helper
-  const getTrendIcon = (currScore: number, prevScore: number) => {
-    if (currScore > prevScore) {
-      return (
-        <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/15">
-          <TrendingUp size={10} /> +{currScore - prevScore}%
-        </span>
-      );
-    }
-    if (currScore < prevScore) {
-      return (
-        <span className="inline-flex items-center gap-1 text-[10px] font-black text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/15">
-          <TrendingDown size={10} /> -{prevScore - currScore}%
-        </span>
-      );
-    }
-    return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-black text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/15">
-        <Activity size={10} /> Stable
-      </span>
-    );
-  };
-
   return (
     <motion.div 
       initial={{ opacity: 0 }}
@@ -381,56 +297,7 @@ export default function Reports() {
         </div>
       </div>
 
-      {/* Apple-Grade Executive Scorecard (All-time peaks & aggregates) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-5 rounded-3xl bg-white/[0.01] border border-white/5 backdrop-blur-md flex flex-col justify-between hover:bg-white/[0.02] transition-all relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-violet-500/5 rounded-full blur-2xl" />
-          <div className="flex items-center justify-between">
-            <span className="text-[9px] font-black text-violet-400 uppercase tracking-widest">Peak Focus Hours</span>
-            <Flame size={16} className="text-violet-400 group-hover:scale-110 transition-transform" />
-          </div>
-          <div className="mt-4">
-            <h3 className="text-3xl font-black text-white tracking-tight">{peaks.focusHours.toFixed(1)}<span className="text-xs text-white/40 ml-1">hrs</span></h3>
-            <p className="text-[9px] text-white/40 font-bold uppercase mt-1">All-time weekly maximum</p>
-          </div>
-        </div>
 
-        <div className="p-5 rounded-3xl bg-white/[0.01] border border-white/5 backdrop-blur-md flex flex-col justify-between hover:bg-white/[0.02] transition-all relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-cyan-500/5 rounded-full blur-2xl" />
-          <div className="flex items-center justify-between">
-            <span className="text-[9px] font-black text-cyan-400 uppercase tracking-widest">Max Code Solves</span>
-            <Code2 size={16} className="text-cyan-400 group-hover:scale-110 transition-transform" />
-          </div>
-          <div className="mt-4">
-            <h3 className="text-3xl font-black text-white tracking-tight">{peaks.codingSolves}<span className="text-xs text-white/40 ml-1">solved</span></h3>
-            <p className="text-[9px] text-white/40 font-bold uppercase mt-1">Highest completed in a cycle</p>
-          </div>
-        </div>
-
-        <div className="p-5 rounded-3xl bg-white/[0.01] border border-white/5 backdrop-blur-md flex flex-col justify-between hover:bg-white/[0.02] transition-all relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 rounded-full blur-2xl" />
-          <div className="flex items-center justify-between">
-            <span className="text-[9px] font-black text-amber-400 uppercase tracking-widest">Peak Chapters Read</span>
-            <BookOpen size={16} className="text-amber-400 group-hover:scale-110 transition-transform" />
-          </div>
-          <div className="mt-4">
-            <h3 className="text-3xl font-black text-white tracking-tight">{peaks.readingChapters}<span className="text-xs text-white/40 ml-1">ch</span></h3>
-            <p className="text-[9px] text-white/40 font-bold uppercase mt-1">Top weekly reading milestone</p>
-          </div>
-        </div>
-
-        <div className="p-5 rounded-3xl bg-white/[0.01] border border-white/5 backdrop-blur-md flex flex-col justify-between hover:bg-white/[0.02] transition-all relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-rose-500/5 rounded-full blur-2xl" />
-          <div className="flex items-center justify-between">
-            <span className="text-[9px] font-black text-rose-400 uppercase tracking-widest">Consistency Rating</span>
-            <Award size={16} className="text-rose-400 group-hover:scale-110 transition-transform" />
-          </div>
-          <div className="mt-4">
-            <h3 className="text-3xl font-black text-white tracking-tight">{peaks.avgConsistency}<span className="text-xs text-white/40 ml-1">%</span></h3>
-            <p className="text-[9px] text-white/40 font-bold uppercase mt-1">6-week rolling composite score</p>
-          </div>
-        </div>
-      </div>
 
       {/* Countdown Card (Next Report Synthesis) */}
       <div className="p-6 rounded-3xl bg-gradient-to-br from-violet-950/20 via-indigo-950/10 to-transparent border border-violet-500/15 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6">
@@ -483,8 +350,7 @@ export default function Reports() {
         <div className="flex gap-1.5 p-1.5 rounded-2xl bg-white/[0.02] border border-white/5 backdrop-blur-md w-full max-w-2xl overflow-x-auto">
           {[
             { id: 'cycles', label: '📅 Weekly Cycles', icon: CalendarRange },
-            { id: 'trends', label: '📈 Trends & Insights', icon: BarChart3 },
-            { id: 'biometrics', label: '📊 Biometrics Matrix', icon: Activity }
+            { id: 'trends', label: '📈 Trends & Insights', icon: BarChart3 }
           ].map((tab) => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
@@ -529,7 +395,7 @@ export default function Reports() {
                 </div>
 
                 {(() => {
-                  const ongoing = weeklyAggregates.find(w => w.weeksAgo === 0);
+                  const ongoing = uiReportAggregates.find(w => w.weeksAgo === 0);
                   if (!ongoing) return null;
                   const { weeksAgo, startDateStr, endDateStr, last7Days, prev7Days, stats } = ongoing;
 
@@ -617,13 +483,13 @@ export default function Reports() {
                   <h3 className="text-xs font-black uppercase tracking-widest text-white/50">Completed Weekly Reports</h3>
                 </div>
 
-                {weeklyAggregates.filter(w => w.weeksAgo > 0).length === 0 ? (
+                {uiReportAggregates.filter(w => w.weeksAgo > 0).length === 0 ? (
                   <div className="p-8 rounded-3xl border border-white/5 bg-white/[0.01] text-center max-w-xl">
                     <p className="text-xs text-white/40 font-semibold uppercase">No completed reports found.</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                    {weeklyAggregates.filter(w => w.weeksAgo > 0).map(({ weeksAgo, startDateStr, endDateStr, last7Days, prev7Days, weekKey, stats }) => {
+                    {uiReportAggregates.filter(w => w.weeksAgo > 0).map(({ weeksAgo, startDateStr, endDateStr, last7Days, prev7Days, weekKey, stats }) => {
                       return (
                         <div 
                           key={weeksAgo}
@@ -658,7 +524,7 @@ export default function Reports() {
                                     <span className="text-[9px] font-black uppercase tracking-widest">Delete Report?</span>
                                   </div>
                                   <p className="text-[11px] text-white/70 font-semibold leading-relaxed">
-                                    Are you sure you want to delete the report for <span className="text-white font-bold">{startDateStr} – {endDateStr}</span>? This will permanently filter it out from your analytics, charts, peaks, and comparisons.
+                                    Are you sure you want to delete this weekly report card from the list? (This will not affect your historical trend charts.)
                                   </p>
                                 </div>
                                 <div className="flex gap-2">
@@ -863,147 +729,6 @@ export default function Reports() {
                   </div>
                 </div>
 
-              </div>
-
-              {/* Smart Heuristic Insights Center */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-white/40">
-                  <Sparkles size={16} />
-                  <h3 className="text-xs font-black uppercase tracking-widest">Mani OS Diagnostics & Insight Feed</h3>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {diagnosticInsights.map((insight, idx) => {
-                    const isWarning = insight.type === 'warning';
-                    const isSuccess = insight.type === 'success';
-
-                    return (
-                      <div 
-                        key={idx}
-                        className={`p-5 rounded-3xl border flex gap-4 transition-all hover:bg-white/[0.02] ${
-                          isWarning 
-                            ? 'bg-amber-500/[0.02] border-amber-500/15 text-amber-400' 
-                            : isSuccess 
-                            ? 'bg-emerald-500/[0.02] border-emerald-500/15 text-emerald-400' 
-                            : 'bg-cyan-500/[0.02] border-cyan-500/15 text-cyan-400'
-                        }`}
-                      >
-                        <div className={`p-2.5 rounded-2xl shrink-0 h-10 w-10 flex items-center justify-center ${
-                          isWarning 
-                            ? 'bg-amber-500/10' 
-                            : isSuccess 
-                            ? 'bg-emerald-500/10' 
-                            : 'bg-cyan-500/10'
-                        }`}>
-                          {isWarning ? <AlertTriangle size={16} /> : isSuccess ? <CheckCircle2 size={16} /> : <Info size={16} />}
-                        </div>
-                        <div className="space-y-1">
-                          <h4 className="text-xs font-black uppercase tracking-wider">
-                            {insight.title}
-                          </h4>
-                          <p className="text-xs text-white/60 font-semibold leading-relaxed">
-                            {insight.text}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 3: BIOMETRICS COMPARISON MATRIX */}
-          {activeTab === 'biometrics' && (
-            <div className="space-y-6">
-              <div className="flex items-center gap-2 text-white/40">
-                <Activity size={16} />
-                <h3 className="text-xs font-black uppercase tracking-widest">Multi-Cycle Biometric Comparison Matrix</h3>
-              </div>
-
-              {/* Table Wrapper with Glassmorphic design and scroll */}
-              <div className="w-full overflow-hidden rounded-3xl border border-white/5 bg-white/[0.01] backdrop-blur-md">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-white/10 bg-white/[0.02]">
-                        <th className="px-6 py-4 text-[10px] font-black text-white/40 uppercase tracking-wider">Week Cycle</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-white/40 uppercase tracking-wider flex items-center gap-1.5">
-                          <Bed size={12} className="text-pink-400" /> Sleep Avg
-                        </th>
-                        <th className="px-6 py-4 text-[10px] font-black text-white/40 uppercase tracking-wider">
-                          <div className="flex items-center gap-1.5">
-                            <Footprints size={12} className="text-emerald-400" /> Steps Avg
-                          </div>
-                        </th>
-                        <th className="px-6 py-4 text-[10px] font-black text-white/40 uppercase tracking-wider">
-                          <div className="flex items-center gap-1.5">
-                            <Droplet size={12} className="text-blue-400" /> Hydration Avg
-                          </div>
-                        </th>
-                        <th className="px-6 py-4 text-[10px] font-black text-white/40 uppercase tracking-wider">
-                          <div className="flex items-center gap-1.5">
-                            <Dumbbell size={12} className="text-rose-400" /> Fitness
-                          </div>
-                        </th>
-                        <th className="px-6 py-4 text-[10px] font-black text-white/40 uppercase tracking-wider">Calorie Bal</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-white/40 uppercase tracking-wider">Consistency</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {weeklyAggregates.map((item, idx) => {
-                        const nextItem = weeklyAggregates[idx + 1];
-                        return (
-                          <tr 
-                            key={item.weeksAgo} 
-                            className="hover:bg-white/[0.02] transition-colors"
-                          >
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className="text-xs font-black text-white block">
-                                {item.weeksAgo === 0 ? 'Current Week Cycle' : `Week -${item.weeksAgo}`}
-                              </span>
-                              <span className="text-[10px] text-white/30 font-semibold mt-0.5 block">
-                                {item.startDateStr} – {item.endDateStr}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className="text-xs font-bold text-white/90">
-                                {item.stats.sleepAverageH} hrs
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className="text-xs font-bold text-white/90">
-                                {item.stats.stepsAverage.toLocaleString()} steps
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className="text-xs font-bold text-white/90">
-                                {item.stats.waterAverageL} Liters
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className="text-xs font-bold text-white/90">
-                                {item.stats.workoutCount} workouts
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className="text-xs font-bold text-white/90">
-                                {item.stats.totalCaloriesTaken.toLocaleString()} in / {item.stats.totalCaloriesBurnt.toLocaleString()} out
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              {/* Consistency Trend arrows comparison */}
-                              {getTrendIcon(
-                                item.stats.focusQualityScore,
-                                nextItem ? nextItem.stats.focusQualityScore : item.stats.focusQualityScore
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
               </div>
             </div>
           )}
