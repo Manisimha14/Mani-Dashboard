@@ -28,6 +28,7 @@ interface WeeklyReportModalProps {
   bookChapters: any[];
   stepsData: Record<string, number>;
   healthGoals: HealthGoal[];
+  weeksAgo?: number;
 }
 
 export default function WeeklyReportModal({
@@ -40,7 +41,8 @@ export default function WeeklyReportModal({
   workoutEntries,
   bookChapters,
   stepsData,
-  healthGoals
+  healthGoals,
+  weeksAgo = 0
 }: WeeklyReportModalProps) {
   const [step, setStep] = useState(0);
   const [generating, setGenerating] = useState(true);
@@ -49,23 +51,25 @@ export default function WeeklyReportModal({
   // Timezone-safe 7-day sequences
   const last7Days = useMemo(() => {
     const list: string[] = [];
+    const baseOffset = (weeksAgo || 0) * 7;
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
-      d.setDate(d.getDate() - i);
+      d.setDate(d.getDate() - i - baseOffset);
       list.push(format(d, 'yyyy-MM-dd'));
     }
     return list;
-  }, []);
+  }, [weeksAgo]);
 
   const prev7Days = useMemo(() => {
     const list: string[] = [];
+    const baseOffset = (weeksAgo || 0) * 7;
     for (let i = 13; i >= 7; i--) {
       const d = new Date();
-      d.setDate(d.getDate() - i);
+      d.setDate(d.getDate() - i - baseOffset);
       list.push(format(d, 'yyyy-MM-dd'));
     }
     return list;
-  }, []);
+  }, [weeksAgo]);
 
   // Goals fallback parameters
   const resolvedGoals = useMemo(() => {
