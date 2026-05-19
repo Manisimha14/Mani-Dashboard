@@ -1,8 +1,9 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, X, Check, Trash2, Calendar, Zap, Trophy, Target, MessageSquare } from 'lucide-react';
+import { Bell, X, Check, Trash2, Calendar, Zap, Trophy, Target, MessageSquare, Download } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { format, parseISO } from 'date-fns';
+import { encryptVaultData } from '../utils/vaultCrypto';
 
 interface NotificationCenterProps {
   open: boolean;
@@ -10,8 +11,23 @@ interface NotificationCenterProps {
 }
 
 export default function NotificationCenter({ open, onClose }: NotificationCenterProps) {
-  const { notifications, markNotificationRead, clearNotifications } = useAppStore();
+  const { notifications, markNotificationRead, clearNotifications, exportData, recordBackup } = useAppStore();
   const unreadCount = notifications.filter(n => !n.read).length;
+
+  const handleExportBackup = () => {
+    const data = exportData();
+    const encrypted = encryptVaultData(data);
+    const blob = new Blob([encrypted], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `mani-vault-${new Date().toISOString().split('T')[0]}.mvsf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    recordBackup();
+  };
 
   const getIcon = (category: string) => {
     switch (category) {
@@ -112,6 +128,21 @@ export default function NotificationCenter({ open, onClose }: NotificationCenter
                         <p className={`text-xs mt-1 leading-relaxed ${n.read ? 'text-white/30' : 'text-white/50'}`}>
                           {n.message}
                         </p>
+                        {n.metadata?.type === 'backup_nudge' && !n.read && (
+                          <div className="mt-3 flex">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleExportBackup();
+                                markNotificationRead(n.id);
+                              }}
+                              className="px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-[10px] font-bold border border-emerald-500/20 transition-all flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <Download size={10} />
+                              Export Secure Backup
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
 

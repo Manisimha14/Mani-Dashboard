@@ -169,6 +169,16 @@ export interface UserSettings {
   scratchpadTodos?: string;
   financeTransactions?: string;
   financeBudgetLimit?: number;
+  simulateOffline?: boolean;
+  pwaBadgingEnabled?: boolean;
+}
+
+export interface XpLedgerEntry {
+  id: string;
+  amount: number;
+  source: string;
+  description: string;
+  timestamp: string;
 }
 
 // ─── App State ────────────────────────────────────────────────────────────────
@@ -184,4 +194,8 @@ export interface AppState {
   pomodoroSettings: PomodoroSettings;
   userSettings: UserSettings;
   dailyActivity: DailyActivity[];
+  xp: number;
+  level: number;
+  xpLedger: XpLedgerEntry[];
 }
+

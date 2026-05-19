@@ -20,6 +20,7 @@ export default function Achievements() {
   const { data: achievements = [] } = useAchievements();
   const unlocked = achievements.filter(a => a.unlocked);
   const locked = achievements.filter(a => !a.unlocked);
+  const { xp = 0, level = 1, xpLedger = [] } = useAppStore();
 
   const byCategory = Object.entries(CATEGORY_LABELS).map(([cat, label]) => ({
     category: cat as Achievement['category'],
@@ -27,14 +28,99 @@ export default function Achievements() {
     items: achievements.filter(a => a.category === cat),
   }));
 
+  const currentLevelXp = xp % 1000;
+  const xpPct = (currentLevelXp / 1000) * 100;
+  const nextLevelXp = 1000 - currentLevelXp;
+
   return (
     <div className="max-w-5xl space-y-8">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Achievements</h1>
-        <p className="text-white/40 mt-1 text-sm">
-          <span className="text-violet-400 font-semibold">{unlocked.length}</span> of {achievements.length} unlocked
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Achievements</h1>
+          <p className="text-white/40 mt-1 text-sm">
+            <span className="text-violet-400 font-semibold">{unlocked.length}</span> of {achievements.length} unlocked
+          </p>
+        </div>
+        <div className="flex items-center gap-3 bg-violet-500/10 border border-violet-500/20 px-4 py-2 rounded-xl">
+          <span className="text-xs font-black uppercase tracking-wider text-violet-400">Total OS Level</span>
+          <span className="text-2xl font-black italic text-white drop-shadow-[0_0_10px_rgba(139,92,246,0.6)]">Lvl {level}</span>
+        </div>
+      </div>
+
+      {/* Spectacular RPG Leveling Card */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="glass-card md:col-span-2 p-6 relative overflow-hidden flex flex-col justify-between border-violet-500/20 bg-black/60 shadow-2xl">
+          <div className="absolute top-0 right-0 w-60 h-60 bg-violet-600/5 blur-[100px] pointer-events-none" />
+          <div className="relative">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">⚡</span>
+                <span className="text-sm font-black uppercase tracking-widest text-white/80">Experience Engine</span>
+              </div>
+              <span className="text-xs font-mono text-violet-400 font-bold">{xp} / {(level) * 1000} XP</span>
+            </div>
+            
+            <div className="h-4 bg-white/5 border border-white/10 rounded-full overflow-hidden mb-3 p-[2px]">
+              <motion.div 
+                className="h-full rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-500 shadow-[0_0_15px_rgba(139,92,246,0.5)]"
+                initial={{ width: 0 }}
+                animate={{ width: `${xpPct}%` }}
+                transition={{ duration: 1, ease: 'easeOut' }}
+              />
+            </div>
+            
+            <div className="flex items-center justify-between text-[11px] text-white/40 font-mono">
+              <span>LEVEL {level}</span>
+              <span>{nextLevelXp} XP TO LEVEL {level + 1}</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4 mt-6 pt-4 border-t border-white/5">
+            <div className="text-center">
+              <div className="text-[10px] text-white/30 uppercase tracking-widest">Solved DSA</div>
+              <div className="text-lg font-bold text-emerald-400 mt-0.5">+{unlocked.filter(a => a.category === 'coding').length * 150} XP</div>
+            </div>
+            <div className="text-center">
+              <div className="text-[10px] text-white/30 uppercase tracking-widest">Focus Time</div>
+              <div className="text-lg font-bold text-violet-400 mt-0.5">+{unlocked.filter(a => a.category === 'focus').length * 200} XP</div>
+            </div>
+            <div className="text-center">
+              <div className="text-[10px] text-white/30 uppercase tracking-widest">Reading Clear</div>
+              <div className="text-lg font-bold text-amber-400 mt-0.5">+{unlocked.filter(a => a.category === 'reading').length * 200} XP</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Dynamic XP Ledger Widget */}
+        <div className="glass-card p-5 border-white/10 bg-black/40 shadow-xl flex flex-col justify-between">
+          <div>
+            <h3 className="text-xs font-black uppercase tracking-wider text-white/60 mb-3 flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" />
+              XP TRANSACTION LEDGER
+            </h3>
+            <div className="space-y-2 max-h-[140px] overflow-y-auto custom-scrollbar">
+              {xpLedger.length === 0 ? (
+                <div className="text-center py-8 text-xs font-mono text-white/20">
+                  No experience transactions logged yet.
+                </div>
+              ) : (
+                xpLedger.slice(0, 4).map((entry) => (
+                  <div key={entry.id} className="flex items-start justify-between gap-2 p-2 rounded-lg bg-white/5 border border-white/5 font-mono text-[10px] leading-tight">
+                    <div className="min-w-0">
+                      <span className="text-violet-400 font-bold uppercase mr-1.5">[{entry.source}]</span>
+                      <span className="text-white/60 truncate inline-block max-w-[130px] align-bottom">{entry.description}</span>
+                    </div>
+                    <span className="text-emerald-400 font-black shrink-0 font-sans">+{entry.amount}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+          <div className="text-[9px] font-mono text-white/30 uppercase text-right border-t border-white/5 pt-2.5 mt-2">
+            Ledger Audit OK
+          </div>
+        </div>
       </div>
 
       {/* Progress Banner */}

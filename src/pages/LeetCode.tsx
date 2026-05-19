@@ -16,6 +16,7 @@ import { showUndoToast } from '../components/UndoToast';
 import { useMemo, useEffect, useCallback, useRef } from 'react';
 import { useSoundFX } from '../hooks/useSoundFX';
 import DeferredOnVisible from '../components/DeferredOnVisible';
+import { LeetCodeSkeleton } from '../components/Skeletons';
 
 const LeetCodeCharts = lazy(() => import('../components/leetcode/LeetCodeCharts'));
 
@@ -24,12 +25,14 @@ const DIFF_COLORS: Record<LeetCodeDifficulty, string> = { Easy: '#34d399', Mediu
 
 export default function LeetCode() {
   const { codingStreak } = useAppStore();
-  const { data: problems = [] } = useProblems();
+  const { data: problems = [], isLoading } = useProblems();
   const addProblemMut = useAddProblem();
   const deleteProblemMut = useDeleteProblem();
   const toggleProblemMut = useToggleProblem();
   const { play } = useSoundFX();
   const [showForm, setShowForm] = useState(false);
+  const [logMode, setLogMode] = useState<'single' | 'bulk'>('single');
+  const [bulkNames, setBulkNames] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [filterDiff, setFilterDiff] = useState<LeetCodeDifficulty | 'All'>('All');
@@ -114,15 +117,55 @@ export default function LeetCode() {
   }, [solvedByDate]);
 
   const handleAdd = () => {
-    if (!form.name.trim()) { toast.error('Problem name required'); return; }
-    if (form.link && !form.link.startsWith('https://leetcode.com')) {
-      toast.error('Please enter a valid LeetCode URL');
+    if (!form.name.trim()) { toast.error('Problem/Task name required'); return; }
+    if (form.link && !form.link.startsWith('http://') && !form.link.startsWith('https://')) {
+      toast.error('Please enter a valid URL (starting with http:// or https://)');
       return;
     }
     
     play('success');
     addProblemMut.mutate({ ...form, timeSpent: 0 });
-    toast.success('Problem logged! 💻');
+    toast.success('Task logged! 💻');
+    setForm({ name: '', link: '', difficulty: 'Easy', topic: 'Array', status: 'solved', notes: '', date: todayString(), completed: true });
+    setShowForm(false);
+  };
+
+  const handleBulkAdd = () => {
+    if (!bulkNames.trim()) { toast.error('At least one name required'); return; }
+    if (form.link && !form.link.startsWith('http://') && !form.link.startsWith('https://')) {
+      toast.error('Please enter a valid URL (starting with http:// or https://)');
+      return;
+    }
+
+    const names = bulkNames
+      .split('\n')
+      .map(name => name.trim())
+      .filter(name => name.length > 0);
+
+    if (names.length === 0) {
+      toast.error('Please enter at least one valid name');
+      return;
+    }
+
+    play('success');
+    
+    // Mutate each problem sequentially
+    names.forEach((name) => {
+      addProblemMut.mutate({
+        name,
+        link: form.link,
+        difficulty: form.difficulty,
+        topic: form.topic,
+        status: form.status,
+        notes: form.notes,
+        date: form.date,
+        completed: form.completed,
+        timeSpent: 0
+      });
+    });
+
+    toast.success(`Successfully logged ${names.length} tasks! 💻`);
+    setBulkNames('');
     setForm({ name: '', link: '', difficulty: 'Easy', topic: 'Array', status: 'solved', notes: '', date: todayString(), completed: true });
     setShowForm(false);
   };
@@ -135,6 +178,19 @@ export default function LeetCode() {
     toast.success('Problem deleted');
     setTimeout(() => setDeletingId(null), 500);
   };
+
+  if (isLoading) {
+    return (
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.3 }}
+      >
+        <LeetCodeSkeleton />
+      </motion.div>
+    );
+  }
 
   return (
     <div className="max-w-6xl space-y-6">
@@ -330,16 +386,52 @@ export default function LeetCode() {
       </div>
 
       {/* Add Problem Modal */}
-      <Modal open={showForm} onClose={() => setShowForm(false)} title="Log Problem">
+      <Modal open={showForm} onClose={() => setShowForm(false)} title={logMode === 'single' ? "Log Problem / Task" : "Bulk Log Tasks"}>
         <div className="space-y-4">
+          {/* Tab Navigation for Log Mode */}
+          <div className="flex border-b border-white/5 pb-2 mb-2" role="tablist">
+            <button
+              onClick={() => setLogMode('single')}
+              className={`flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider text-center border-b-2 transition-all ${
+                logMode === 'single'
+                  ? 'border-violet-500 text-white'
+                  : 'border-transparent text-white/40 hover:text-white/70'
+              }`}
+            >
+              Single Problem / Task
+            </button>
+            <button
+              onClick={() => setLogMode('bulk')}
+              className={`flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider text-center border-b-2 transition-all ${
+                logMode === 'bulk'
+                  ? 'border-violet-500 text-white'
+                  : 'border-transparent text-white/40 hover:text-white/70'
+              }`}
+            >
+              Bulk Logging
+            </button>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
+            {logMode === 'single' ? (
+              <div className="col-span-2">
+                <label className="text-xs text-white/40 mb-1 block">Problem / Task Name *</label>
+                <input className="input-glass w-full px-3 py-2 text-sm" placeholder="Two Sum" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+              </div>
+            ) : (
+              <div className="col-span-2">
+                <label className="text-xs text-white/40 mb-1 block">Problem / Task Names (one per line) *</label>
+                <textarea 
+                  className="input-glass w-full px-3 py-2 text-sm min-h-[100px]" 
+                  placeholder="Two Sum&#10;Three Sum&#10;System Design: Rate Limiter" 
+                  value={bulkNames} 
+                  onChange={e => setBulkNames(e.target.value)} 
+                />
+              </div>
+            )}
             <div className="col-span-2">
-              <label className="text-xs text-white/40 mb-1 block">Problem Name *</label>
-              <input className="input-glass w-full px-3 py-2 text-sm" placeholder="Two Sum" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-            </div>
-            <div className="col-span-2">
-              <label className="text-xs text-white/40 mb-1 block">LeetCode Link</label>
-              <input className="input-glass w-full px-3 py-2 text-sm" placeholder="https://leetcode.com/problems/..." value={form.link} onChange={e => setForm(f => ({ ...f, link: e.target.value }))} />
+              <label className="text-xs text-white/40 mb-1 block">Reference URL / Link</label>
+              <input className="input-glass w-full px-3 py-2 text-sm" placeholder="https://leetcode.com/problems/... or any valid URL" value={form.link} onChange={e => setForm(f => ({ ...f, link: e.target.value }))} />
             </div>
             <div>
               <label className="text-xs text-white/40 mb-1 block">Difficulty</label>
@@ -376,8 +468,8 @@ export default function LeetCode() {
             </div>
           </div>
 
-          <button onClick={handleAdd} className="btn-glow w-full py-2.5 mt-2 text-sm font-bold">
-            Add Problem
+          <button onClick={logMode === 'single' ? handleAdd : handleBulkAdd} className="btn-glow w-full py-2.5 mt-2 text-sm font-bold">
+            {logMode === 'single' ? 'Add Problem' : 'Log Bulk Problems'}
           </button>
         </div>
       </Modal>

@@ -178,6 +178,39 @@ export default function WeeklySummaryPanel({
         ))}
       </div>
 
+      {/* Weekly Volume Totals */}
+      <div className="space-y-3">
+        <h4 className="text-xs font-black text-white/40 uppercase tracking-widest">Weekly Total Volumes</h4>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 flex flex-col justify-between hover:bg-white/[0.04] transition-all">
+            <span className="text-[9px] font-black text-cyan-400 uppercase tracking-widest">Total Calorie Intake</span>
+            <div className="mt-2">
+              <span className="text-2xl font-black text-white tracking-tight">{stats.totalCaloriesTaken.toLocaleString()}</span>
+              <span className="text-xs text-white/40 font-bold ml-1">kcal</span>
+            </div>
+            <span className="text-[9px] text-white/40 font-bold mt-1.5">Weekly total calories taken</span>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 flex flex-col justify-between hover:bg-white/[0.04] transition-all">
+            <span className="text-[9px] font-black text-rose-400 uppercase tracking-widest">Total Calories Burnt</span>
+            <div className="mt-2">
+              <span className="text-2xl font-black text-white tracking-tight">{stats.totalCaloriesBurnt.toLocaleString()}</span>
+              <span className="text-xs text-white/40 font-bold ml-1">kcal</span>
+            </div>
+            <span className="text-[9px] text-white/40 font-bold mt-1.5">Weekly total calories burnt</span>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 flex flex-col justify-between hover:bg-white/[0.04] transition-all">
+            <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest">Total Water Intake</span>
+            <div className="mt-2">
+              <span className="text-2xl font-black text-white tracking-tight">{(stats.totalWaterIntakeMl / 1000).toFixed(1)}</span>
+              <span className="text-xs text-white/40 font-bold ml-1">L</span>
+            </div>
+            <span className="text-[9px] text-white/40 font-bold mt-1.5">Weekly water intake ({stats.totalWaterIntakeMl.toLocaleString()} mL)</span>
+          </div>
+        </div>
+      </div>
+
       {/* Best / Worst Day Metadata */}
       <div className="p-4 rounded-2xl bg-white/[0.01] border border-white/5 grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="flex flex-col gap-0.5">
@@ -212,6 +245,49 @@ export default function WeeklySummaryPanel({
           ))}
         </div>
       </div>
+
+      {/* Custom Trackers Performance */}
+      {stats.trackerSummaries && stats.trackerSummaries.length > 0 && (
+        <div className="space-y-3">
+          <h4 className="text-xs font-black text-white/40 uppercase tracking-widest">Custom Trackers Performance</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {stats.trackerSummaries.map((t) => (
+              <div key={t.trackerId} className="p-4 rounded-xl bg-white/[0.02] border border-white/5 flex flex-col justify-between hover:bg-white/[0.04] transition-all">
+                <div className="flex justify-between items-start">
+                  <div className="flex flex-col">
+                    <span className="text-xs font-black text-white">{t.title}</span>
+                    <span className="text-[9px] text-white/30 font-black uppercase tracking-wider mt-0.5">Type: {t.type}</span>
+                  </div>
+                  <span className="text-[10px] font-black text-violet-400 bg-violet-500/10 px-2 py-0.5 rounded-md">
+                    {t.completedCount} / {t.totalLogged} Logged
+                  </span>
+                </div>
+                
+                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-white/5 pt-2">
+                  {t.sumValue !== undefined && (
+                    <div className="flex flex-col">
+                      <span className="text-[8px] text-white/30 uppercase font-black">Total Sum</span>
+                      <span className="text-xs font-bold text-cyan-400">{t.sumValue.toLocaleString()} {t.unit || ''}</span>
+                    </div>
+                  )}
+                  {t.avgValue !== undefined && (
+                    <div className="flex flex-col">
+                      <span className="text-[8px] text-white/30 uppercase font-black">Average</span>
+                      <span className="text-xs font-bold text-emerald-400">{t.avgValue.toFixed(1)} {t.unit || ''}</span>
+                    </div>
+                  )}
+                  {t.target !== undefined && (
+                    <div className="flex flex-col">
+                      <span className="text-[8px] text-white/30 uppercase font-black">Daily Target</span>
+                      <span className="text-xs font-bold text-amber-400">{t.target} {t.unit || ''}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

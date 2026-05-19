@@ -18,6 +18,7 @@ import { useAchievementsEngine } from '../hooks/useAchievementsEngine';
 import { useExtensionSync } from '../hooks/useExtensionSync';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { getAppVersion } from '../lib/appVersion';
+import { useNetworkStatus } from '../hooks/useNetworkStatus';
 
 const CommandPalette = lazy(() => import('./CommandPalette'));
 const WeatherOverlay = lazy(() => import('./WeatherOverlay'));
@@ -60,6 +61,7 @@ function MobileTabButton({ to, icon: Icon, label, isActive, onClick }: {
 }
 
 export default function Layout() {
+  const isOnline = useNetworkStatus();
   const isMobile = useIsMobile();
   const navigate = useNavigate();
   const [cmdOpen, setCmdOpen] = useState(false);
@@ -179,7 +181,8 @@ export default function Layout() {
 
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      // Toggle console overlay on Ctrl + ` or Ctrl + \ or Alt + T
+      // Toggle console overlay on Ctrl + ` or Ctrl + \ or Alt + T (Desktop only)
+      if (window.innerWidth < 1024) return;
       if (
         (e.ctrlKey && e.key === '`') ||
         (e.ctrlKey && e.key === '\\') ||
@@ -446,7 +449,25 @@ export default function Layout() {
         )}
       </AnimatePresence>
 
-            {/* Global Grain Texture - The 'Award Winning' secret sauce */}
+      {/* Offline Mode Glass Banner */}
+      <AnimatePresence>
+        {!isOnline && (
+          <motion.div
+            initial={{ opacity: 0, y: -50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -50 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 250 }}
+            className="fixed top-0 left-0 right-0 z-[9999] h-10 bg-amber-500/10 border-b border-amber-500/20 backdrop-blur-md flex items-center justify-center gap-3 px-4 shadow-[0_4px_30px_rgba(245,158,11,0.05)]"
+          >
+            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.8)]" />
+            <span className="text-[11px] font-black uppercase tracking-[0.15em] text-amber-400">
+              Offline Mode Active — Secure Local Vault Buffering Data
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Global Grain Texture - The 'Award Winning' secret sauce */}
       <div className="fixed inset-0 pointer-events-none z-[999] opacity-[0.08] mix-blend-overlay bg-noise" />
     </div>
   );

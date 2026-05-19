@@ -8,7 +8,8 @@ import { format } from 'date-fns';
 import { useBook } from '../hooks/useBookQuery';
 import { useProblems } from '../hooks/useLeetCodeQuery';
 import { useFocusSessions } from '../hooks/useFocusQuery';
-import { useHealthGoals, useWater, useSleepEntries, useWorkouts, useSteps } from '../hooks/useHealthQuery';
+import { useHealthGoals, useWater, useSleepEntries, useWorkouts, useSteps, useMeals } from '../hooks/useHealthQuery';
+import { useTrackers } from '../hooks/useTrackerQuery';
 import { useSoundFX } from '../hooks/useSoundFX';
 import { normalizeToLocalDateString } from '../utils/dateNormalization';
 import { calculateWeeklyReport } from '../services/reports/weeklyReportCalculator';
@@ -52,6 +53,8 @@ export default function Reports() {
   const { data: sleepEntries = [] } = useSleepEntries();
   const { data: workoutEntries = [] } = useWorkouts();
   const { data: stepsData = {} } = useSteps();
+  const { data: meals = [] } = useMeals();
+  const { data: trackers = [] } = useTrackers();
 
   // Tick countdown every second
   useEffect(() => {
@@ -146,7 +149,9 @@ export default function Reports() {
           stepsData,
           healthGoals,
           last7Days,
-          prev7Days
+          prev7Days,
+          meals,
+          trackers
         });
         generateWeeklyReportPDF(result, last7Days);
       } catch (err) {
@@ -345,6 +350,8 @@ export default function Reports() {
           bookChapters={book?.chapters ?? []}
           stepsData={stepsData}
           healthGoals={healthGoals}
+          meals={meals}
+          trackers={trackers}
           weeksAgo={selectedWeeksAgo}
         />
       )}

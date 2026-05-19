@@ -1,4 +1,5 @@
 import type { TerminalContext } from './types';
+import { useAppStore } from '../../../store/useAppStore';
 
 // Helper to filter focus sessions by historical window
 const filterSessionsByWindow = (sessions: any[], days: number) => {
@@ -23,27 +24,63 @@ export const COMMAND_REGISTRY: Record<string, CommandHandler> = {
   help: () => [
     'Available Commands:',
     '------------------',
-    'focus [7d|30d|90d]  - Focus metrics over custom window',
+    'focus [duration]    - Launch custom Pomodoro (e.g. focus 25)',
+    'focus stats [30d]   - Focus metrics over custom window',
     'focus streak        - Check your focus streak statistics',
     'focus weekly        - Summary metrics of the current week',
-    'code                - Completed coding exercises & difficulty',
-    'leetcode            - Breakdown of solved problems',
+    'solve [name] [diff] - Log LeetCode problem (e.g. solve "Two Sum" Easy)',
+    'code / leetcode     - Breakdown of solved problems',
     'health              - Health totals & average metrics',
-    'water               - Hydration summary and status',
-    'sleep               - Sleep duration summary and logs',
-    'calories            - Calorie intake averages',
-    'today               - Today\'s summary snapshot',
-    'insights            - Recommendations and daily statistics',
-    'go [health|analytics] - Instantly navigate active tabs',
-    'log water [ml]      - Log custom volume (e.g., log water 500)',
-    'log calories [kcal] - Log caloric intake (e.g., log calories 600)',
+    'health water [ml]   - Log custom water volume (e.g. health water 500)',
+    'health calories [c] - Log caloric intake (e.g. health calories 600)',
+    'xp                  - Display ASCII level progress & transaction log',
+    'theme [themeName]   - Change user interface theme instantly',
+    'system              - Print storage locks, quota stats, and network state',
     'clear               - Clear terminal log view',
     'history             - Display executed command logs',
   ],
 
   focus: (args, ctx) => {
-    const days = args[0] ? parseInt(args[0]) : 30;
-    const windowDays = isNaN(days) ? 30 : days;
+    const subAction = args[0]?.toLowerCase();
+    
+    // Check if launching a Pomodoro session
+    if (subAction && !['stats', 'streak', 'weekly', '7d', '30d', '90d'].includes(subAction)) {
+      const duration = parseInt(subAction);
+      if (!isNaN(duration) && duration > 0) {
+        const { updatePomodoroSettings, pomodoroSettings } = useAppStore.getState();
+        updatePomodoroSettings({ focusDuration: duration });
+        
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const timerState = {
+          timeLeft: duration * 60,
+          isRunning: true,
+          mode: 'focus',
+          taskName: 'Terminal Focus',
+          mood: 'motivated',
+          currentSession: {
+            date: todayStr,
+            startTime: new Date().toISOString(),
+            duration: duration,
+            taskName: 'Terminal Focus',
+            mood: 'motivated',
+            growthTheme: pomodoroSettings.growthTheme || 'tree',
+            ambience: pomodoroSettings.ambience || 'none',
+            mode: 'focus',
+          },
+          savedAt: Date.now(),
+        };
+        localStorage.setItem('active_focus_timer_v1', JSON.stringify(timerState));
+        
+        setTimeout(() => ctx.onNavigate('/focus'), 150);
+        
+        return [
+          `🚀 Launching a ${duration} minute Pomodoro focus session...`,
+          `Tree planting initialized. Navigating to Focus Hub.`,
+        ];
+      }
+    }
+
+    const windowDays = subAction === '7d' ? 7 : subAction === '90d' ? 90 : 30;
     const windowSessions = filterSessionsByWindow(ctx.focusSessions, windowDays);
 
     const completed = windowSessions.filter(s => s.completed);
@@ -91,6 +128,46 @@ export const COMMAND_REGISTRY: Record<string, CommandHandler> = {
     ];
   },
 
+  solve: (args, ctx) => {
+    if (args.length < 1) {
+      return [
+        'Usage: solve [problem_name] [easy|medium|hard]',
+        'Example: solve "Two Sum" Easy',
+      ];
+    }
+    
+    let diff: 'Easy' | 'Medium' | 'Hard' = 'Medium';
+    let name = args.join(' ');
+    
+    if (args.length > 1) {
+      const lastArg = args[args.length - 1].toLowerCase();
+      if (['easy', 'medium', 'hard'].includes(lastArg)) {
+        diff = (lastArg.charAt(0).toUpperCase() + lastArg.slice(1)) as 'Easy' | 'Medium' | 'Hard';
+        name = args.slice(0, -1).join(' ');
+      }
+    }
+    
+    name = name.replace(/^['"]|['"]$/g, '');
+    const todayStr = new Date().toISOString().slice(0, 10);
+    
+    useAppStore.getState().addProblem({
+      name,
+      difficulty: diff,
+      completed: true,
+      status: 'solved',
+      link: '',
+      topic: 'algorithms',
+      date: todayStr,
+      notes: 'Logged via Companion Console',
+      timeSpent: 25,
+    });
+    
+    return [
+      `✅ Solved problem: "${name}" [${diff}] logged successfully!`,
+      `+150 XP rewarded! Level up progress updated.`,
+    ];
+  },
+
   code: (args, ctx) => {
     const completed = ctx.problems.filter(p => p.completed);
     const easyCount = completed.filter(p => p.difficulty === 'Easy').length;
@@ -111,14 +188,44 @@ export const COMMAND_REGISTRY: Record<string, CommandHandler> = {
   leetcode: (args, ctx) => COMMAND_REGISTRY.code(args, ctx),
   problems: (args, ctx) => COMMAND_REGISTRY.code(args, ctx),
 
-  health: (args, ctx) => [
-    'Health Summary Averages',
-    '-----------------------',
-    `Water Average   : ${ctx.biometricStats.avgWaterL} L/day`,
-    `Sleep Average   : ${ctx.biometricStats.avgSleepHrs} h/day`,
-    `Calories Average: ${ctx.biometricStats.avgCalories} kcal/day`,
-    `Workouts Logged : ${ctx.biometricStats.totalWorkouts} sessions`,
-  ],
+  health: (args, ctx) => {
+    if (args[0]) {
+      const subAction = args[0].toLowerCase();
+      const amount = parseInt(args[1] || '');
+      
+      if (['water', 'calories', 'calorie'].includes(subAction)) {
+        if (isNaN(amount) || amount <= 0) {
+          return [
+            'Error: Log amount must be a positive integer.',
+            'Usage: health [water|calories] [amount]',
+          ];
+        }
+        
+        if (subAction === 'water') {
+          ctx.onLogWater(amount);
+          return [
+            `💦 Logged +${amount}ml of hydration successfully!`,
+            `+20 XP rewarded!`,
+          ];
+        } else {
+          ctx.onLogCalories(amount);
+          return [
+            `🍕 Logged +${amount}kcal caloric intake successfully!`,
+            `+30 XP rewarded!`,
+          ];
+        }
+      }
+    }
+
+    return [
+      'Health Summary Averages',
+      '-----------------------',
+      `Water Average   : ${ctx.biometricStats.avgWaterL} L/day`,
+      `Sleep Average   : ${ctx.biometricStats.avgSleepHrs} h/day`,
+      `Calories Average: ${ctx.biometricStats.avgCalories} kcal/day`,
+      `Workouts Logged : ${ctx.biometricStats.totalWorkouts} sessions`,
+    ];
+  },
 
   water: (args, ctx) => [
     'Hydration Summary',
@@ -224,10 +331,92 @@ export const COMMAND_REGISTRY: Record<string, CommandHandler> = {
       'Usage: log [water|calories] [amount]',
     ];
   },
+
+  xp: (args, ctx) => {
+    const { xp = 0, level = 1, xpLedger = [] } = useAppStore.getState();
+    const currentLevelXp = xp % 1000;
+    const progressPct = currentLevelXp / 10;
+    const progressBars = Math.round(progressPct / 5);
+    const barStr = '█'.repeat(progressBars) + '░'.repeat(20 - progressBars);
+    
+    const lines = [
+      'Mani OS Experience Engine',
+      '=========================',
+      `Level: ${level}`,
+      `Total XP: ${xp} XP`,
+      `Progress: [${barStr}] ${currentLevelXp} / 1000 XP (${Math.round(progressPct)}%)`,
+      '',
+      'Recent Achievements & Transactions:',
+      '----------------------------------',
+    ];
+    
+    if (xpLedger.length === 0) {
+      lines.push('No experience transactions logged yet.');
+    } else {
+      xpLedger.slice(0, 5).forEach(entry => {
+        const sign = entry.amount >= 0 ? '+' : '';
+        const time = new Date(entry.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        lines.push(` [${time}] ${entry.source.toUpperCase()}: ${entry.description} (${sign}${entry.amount} XP)`);
+      });
+    }
+    
+    return lines;
+  },
+
+  theme: (args, ctx) => {
+    const themeName = args[0]?.toLowerCase();
+    const validThemes = [
+      'dark_pro', 'oled', 'cyberpunk', 'forest', 'nebula', 
+      'midnight_glass', 'aurora', 'hacker', 'paper_warm', 'solarized'
+    ];
+    
+    if (!themeName || !validThemes.includes(themeName)) {
+      return [
+        'Usage: theme [theme_name]',
+        'Available Themes:',
+        '  dark_pro, oled, cyberpunk, forest, nebula,',
+        '  midnight_glass, aurora, hacker, paper_warm, solarized'
+      ];
+    }
+    
+    useAppStore.getState().updateUserSettings({ theme: themeName as any });
+    
+    return [
+      `🎨 Theme switched to "${themeName}" successfully!`,
+      `UI aesthetics successfully adapted to the new workspace aura.`,
+    ];
+  },
+
+  system: (args, ctx) => {
+    const isOnline = navigator.onLine;
+    const { notifications = [] } = useAppStore.getState();
+    const unreadCount = notifications.filter(n => !n.read).length;
+    
+    const lines = [
+      'Mani OS System Metrics',
+      '======================',
+      `Network Status      : ${isOnline ? '🟢 ONLINE' : '🔴 OFFLINE'}`,
+      `Unread Notifications: ${unreadCount} alerts`,
+      `App Window Display  : ${window.innerWidth}x${window.innerHeight} (${window.innerWidth >= 1024 ? 'Desktop' : 'Mobile/PWA'})`,
+      'Storage Quota Status:',
+      '  - Cache Mechanism: LocalStorage & IndexedDB persistent logs',
+      '  - Auto-eviction: Disabled (persistent locks active)',
+    ];
+    
+    return lines;
+  },
 };
 
-// Alias mappings for shortcuts
+// Alias mappings for shortcuts and slash commands
 export const COMMAND_ALIASES: Record<string, string> = {
+  '/help': 'help',
+  '/focus': 'focus',
+  '/solve': 'solve',
+  '/health': 'health',
+  '/xp': 'xp',
+  '/theme': 'theme',
+  '/system': 'system',
+  '/clear': 'clear',
   ls: 'help',
   dir: 'help',
   cls: 'clear',

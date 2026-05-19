@@ -10,7 +10,7 @@ import { useDailyActivity } from '../hooks/useActivityQuery';
 import { useTrackers } from '../hooks/useTrackerQuery';
 import { 
   useTodayHealthData, useHealthGoals, useAddWater, useAddWorkout,
-  useWater, useSleepEntries, useWorkouts, useSteps
+  useWater, useSleepEntries, useWorkouts, useSteps, useMeals
 } from '../hooks/useHealthQuery';
 import { useSoundFX } from '../hooks/useSoundFX';
 import {
@@ -80,6 +80,7 @@ export default function Dashboard() {
   const { data: sleepEntries = [] } = useSleepEntries();
   const { data: workoutEntries = [] } = useWorkouts();
   const { data: stepsData = {} } = useSteps();
+  const { data: meals = [] } = useMeals();
 
   const readingStreak = profile?.readingStreak ?? { currentStreak: 0, longestStreak: 0, history: {} };
   const codingStreak = profile?.codingStreak ?? { currentStreak: 0, longestStreak: 0, history: {} };
@@ -817,6 +818,8 @@ export default function Dashboard() {
         bookChapters={book?.chapters ?? []}
         stepsData={stepsData}
         healthGoals={healthGoals}
+        meals={meals}
+        trackers={trackers}
       />
     </motion.div>
   );

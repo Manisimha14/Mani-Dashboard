@@ -13,6 +13,7 @@ import {
 } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
 import { useHealthStore } from '../store/useHealthStore';
+import { useAppStore } from '../store/useAppStore';
 import { getTodayHealthData } from '../store/useHealthStore';
 import * as HealthSvc from '../services/health.service';
 import { todayString } from '../lib/utils';
@@ -50,7 +51,10 @@ export function useTodayHealthData() {
 
   if (!user) {
     // Offline — use Zustand directly
-    return getTodayHealthData(localStore, today);
+    return {
+      ...getTodayHealthData(localStore, today),
+      isLoading: false,
+    };
   }
 
   const meals    = mealsQ.data    ?? [];
@@ -68,6 +72,7 @@ export function useTodayHealthData() {
     totalCarbs:         meals.reduce((a, m) => a + m.carbs, 0),
     totalFat:           meals.reduce((a, m) => a + m.fat, 0),
     totalWorkoutMinutes: workouts.reduce((a, w) => a + w.durationMinutes, 0),
+    isLoading: mealsQ.isLoading || waterQ.isLoading || workoutsQ.isLoading || sleepQ.isLoading || stepsQ.isLoading,
   };
 }
 
@@ -97,6 +102,11 @@ export function useAddMeal(): UseMutationResult<unknown, Error, Omit<MealEntry, 
     onSuccess: (_, meal) => {
       qc.invalidateQueries({ queryKey: healthKeys.meals(user?.id ?? 'local', meal.date) });
       qc.invalidateQueries({ queryKey: healthKeys.meals(user?.id ?? 'local') });
+      try {
+        useAppStore.getState().addXp(30, 'health', `Logged meal: ${meal.name} (+${meal.calories} kcal)`);
+      } catch (e) {
+        console.error(e);
+      }
     },
   });
 }
@@ -172,6 +182,11 @@ export function useAddWater(): UseMutationResult<unknown, Error, Omit<WaterEntry
     onSuccess: (_, entry) => {
       qc.invalidateQueries({ queryKey: healthKeys.water(user?.id ?? 'local', entry.date) });
       qc.invalidateQueries({ queryKey: healthKeys.water(user?.id ?? 'local') });
+      try {
+        useAppStore.getState().addXp(20, 'health', `Logged water: ${entry.amount}ml`);
+      } catch (e) {
+        console.error(e);
+      }
     },
   });
 }
@@ -246,6 +261,11 @@ export function useAddWorkout(): UseMutationResult<unknown, Error, Omit<WorkoutE
     onSuccess: (_, w) => {
       qc.invalidateQueries({ queryKey: healthKeys.workouts(user?.id ?? 'local', w.date) });
       qc.invalidateQueries({ queryKey: healthKeys.workouts(user?.id ?? 'local') });
+      try {
+        useAppStore.getState().addXp(100, 'health', `Completed workout: ${w.name} (${w.durationMinutes} min)`);
+      } catch (e) {
+        console.error(e);
+      }
     },
   });
 }

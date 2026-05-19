@@ -204,6 +204,8 @@ export const LEETCODE_TOPICS = [
   'Tree', 'Matrix', 'Two Pointers', 'Bit Manipulation', 'Stack',
   'Heap (Priority Queue)', 'Graph', 'Sliding Window', 'Backtracking', 'Union Find',
   'Linked List', 'Monotonic Stack', 'Recursion', 'Divide and Conquer', 'Queue',
+  'System Design', 'Database / SQL', 'Frontend Development', 'Backend Development',
+  'DevOps / Infra', 'Machine Learning / AI', 'General Coding', 'API Design / Testing',
 ];
 
 export const PRODUCTIVITY_QUOTES = [

@@ -38,10 +38,7 @@ export function useReminderEngine() {
       if (inQuietHours) return;
     }
 
-    // 2. Check Focus Mode
-    // (Assuming focus mode is a global state, if needed we can block here)
-
-    // 3. Browser Notification
+    // 2. Browser Notification
     if (reminderSettings.browserNotificationsEnabled && Notification.permission === 'granted') {
       new Notification(reminder.title, {
         body: reminder.message,
@@ -50,7 +47,7 @@ export function useReminderEngine() {
       });
     }
 
-    // 4. In-App Notification
+    // 3. In-App Notification
     addNotification({
       title: reminder.title,
       message: reminder.message,
@@ -61,10 +58,10 @@ export function useReminderEngine() {
       metadata: { type: 'system', source: 'reminder-engine', reminderId: reminder.id }
     });
 
-    // 5. Update last triggered
+    // 4. Update last triggered
     updateReminder(reminder.id, { lastTriggeredAt: new Date().toISOString() as ISODateString });
 
-    // 6. Handle Recurrence
+    // 5. Handle Recurrence
     if (reminder.recurrence !== 'none') {
       let nextDate = parseISO(reminder.scheduledAt);
       
@@ -150,12 +147,39 @@ export function useReminderEngine() {
         }
       }
     }
+
+    // 4. Weekly Backup Alerting (Check once a week if backupReminderEnabled is true)
+    if (reminderSettings.backupReminderEnabled) {
+      const lastBackup = useAppStore.getState().lastBackupAt;
+      const nowMs = now.getTime();
+      const lastBackupMs = lastBackup ? new Date(lastBackup).getTime() : 0;
+      const timeDiff = nowMs - lastBackupMs;
+      const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+      
+      if (!lastBackup || timeDiff > sevenDaysMs) {
+        // Check if we already pushed a backup nudge in the last 7 days to avoid duplicate alert flooding
+        const recentBackupNudge = notifications.find(n => 
+          n.metadata?.type === 'backup_nudge' && 
+          (nowMs - new Date(n.timestamp).getTime()) < sevenDaysMs
+        );
+        
+        if (!recentBackupNudge) {
+          addNotification({
+            title: 'Vault Backup Alert',
+            message: 'Your local-first data is highly valuable. Export a secure JSON backup of your vault to keep your progress safe! 🛡️',
+            category: 'reminders',
+            priority: 'high',
+            createdAt: new Date().toISOString() as ISODateString,
+            updatedAt: new Date().toISOString() as ISODateString,
+            metadata: { type: 'backup_nudge' }
+          });
+        }
+      }
+    }
   }, [reminders, triggerNotification, reminderSettings, dailyActivity, notifications, addNotification]);
 
   useEffect(() => {
     checkInterval.current = setInterval(runCheck, 60000); // Check every minute
-    runCheck(); // Initial check
-
     return () => {
       if (checkInterval.current) clearInterval(checkInterval.current);
     };

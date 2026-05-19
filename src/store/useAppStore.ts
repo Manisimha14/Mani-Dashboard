@@ -9,13 +9,16 @@ import type {
 import type { Reminder, AppNotification, ReminderSettings, ISODateString, HHMMString } from '../types/reminder';
 import { DEFAULT_ACHIEVEMENTS, BOOK_CHAPTERS } from '../lib/data';
 import { todayString, calculateStreak, generateId, updateStreakData } from '../lib/utils';
-import { showAchievementToast } from '../lib/toasts';
+import { showAchievementToast, showNotificationToast } from '../lib/toasts';
 
 type UndoAction =
   | { type: 'delete_problem'; data: LeetCodeProblem; rollback: () => void }
   | { type: 'delete_tracker'; data: Tracker; rollback: () => void }
   | { type: 'delete_session'; data: FocusSession; rollback: () => void }
   | { type: 'complete_chapter'; data: { id: number; prevStatus: string; prevCompleted: boolean }; rollback: () => void };
+
+import type { XpLedgerEntry } from '../types';
+import { encryptVaultData, decryptVaultData } from '../utils/vaultCrypto';
 
 interface AppStore {
   // State
@@ -31,6 +34,10 @@ interface AppStore {
   dailyActivity: DailyActivity[];
   trackers: Tracker[];
   celebratingAchievement: Achievement | null;
+  lastBackupAt?: string;
+  xp: number;
+  level: number;
+  xpLedger: XpLedgerEntry[];
 
   // Tracker actions
   addTracker: (tracker: Omit<Tracker, 'id' | 'createdAt'> & { id?: string }) => void;
@@ -70,6 +77,9 @@ interface AppStore {
   // Activity
   logActivity: (type: 'reading' | 'coding' | 'focus', value: number) => void;
 
+  // XP Gamification
+  addXp: (amount: number, source: string, description: string) => void;
+
   // Reminders & Notifications
   reminders: Reminder[];
   notifications: AppNotification[];
@@ -80,6 +90,8 @@ interface AppStore {
   addNotification: (notification: Omit<AppNotification, 'id' | 'timestamp' | 'read'>) => void;
   markNotificationRead: (id: string) => void;
   clearNotifications: () => void;
+  updateReminderSettings: (settings: Partial<ReminderSettings>) => void;
+  recordBackup: () => void;
 
   // Launcher actions
   launcher: LauncherState;
@@ -137,6 +149,7 @@ const DEFAULT_USER_SETTINGS: UserSettings = {
   scratchpadTodos: '[]',
   financeTransactions: '[]',
   financeBudgetLimit: 1000,
+  pwaBadgingEnabled: true,
 };
 
 const DEFAULT_APP_LINKS: AppLink[] = [
@@ -170,6 +183,9 @@ export const useAppStore = create<AppStore>()(
       userSettings: DEFAULT_USER_SETTINGS,
       dailyActivity: [],
       lastAction: null,
+      xp: 0,
+      level: 1,
+      xpLedger: [],
       reminders: [],
       notifications: [],
       reminderSettings: {
@@ -179,6 +195,7 @@ export const useAppStore = create<AppStore>()(
         soundEnabled: true,
         smartRemindersEnabled: true,
         browserNotificationsEnabled: true,
+        backupReminderEnabled: true,
       },
       trackers: [],
       celebratingAchievement: null,
@@ -199,12 +216,14 @@ export const useAppStore = create<AppStore>()(
         }));
       },
       addTrackerItem: (trackerId, item) => {
+        const tracker = get().trackers.find(t => t.id === trackerId);
         set(state => ({
           trackers: state.trackers.map(t => t.id === trackerId ? {
             ...t,
             items: [...t.items, { ...item, id: generateId() }]
           } : t)
         }));
+        get().addXp(50, 'tracker', `Logged item for tracker: ${tracker?.title ?? 'Custom Tracker'}`);
       },
       updateTrackerItem: (trackerId, itemId, updates) => {
         set(state => ({
@@ -300,6 +319,12 @@ export const useAppStore = create<AppStore>()(
 
         if (updates.completed !== undefined) {
           get().logActivity('reading', updates.completed ? 1 : -1);
+          const ch = get().book.chapters.find(c => c.id === chapterId);
+          if (updates.completed) {
+            get().addXp(200, 'reading', `Completed Chapter ${ch?.number ?? chapterId}: ${ch?.title ?? ''}`);
+          } else {
+            get().addXp(-200, 'reading', `Uncompleted Chapter ${ch?.number ?? chapterId}`);
+          }
         }
         get().checkAndUnlockAchievements();
       },
@@ -322,6 +347,7 @@ export const useAppStore = create<AppStore>()(
         });
         if (problem.completed) {
           get().logActivity('coding', 1);
+          get().addXp(150, 'coding', `Solved problem: ${problem.name}`);
         }
         get().checkAndUnlockAchievements();
       },
@@ -387,6 +413,11 @@ export const useAppStore = create<AppStore>()(
         });
 
         get().logActivity('coding', isCompleting ? 1 : -1);
+        if (isCompleting) {
+          get().addXp(150, 'coding', `Solved problem: ${problem.name}`);
+        } else {
+          get().addXp(-150, 'coding', `Unsolved problem: ${problem.name}`);
+        }
         get().checkAndUnlockAchievements();
       },
 
@@ -404,6 +435,7 @@ export const useAppStore = create<AppStore>()(
         });
         if (session.completed && session.actualDuration) {
           get().logActivity('focus', session.actualDuration);
+          get().addXp(session.actualDuration * 10, 'focus', `Completed Pomodoro session: ${session.actualDuration} min focused`);
         }
         get().checkAndUnlockAchievements();
       },
@@ -547,6 +579,49 @@ export const useAppStore = create<AppStore>()(
         });
       },
 
+      addXp: (amount, source, description) => {
+        set(state => {
+          const newXp = state.xp + amount;
+          const newLevel = Math.floor(newXp / 1000) + 1;
+          const isLevelUp = newLevel > state.level;
+
+          const newEntry = {
+            id: generateId(),
+            amount,
+            source,
+            description,
+            timestamp: new Date().toISOString(),
+          };
+
+          const updatedLedger = [newEntry, ...state.xpLedger].slice(0, 100);
+
+          if (isLevelUp) {
+            setTimeout(() => {
+              showAchievementToast(`LEVEL UP! Reached Level ${newLevel}`, '🏆');
+              // Auto-inject a system notification for the user
+              get().addNotification({
+                title: 'Operating System Level Up!',
+                message: `Congratulations! You leveled up from Level ${state.level} to Level ${newLevel}! Your experience is growing exponentially.`,
+                category: 'achievements',
+                priority: 'normal',
+                createdAt: new Date().toISOString() as ISODateString,
+                updatedAt: new Date().toISOString() as ISODateString,
+                metadata: {
+                  type: 'achievement',
+                  id: `level-${newLevel}`
+                }
+              });
+            }, 100);
+          }
+
+          return {
+            xp: newXp,
+            level: newLevel,
+            xpLedger: updatedLedger,
+          };
+        });
+      },
+
       addReminder: (reminder) => {
         set(state => ({
           reminders: [
@@ -571,19 +646,81 @@ export const useAppStore = create<AppStore>()(
         }));
       },
       addNotification: (notification) => {
+        const id = generateId();
+        const timestamp = new Date().toISOString() as ISODateString;
+        const fullNotification = { 
+          ...notification, 
+          id, 
+          timestamp, 
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          read: false 
+        } as AppNotification;
+
         set(state => ({
           notifications: [
-            { 
-              ...notification, 
-              id: generateId(), 
-              timestamp: new Date().toISOString() as ISODateString, 
-              createdAt: new Date().toISOString() as ISODateString,
-              updatedAt: new Date().toISOString() as ISODateString,
-              read: false 
-            } as AppNotification,
+            fullNotification,
             ...state.notifications 
           ].slice(0, 100)
         }));
+
+        // Sound trigger
+        if (get().reminderSettings.soundEnabled) {
+          import('../hooks/useSoundFX').then(({ soundEngine }) => {
+            if (notification.priority === 'urgent') {
+              soundEngine.error(0.4);
+            } else {
+              soundEngine.click(0.4);
+            }
+          }).catch(() => {});
+        }
+
+        // Native push notification
+        if (
+          typeof window !== 'undefined' &&
+          'Notification' in window &&
+          Notification.permission === 'granted' &&
+          get().reminderSettings.browserNotificationsEnabled
+        ) {
+          new Notification(notification.title, {
+            body: notification.message,
+            icon: '/favicon.ico',
+          });
+        }
+
+        // Toast alert with CTA callback if backup nudge
+        const triggerBackupDownload = () => {
+          const data = get().exportData();
+          const encrypted = encryptVaultData(data);
+          const blob = new Blob([encrypted], { type: 'text/plain;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `mani-vault-${new Date().toISOString().split('T')[0]}.mvsf`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+          get().recordBackup();
+        };
+
+        if (notification.metadata?.type === 'backup_nudge') {
+          showNotificationToast(
+            notification.title,
+            notification.message,
+            notification.category || 'reminders',
+            notification.priority || 'normal',
+            triggerBackupDownload,
+            'Export Backup'
+          );
+        } else {
+          showNotificationToast(
+            notification.title,
+            notification.message,
+            notification.category || 'reminders',
+            notification.priority || 'normal'
+          );
+        }
       },
       markNotificationRead: (id) => {
         set(state => ({
@@ -592,6 +729,12 @@ export const useAppStore = create<AppStore>()(
       },
       clearNotifications: () => {
         set({ notifications: [] });
+      },
+      updateReminderSettings: (settings) => {
+        set(state => ({ reminderSettings: { ...state.reminderSettings, ...settings } }));
+      },
+      recordBackup: () => {
+        set({ lastBackupAt: new Date().toISOString() });
       },
 
       exportData: () => {
@@ -618,7 +761,15 @@ export const useAppStore = create<AppStore>()(
       },
 
       importData: (data: unknown) => {
-        const d = data as any;
+        let d = data as any;
+        if (typeof d === 'string') {
+          try {
+            d = decryptVaultData(d);
+          } catch (err: any) {
+            throw new Error(err.message || 'Failed to decrypt vault file.');
+          }
+        }
+
         if (!d || typeof d !== 'object' || d.version !== 1) {
           throw new Error('Invalid or incompatible export file version');
         }

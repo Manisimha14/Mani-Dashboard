@@ -7,6 +7,7 @@ import {
 import { todayString } from '../lib/utils';
 import { useTodayHealthData, useHealthGoals } from '../hooks/useHealthQuery';
 import HealthOverview from '../components/health/HealthOverview';
+import { HealthSkeleton } from '../components/Skeletons';
 import CalorieTracker from '../components/health/CalorieTracker';
 import WaterTracker from '../components/health/WaterTracker';
 import StepsTracker from '../components/health/StepsTracker';
@@ -29,7 +30,23 @@ type Tab = typeof TABS[number]['id'];
 export default function Health() {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const todayData = useTodayHealthData();
-  const { data: goals = [] } = useHealthGoals();
+  const { data: goals = [], isLoading: isLoadingGoals } = useHealthGoals();
+  
+  const isLoading = todayData.isLoading || isLoadingGoals;
+
+  if (isLoading) {
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.3 }}
+      >
+        <HealthSkeleton />
+      </motion.div>
+    );
+  }
+
   const today = todayString();
 
   const calorieGoal = goals.find(g => g.type === 'calories')?.targetValue ?? 1700;

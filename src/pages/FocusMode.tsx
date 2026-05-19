@@ -72,6 +72,10 @@ export default function FocusMode() {
   const [activeTab, setActiveTab]       = useState<'timer' | 'analytics'>('timer');
   const [isInitialized, setIsInitialized] = useState(false);
 
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [isPipActive, setIsPipActive] = useState(false);
+
   const [selectedActivities, setSelectedActivities] = useState<string[]>([]);
   const [quantities, setQuantities] = useState({
     problemsSolved: 0,
@@ -82,6 +86,8 @@ export default function FocusMode() {
     exercisesCompleted: 0
   });
   const [sessionQuality, setSessionQuality] = useState<string>('Average');
+
+
 
   const computedSessionScore = useMemo(() => {
     let score = 25; // completed focus session gets +25
@@ -361,6 +367,113 @@ export default function FocusMode() {
   const modeColor = mode === 'focus' ? '#8b5cf6' : mode === 'short_break' ? '#10b981' : '#3b82f6';
   const modeColor2 = mode === 'focus' ? '#ec4899' : mode === 'short_break' ? '#06b6d4' : '#8b5cf6';
 
+  const drawPipCanvas = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    canvas.width = 300;
+    canvas.height = 300;
+
+    // Background radial gradient matching premium dark theme
+    const radialGrad = ctx.createRadialGradient(150, 150, 50, 150, 150, 150);
+    radialGrad.addColorStop(0, '#1c133a');
+    radialGrad.addColorStop(1, '#080911');
+    ctx.fillStyle = radialGrad;
+    ctx.fillRect(0, 0, 300, 300);
+
+    // Progress circle ring properties
+    const radius = 100;
+    const cx = 150;
+    const cy = 150;
+    const total = totalDuration;
+    const currentProgress = total > 0 ? (total - timeLeft) / total : 0;
+    const startAngle = -Math.PI / 2;
+    const endAngle = startAngle + (2 * Math.PI * currentProgress);
+
+    // Draw background outer ring
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+    ctx.lineWidth = 14;
+    ctx.stroke();
+
+    // Draw active glowing ring
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, startAngle, endAngle);
+    const grad = ctx.createLinearGradient(50, 150, 250, 150);
+    grad.addColorStop(0, mode === 'focus' ? '#8b5cf6' : '#10b981');
+    grad.addColorStop(1, mode === 'focus' ? '#ec4899' : '#06b6d4');
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = 14;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+
+    // Countdown Text
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '900 46px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(formatTime(timeLeft), cx, cy);
+
+    // Label / Subtitle
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+    ctx.font = '900 12px sans-serif';
+    const label = mode === 'focus' ? (taskName || 'Concentrate') : 'Recharge';
+    ctx.fillText(label.toUpperCase().slice(0, 20), cx, cy + 42);
+
+    // Growth Emoji at the top
+    ctx.font = '28px sans-serif';
+    ctx.fillText(growthEmoji, cx, cy - 45);
+  }, [timeLeft, totalDuration, mode, taskName, growthEmoji]);
+
+  const togglePip = async () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+      } else {
+        drawPipCanvas();
+        const canvas = canvasRef.current;
+        if (canvas) {
+          const stream = (canvas as any).captureStream ? (canvas as any).captureStream(10) : (canvas as any).mozCaptureStream ? (canvas as any).mozCaptureStream(10) : null;
+          if (stream) {
+            video.srcObject = stream;
+            await video.play();
+            await video.requestPictureInPicture();
+          } else {
+            toast.error('Canvas streaming not supported by browser');
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error toggling picture-in-picture', error);
+      toast.error('Failed to start floating timer window');
+    }
+  };
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const onEnter = () => setIsPipActive(true);
+    const onLeave = () => setIsPipActive(false);
+    video.addEventListener('enterpictureinpicture', onEnter);
+    video.addEventListener('leavepictureinpicture', onLeave);
+    return () => {
+      video.removeEventListener('enterpictureinpicture', onEnter);
+      video.removeEventListener('leavepictureinpicture', onLeave);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isPipActive) {
+      drawPipCanvas();
+    }
+  }, [timeLeft, isPipActive, drawPipCanvas]);
+
   const content = (
     <div className={isFullscreen
       ? 'fixed inset-0 z-[1000] flex flex-col items-center justify-center overflow-hidden'
@@ -419,6 +532,13 @@ export default function FocusMode() {
                   className="btn-ghost p-2 sm:px-3 sm:py-2 flex items-center gap-1.5 text-xs sm:text-sm">
                   <Maximize2 size={14} /> <span className="hidden md:inline">Immersive</span>
                 </button>
+                {typeof document !== 'undefined' && document.pictureInPictureEnabled && (
+                  <button onClick={togglePip}
+                    title="Floating Timer (PiP)"
+                    className={`btn-ghost p-2 sm:px-3 sm:py-2 flex items-center gap-1.5 text-xs sm:text-sm transition-all ${isPipActive ? 'text-emerald-400 border-emerald-500/20' : ''}`}>
+                    <Rocket size={14} /> <span className="hidden md:inline">{isPipActive ? 'Floating Active' : 'Floating Timer'}</span>
+                  </button>
+                )}
               </div>
             </div>
           </motion.div>
@@ -974,6 +1094,8 @@ export default function FocusMode() {
           </button>
         </div>
       </Modal>
+      <canvas ref={canvasRef} style={{ display: 'none' }} width={300} height={300} />
+      <video ref={videoRef} style={{ display: 'none' }} muted playsInline />
     </div>
   );
 

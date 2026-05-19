@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useState, useEffect } from 'react';
+import React, { Suspense, lazy, useState, useEffect, useMemo } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -11,15 +11,16 @@ import { applyTheme } from './lib/themes';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Reading from './pages/Reading';
-import LeetCode from './pages/LeetCode';
 import FocusMode from './pages/FocusMode';
 import Trackers from './pages/Trackers';
-import Health from './pages/Health';
 
+const LeetCode = lazy(() => import('./pages/LeetCode'));
+const Health = lazy(() => import('./pages/Health'));
 const Analytics = lazy(() => import('./pages/Analytics'));
 const Achievements = lazy(() => import('./pages/Achievements'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Ambient = lazy(() => import('./pages/Ambient'));
+const Reports = lazy(() => import('./pages/Reports'));
 const Onboarding = lazy(() => import('./components/Onboarding'));
 
 function RouteFallback() {
@@ -37,9 +38,23 @@ function RouteFallback() {
 }
 
 export default function App() {
-  const { userSettings } = useAppStore();
+  const { userSettings, notifications } = useAppStore();
   const { user } = useAuth();
   const [showOnboarding, setShowOnboarding] = useState(false);
+
+  const unreadCount = useMemo(() => {
+    return notifications.filter(n => !n.read).length;
+  }, [notifications]);
+
+  useEffect(() => {
+    if ('setAppBadge' in navigator) {
+      if (userSettings.pwaBadgingEnabled !== false && unreadCount > 0) {
+        navigator.setAppBadge(unreadCount).catch(err => console.warn('PWA App Badge error:', err));
+      } else {
+        navigator.clearAppBadge().catch(err => console.warn('PWA App Badge clear error:', err));
+      }
+    }
+  }, [unreadCount, userSettings.pwaBadgingEnabled]);
 
   useEffect(() => {
     setShowOnboarding(Boolean(user) && !userSettings.onboardingComplete);
@@ -72,6 +87,7 @@ export default function App() {
                     <Route path="health" element={<Health />} />
                     <Route path="ambient" element={<Ambient />} />
                     <Route path="analytics" element={<Analytics />} />
+                    <Route path="reports" element={<Reports />} />
                     <Route path="achievements" element={<Achievements />} />
                     <Route path="settings" element={<Settings />} />
                     <Route path="*" element={<Navigate to="/" replace />} />

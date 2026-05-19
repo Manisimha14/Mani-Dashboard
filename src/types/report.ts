@@ -1,5 +1,5 @@
-import type { FocusSession, LeetCodeProblem } from './index';
-import type { WaterEntry, SleepEntry, WorkoutEntry } from './health';
+import type { FocusSession, LeetCodeProblem, Tracker } from './index';
+import type { WaterEntry, SleepEntry, WorkoutEntry, MealEntry } from './health';
 
 export interface IndexedReportData {
   sessionsMap: Map<string, FocusSession[]>;
@@ -7,6 +7,18 @@ export interface IndexedReportData {
   sleepMap: Map<string, SleepEntry>;
   workoutsMap: Map<string, WorkoutEntry[]>;
   problemsMap: Map<string, LeetCodeProblem[]>;
+}
+
+export interface CustomTrackerWeeklySummary {
+  trackerId: string;
+  title: string;
+  type: string;
+  unit?: string;
+  target?: number;
+  completedCount: number;
+  totalLogged: number;
+  sumValue?: number;
+  avgValue?: number;
 }
 
 export interface WeeklyReportStats {
@@ -47,4 +59,12 @@ export interface WeeklyReportStats {
   sleepChartData: number[];
   readingChartData: number[];
   sleepDaysWithData: number;
+  
+  // Health extensions
+  totalCaloriesTaken: number;
+  totalCaloriesBurnt: number;
+  totalWaterIntakeMl: number;
+  
+  // Custom Trackers
+  trackerSummaries: CustomTrackerWeeklySummary[];
 }

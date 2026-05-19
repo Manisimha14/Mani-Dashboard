@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import toast from 'react-hot-toast';
 import { useAppStore } from '../store/useAppStore';
 import {
   Palette, User, Shield, Zap, Search,
@@ -14,6 +15,9 @@ import { migrateLocalStorageToSupabase, isMigrationDone, markMigrationComplete }
 import { useProfile, useUpdateProfile } from '../hooks/useProfileQuery';
 import { useHealthStore } from '../store/useHealthStore';
 import { getAppVersion } from '../lib/appVersion';
+import { useSoundFX } from '../hooks/useSoundFX';
+import { useReminderEngine } from '../hooks/useReminderEngine';
+import type { ISODateString } from '../types/reminder';
 
 type SettingsTab = 'general' | 'appearance' | 'controls' | 'notifications' | 'privacy' | 'labs';
 
@@ -37,13 +41,33 @@ const DEFAULT_USER_SETTINGS: UserSettings = {
 export default function Settings() {
   const { data: profile } = useProfile();
   const { mutate: updateProfile } = useUpdateProfile();
+  
+  const [storagePersisted, setStoragePersisted] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (navigator.storage && navigator.storage.persisted) {
+      navigator.storage.persisted().then(setStoragePersisted);
+    }
+  }, []);
+  
+  const { 
+    reminderSettings, 
+    updateReminderSettings, 
+    addNotification,
+    userSettings: localUserSettings,
+    updateUserSettings: updateLocalUserSettings
+  } = useAppStore();
+  const { play, soundEngine } = useSoundFX();
+  const { requestPermission } = useReminderEngine();
 
   const userSettings: UserSettings = {
     ...DEFAULT_USER_SETTINGS,
+    ...localUserSettings,
     ...(profile?.settings ?? {}),
   };
 
   const updateUserSettings = (updates: Partial<UserSettings>) => {
+    updateLocalUserSettings(updates);
     updateProfile({ settings: { ...userSettings, ...updates } });
   };
 
@@ -500,6 +524,44 @@ export default function Settings() {
 
             {activeTab === 'notifications' && (
               <div className="space-y-6">
+                <Section title="Neural Signaling" icon={<Bell size={16} />} description="Configure interface audio feedback, desktop notifications, and backup alarms.">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                     <ToggleRow 
+                       label="Audio Sound FX" 
+                       description="Play responsive, premium audio cues for dashboard activities"
+                       active={reminderSettings.soundEnabled}
+                       onToggle={() => updateReminderSettings({ soundEnabled: !reminderSettings.soundEnabled })}
+                     />
+                     <ToggleRow 
+                       label="Desktop Push Alerts" 
+                       description="Trigger browser-level notification updates immediately"
+                       active={reminderSettings.browserNotificationsEnabled}
+                       onToggle={async () => {
+                         if (!reminderSettings.browserNotificationsEnabled) {
+                           const granted = await requestPermission();
+                           if (!granted) {
+                             alert("Permission denied. Enable browser alerts in your browser settings.");
+                             return;
+                           }
+                         }
+                         updateReminderSettings({ browserNotificationsEnabled: !reminderSettings.browserNotificationsEnabled });
+                       }}
+                     />
+                     <ToggleRow 
+                       label="Weekly Vault Backup Alarms" 
+                       description="Remind me to backup my local productivity vault if I haven't in 7 days"
+                       active={reminderSettings.backupReminderEnabled}
+                       onToggle={() => updateReminderSettings({ backupReminderEnabled: !reminderSettings.backupReminderEnabled })}
+                     />
+                     <ToggleRow 
+                       label="PWA Launcher Badging" 
+                       description="Display the count of unread notifications directly on your device launcher / dock icon"
+                       active={userSettings.pwaBadgingEnabled ?? true}
+                       onToggle={() => updateUserSettings({ pwaBadgingEnabled: !(userSettings.pwaBadgingEnabled ?? true) })}
+                     />
+                  </div>
+                </Section>
+
                 <Section title="Cognitive Anchors" icon={<Bell size={16} />} description="Configure non-intrusive smart alerts that keep your streak alive and mind sharp.">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                      <ToggleRow 
@@ -655,6 +717,133 @@ export default function Settings() {
                         desc="End-to-end encrypted multi-device relay."
                         status="DEV"
                       />
+                   </div>
+                </Section>
+
+                <Section title="Ecosystem Diagnostics" icon={<Activity size={16} />} description="Simulate live environments and run localized signals testing.">
+                   <div className="space-y-4">
+                     <ToggleRow 
+                       label="📴 Offline Simulation Mode" 
+                       description="Disconnect your dashboard environment. Triggers the glassmorphic amber banner and buffers data state to local storage secure cache." 
+                       active={userSettings.simulateOffline ?? false}
+                       onToggle={() => updateUserSettings({ simulateOffline: !(userSettings.simulateOffline ?? false) })}
+                     />
+                     
+                     <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl bg-white/[0.02] border border-white/5 gap-3 mt-2">
+                       <div>
+                         <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                           🔒 Persistent Vault Storage
+                         </h4>
+                         <p className="text-[10px] text-white/40 mt-1 max-w-md">
+                           Prevent the device OS from silently purging your local database during storage-low states.
+                         </p>
+                       </div>
+                       <div className="flex items-center gap-2.5 self-end sm:self-auto">
+                         <span className={`px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-wider ${
+                           storagePersisted 
+                             ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                             : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                         }`}>
+                           {storagePersisted === null ? 'UNKNOWN' : storagePersisted ? 'SECURED' : 'EVICTABLE'}
+                         </span>
+                         {storagePersisted === false && (
+                           <button
+                             onClick={async () => {
+                               if (navigator.storage && navigator.storage.persist) {
+                                 const persisted = await navigator.storage.persist();
+                                 setStoragePersisted(persisted);
+                                 if (persisted) {
+                                   toast.success("Vault storage successfully locked & secured! 🛡️");
+                                 } else {
+                                   toast.error("OS denied persistent storage request.");
+                                 }
+                               }
+                             }}
+                             className="px-3 py-1.5 rounded-xl bg-violet-600/80 hover:bg-violet-600 text-white text-[10px] font-black uppercase tracking-wider transition-all"
+                           >
+                             Lock Vault
+                           </button>
+                         )}
+                       </div>
+                     </div>
+
+                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+                       <button
+                         onClick={() => {
+                           soundEngine.success();
+                           addNotification({
+                             title: 'Audio Synthesizer Active',
+                             message: 'Tested sound frequency success wave. 🎵',
+                             category: 'focus',
+                             priority: 'normal',
+                             createdAt: new Date().toISOString() as ISODateString,
+                             updatedAt: new Date().toISOString() as ISODateString,
+                           });
+                         }}
+                         className="flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] active:scale-98 transition-all text-left text-xs font-bold text-white/80"
+                       >
+                         <span>🔊 Test Audio Engine</span>
+                         <span className="text-[10px] font-black text-violet-400">PLAY WAVE</span>
+                       </button>
+
+                       <button
+                         onClick={() => {
+                           if ('Notification' in window) {
+                             Notification.requestPermission().then(permission => {
+                               if (permission === 'granted') {
+                                 new Notification("Test Signal Received", {
+                                   body: "This is a real-time production signal from your secure local dashboard. 🛸",
+                                   icon: '/favicon.ico',
+                                 });
+                               } else {
+                                 alert("Desktop Push permission is denied or dismissed. Please enable it in your browser settings to test.");
+                               }
+                             });
+                           } else {
+                             alert("Desktop Notifications are not supported in this browser.");
+                           }
+                         }}
+                         className="flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] active:scale-98 transition-all text-left text-xs font-bold text-white/80"
+                       >
+                         <span>🔔 Test Push Alert</span>
+                         <span className="text-[10px] font-black text-violet-400">TRIGGER PUSH</span>
+                       </button>
+
+                       <button
+                         onClick={() => {
+                           addNotification({
+                             title: 'Vault Backup Alert',
+                             message: 'Your local-first data is highly valuable. Export a secure JSON backup of your vault to keep your progress safe! 🛡️',
+                             category: 'reminders',
+                             priority: 'high',
+                             createdAt: new Date().toISOString() as ISODateString,
+                             updatedAt: new Date().toISOString() as ISODateString,
+                             metadata: { type: 'backup_nudge' }
+                           });
+                         }}
+                         className="flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] active:scale-98 transition-all text-left text-xs font-bold text-white/80"
+                       >
+                         <span>🛡️ Nudge Weekly Backup</span>
+                         <span className="text-[10px] font-black text-amber-400">ALERT HIGH</span>
+                       </button>
+
+                       <button
+                         onClick={() => {
+                           addNotification({
+                             title: 'Logic Pulse Fading',
+                             message: '⚠️ Simulated fallback trigger: Your daily coding streak is at risk. Quick! Solve a problem to recover.',
+                             category: 'streak',
+                             priority: 'high',
+                             createdAt: new Date().toISOString() as ISODateString,
+                             updatedAt: new Date().toISOString() as ISODateString,
+                           });
+                         }}
+                         className="flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] active:scale-98 transition-all text-left text-xs font-bold text-white/80"
+                       >
+                         <span>🔥 Test Streak Fallback</span>
+                         <span className="text-[10px] font-black text-rose-400">STREAK RISK</span>
+                       </button>
+                     </div>
                    </div>
                 </Section>
               </div>

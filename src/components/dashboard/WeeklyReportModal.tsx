@@ -13,8 +13,8 @@ import RecommendationsPanel from '../reports/RecommendationsPanel';
 // Services & Utilities imports
 import { calculateWeeklyReport } from '../../services/reports/weeklyReportCalculator';
 import { generateWeeklyReportPDF } from '../../services/reports/weeklyReportPdf';
-import type { FocusSession, LeetCodeProblem } from '../../types';
-import type { WaterEntry, SleepEntry, WorkoutEntry, HealthGoal } from '../../types/health';
+import type { FocusSession, LeetCodeProblem, Tracker } from '../../types';
+import type { WaterEntry, SleepEntry, WorkoutEntry, HealthGoal, MealEntry } from '../../types/health';
 import type { WeeklyReportStats } from '../../types/report';
 
 interface WeeklyReportModalProps {
@@ -28,6 +28,8 @@ interface WeeklyReportModalProps {
   bookChapters: any[];
   stepsData: Record<string, number>;
   healthGoals: HealthGoal[];
+  meals: MealEntry[];
+  trackers: Tracker[];
   weeksAgo?: number;
 }
 
@@ -42,6 +44,8 @@ export default function WeeklyReportModal({
   bookChapters,
   stepsData,
   healthGoals,
+  meals,
+  trackers,
   weeksAgo = 0
 }: WeeklyReportModalProps) {
   const [step, setStep] = useState(0);
@@ -97,7 +101,9 @@ export default function WeeklyReportModal({
             stepsData,
             healthGoals,
             last7Days,
-            prev7Days
+            prev7Days,
+            meals,
+            trackers
           });
           setStats(result);
         } catch (err) {
@@ -121,6 +127,8 @@ export default function WeeklyReportModal({
     bookChapters,
     stepsData,
     healthGoals,
+    meals,
+    trackers,
     last7Days,
     prev7Days
   ]);

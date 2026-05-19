@@ -85,7 +85,8 @@ export interface AppNotification extends Auditable {
     | { type: 'achievement'; id: string }
     | { type: 'session'; duration: number; mode: string }
     | { type: 'goal'; id: string; progress: number }
-    | { type: 'system'; source: string; reminderId?: string };
+    | { type: 'system'; source: string; reminderId?: string }
+    | { type: 'backup_nudge' };
 }
 
 export interface ReminderSettings {
@@ -101,4 +102,5 @@ export interface ReminderSettings {
   soundEnabled: boolean;
   smartRemindersEnabled: boolean;
   browserNotificationsEnabled: boolean;
+  backupReminderEnabled: boolean;
 }

@@ -23,6 +23,29 @@ export default defineConfig({
           { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
           { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
         ],
+        shortcuts: [
+          {
+            name: 'Start Focus Session',
+            short_name: 'Focus',
+            description: 'Launch the Forest Pomodoro tree tracker immediately',
+            url: '/focus',
+            icons: [{ src: 'pwa-192x192.png', sizes: '192x192' }]
+          },
+          {
+            name: 'Log Solve',
+            short_name: 'Log Code',
+            description: 'Log a resolved software engineering or DSA problem',
+            url: '/leetcode',
+            icons: [{ src: 'pwa-192x192.png', sizes: '192x192' }]
+          },
+          {
+            name: 'Weekly Report',
+            short_name: 'Report',
+            description: 'View the executive performance analytics report',
+            url: '/dashboard?showReport=true',
+            icons: [{ src: 'pwa-192x192.png', sizes: '192x192' }]
+          }
+        ],
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],

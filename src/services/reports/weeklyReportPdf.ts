@@ -60,10 +60,13 @@ export function generateWeeklyReportPDF(stats: WeeklyReportStats, cycleDates: st
     { label: 'Focus Quality', value: `${stats.focusQualityScore}%` },
     { label: 'Problems Solved', value: `${stats.problemsSolved}` },
     { label: 'Chapters Done', value: `${stats.chaptersRead}` },
-    { label: 'Daily Water Avg', value: `${stats.waterAverageL}L` },
+    { label: 'Weekly Water Intake', value: `${(stats.totalWaterIntakeMl / 1000).toFixed(1)}L` },
     { label: 'Daily Sleep Avg', value: `${stats.sleepAverageH}h` },
     { label: 'Weekly Workouts', value: `${stats.workoutCount}` },
-    { label: 'Daily Steps Avg', value: `${stats.stepsAverage.toLocaleString()}` }
+    { label: 'Daily Steps Avg', value: `${stats.stepsAverage.toLocaleString()}` },
+    { label: 'Calories Taken', value: `${stats.totalCaloriesTaken.toLocaleString()} kcal` },
+    { label: 'Calories Burnt', value: `${stats.totalCaloriesBurnt.toLocaleString()} kcal` },
+    { label: 'Daily Water Avg', value: `${stats.waterAverageL}L` }
   ];
 
   const colWidth = (pageWidth - 80) / 3;
@@ -80,7 +83,7 @@ export function generateWeeklyReportPDF(stats: WeeklyReportStats, cycleDates: st
 
     // Value text
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
+    doc.setFontSize(10);
     doc.setTextColor(15, 23, 42);
     doc.text(m.value, xPos + 8, yPos + 16);
 
@@ -90,7 +93,7 @@ export function generateWeeklyReportPDF(stats: WeeklyReportStats, cycleDates: st
     doc.setTextColor(100, 116, 139);
     doc.text(m.label.toUpperCase(), xPos + 8, yPos + 28);
   });
-  y += 145;
+  y += 190;
 
   // 2. Goal Achievement scorecard
   drawSectionTitle('2. Weekly Goal Scorecard');
@@ -207,6 +210,50 @@ export function generateWeeklyReportPDF(stats: WeeklyReportStats, cycleDates: st
   drawBullets('6. Identified Concerns', stats.risks);
   drawBullets('7. Health & Productivity Trends', stats.correlationInsights);
   drawBullets('8. Next Week Recommended Actions', stats.actionPlan);
+
+  // 9. Custom Trackers Weekly Performance Report Section
+  if (stats.trackerSummaries && stats.trackerSummaries.length > 0) {
+    if (y > pageHeight - 120) {
+      doc.addPage();
+      y = 50;
+    }
+    drawSectionTitle('9. Custom Trackers Performance');
+
+    stats.trackerSummaries.forEach((t) => {
+      if (y > pageHeight - 50) {
+        doc.addPage();
+        y = 50;
+      }
+
+      doc.setFillColor(250, 250, 250);
+      doc.setDrawColor(226, 232, 240);
+      doc.rect(40, y, pageWidth - 80, 28, 'FD');
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.5);
+      doc.setTextColor(15, 23, 42);
+      doc.text(t.title, 48, y + 17);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(71, 85, 105);
+
+      let summaryText = `Type: ${t.type.toUpperCase()}  |  Completed: ${t.completedCount} / ${t.totalLogged}`;
+      if (t.sumValue !== undefined) {
+        summaryText += `  |  Total Value: ${t.sumValue}${t.unit ? ' ' + t.unit : ''}`;
+      }
+      if (t.avgValue !== undefined) {
+        summaryText += `  |  Daily Avg: ${t.avgValue.toFixed(1)}${t.unit ? ' ' + t.unit : ''}`;
+      }
+      if (t.target !== undefined) {
+        summaryText += `  |  Target: ${t.target}${t.unit ? ' ' + t.unit : ''}`;
+      }
+
+      doc.text(summaryText, 200, y + 17);
+      y += 33;
+    });
+    y += 10;
+  }
 
   // Apply footer numbers cleanly to all active pages
   const totalPages = doc.getNumberOfPages();

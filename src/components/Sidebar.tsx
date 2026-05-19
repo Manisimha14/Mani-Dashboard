@@ -2,7 +2,7 @@ import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  LayoutDashboard, BookOpen, Code2, Timer, BarChart3,
+  LayoutDashboard, BookOpen, Code2, Timer, BarChart3, FileText,
   Trophy, Settings, Zap, ChevronRight, Flame, Target, Sparkles, Heart, Music, X
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
@@ -23,6 +23,7 @@ const navItems = [
   { to: '/health', icon: Heart, label: 'Health' },
   { to: '/ambient', icon: Music, label: 'Flowscape' },
   { to: '/analytics', icon: BarChart3, label: 'Analytics' },
+  { to: '/reports', icon: FileText, label: 'Reports' },
   { to: '/achievements', icon: Trophy, label: 'Achievements' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];

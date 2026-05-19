@@ -1,8 +1,8 @@
 import { format } from 'date-fns';
 import { normalizeToLocalDateString } from '../../utils/dateNormalization';
 import { calculateFocusQualityScore } from '../../utils/scoring';
-import type { FocusSession, LeetCodeProblem } from '../../types';
-import type { WaterEntry, SleepEntry, WorkoutEntry, HealthGoal } from '../../types/health';
+import type { FocusSession, LeetCodeProblem, Tracker } from '../../types';
+import type { WaterEntry, SleepEntry, WorkoutEntry, HealthGoal, MealEntry } from '../../types/health';
 import type { IndexedReportData, WeeklyReportStats } from '../../types/report';
 
 /**
@@ -19,6 +19,8 @@ export function calculateWeeklyReport(params: {
   healthGoals: HealthGoal[];
   last7Days: string[];
   prev7Days: string[];
+  meals: MealEntry[];
+  trackers: Tracker[];
 }): WeeklyReportStats {
   const {
     focusSessions,
@@ -30,8 +32,64 @@ export function calculateWeeklyReport(params: {
     stepsData,
     healthGoals,
     last7Days,
-    prev7Days
+    prev7Days,
+    meals,
+    trackers
   } = params;
+
+  // Health and Calorie aggregates
+  let totalCaloriesTaken = 0;
+  meals.forEach(m => {
+    const dStr = normalizeToLocalDateString(m.date);
+    if (dStr && last7Days.includes(dStr)) {
+      totalCaloriesTaken += m.calories;
+    }
+  });
+
+  let totalCaloriesBurnt = 0;
+  workoutEntries.forEach(w => {
+    const dStr = normalizeToLocalDateString(w.date);
+    if (dStr && last7Days.includes(dStr)) {
+      totalCaloriesBurnt += w.caloriesBurned || 0;
+    }
+  });
+
+  // Custom Trackers Summary
+  const trackerSummaries: any[] = [];
+  trackers.forEach(t => {
+    let completedCount = 0;
+    let totalLogged = 0;
+    let sumValue = 0;
+    let valueCount = 0;
+
+    t.items.forEach(item => {
+      const dStr = normalizeToLocalDateString(item.dateCompleted);
+      if (dStr && last7Days.includes(dStr)) {
+        totalLogged++;
+        if (item.status === 'completed') {
+          completedCount++;
+        }
+        if (item.value !== undefined && item.value !== null) {
+          sumValue += item.value;
+          valueCount++;
+        }
+      }
+    });
+
+    if (totalLogged > 0) {
+      trackerSummaries.push({
+        trackerId: t.id,
+        title: t.title,
+        type: t.type,
+        unit: t.unit,
+        target: t.target,
+        completedCount,
+        totalLogged,
+        sumValue: valueCount > 0 ? sumValue : undefined,
+        avgValue: valueCount > 0 ? sumValue / valueCount : undefined
+      });
+    }
+  });
 
   // 1. Resolve goals from database settings
   const waterGoalMl = healthGoals.find(g => g.type === 'water')?.targetValue ?? 3000;
@@ -458,6 +516,10 @@ export function calculateWeeklyReport(params: {
     waterChartData,
     sleepChartData,
     readingChartData,
-    sleepDaysWithData: currentWeekStats.sleepDaysWithData
+    sleepDaysWithData: currentWeekStats.sleepDaysWithData,
+    totalCaloriesTaken,
+    totalCaloriesBurnt,
+    totalWaterIntakeMl: currentWeekStats.waterMl,
+    trackerSummaries
   };
 }
