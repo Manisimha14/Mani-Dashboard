@@ -100,6 +100,7 @@ export default function BookReaderModal({ open, onClose }: BookReaderModalProps)
   );
   const [zoom, setZoom] = useState(Number(localStorage.getItem(ZOOM_KEY) || 100));
   const urlRef = useRef<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const completedChapters = useMemo(
     () => book.chapters.filter((c: any) => c.completed).length,
@@ -144,6 +145,47 @@ export default function BookReaderModal({ open, onClose }: BookReaderModalProps)
     }
   }, [cleanupUrl]);
 
+  const toggleFullscreen = useCallback(async () => {
+    if (!containerRef.current) return;
+    try {
+      if (!document.fullscreenElement) {
+        if (containerRef.current.requestFullscreen) {
+          await containerRef.current.requestFullscreen();
+        } else if ((containerRef.current as any).webkitRequestFullscreen) {
+          await (containerRef.current as any).webkitRequestFullscreen();
+        } else if ((containerRef.current as any).msRequestFullscreen) {
+          await (containerRef.current as any).msRequestFullscreen();
+        }
+      } else {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if ((document as any).webkitExitFullscreen) {
+          await (document as any).webkitExitFullscreen();
+        } else if ((document as any).msExitFullscreen) {
+          await (document as any).msExitFullscreen();
+        }
+      }
+    } catch (err) {
+      console.error('Failed to toggle fullscreen:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+    };
+  }, []);
+
   useEffect(() => {
     if (!open) {
       cleanupUrl();
@@ -171,15 +213,23 @@ export default function BookReaderModal({ open, onClose }: BookReaderModalProps)
     const handler = (e: KeyboardEvent) => {
       if (!open) return;
 
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        if (document.fullscreenElement) {
+          document.exitFullscreen();
+        } else {
+          onClose();
+        }
+      }
       if (e.key === 'ArrowRight') setCurrentPage((p) => p + 1);
       if (e.key === 'ArrowLeft') setCurrentPage((p) => Math.max(1, p - 1));
-      if (e.key.toLowerCase() === 'f') setIsFullscreen((v) => !v);
+      if (e.key.toLowerCase() === 'f') {
+        toggleFullscreen();
+      }
     };
 
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [open, onClose]);
+  }, [open, onClose, toggleFullscreen]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -230,7 +280,7 @@ export default function BookReaderModal({ open, onClose }: BookReaderModalProps)
   const content = loading ? (
     <div className="flex-1 flex items-center justify-center text-white/50">Loading reader...</div>
   ) : pdfUrl ? (
-    <div className="flex h-full bg-[#0a0a0f] overflow-hidden">
+    <div ref={containerRef} className="flex h-full w-full bg-[#0a0a0f] overflow-hidden">
       <AnimatePresence>
         {showSidebar && (
           <motion.div
@@ -283,7 +333,7 @@ export default function BookReaderModal({ open, onClose }: BookReaderModalProps)
           </div>
 
           <div className="flex gap-2">
-            <button onClick={() => setIsFullscreen((v) => !v)} className="btn-ghost px-3 py-2">
+            <button onClick={toggleFullscreen} className="btn-ghost px-3 py-2">
               {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
             </button>
             <button onClick={handleRemove} className="btn-ghost px-3 py-2 text-red-400">
@@ -309,10 +359,6 @@ export default function BookReaderModal({ open, onClose }: BookReaderModalProps)
       </label>
     </div>
   );
-
-  if (isFullscreen) {
-    return <div className="fixed inset-0 z-[200]">{content}</div>;
-  }
 
   return (
     <Modal open={open} onClose={onClose} title="Interactive Reader" maxWidth="max-w-7xl" showClose>

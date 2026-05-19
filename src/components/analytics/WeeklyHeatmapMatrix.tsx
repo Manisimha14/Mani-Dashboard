@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, subDays, isSameDay } from 'date-fns';
 import type { FocusSession, LeetCodeProblem, DailyActivity, StreakData } from '../../types';
@@ -30,6 +30,11 @@ export default function WeeklyHeatmapMatrix({
   focusStreak,
 }: WeeklyHeatmapMatrixProps) {
   const range = 10; // Optimized compact range for high density and maximum readability
+
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // 1. Memoized 10-day rolling dates timeline to prevent repeated Date allocations
   const rollingDates = useMemo(() => {
@@ -174,6 +179,7 @@ export default function WeeklyHeatmapMatrix({
 
   // Helper to render grid rows
   const renderRow = (type: 'focus' | 'coding' | 'reading' | 'health') => {
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
     return matrixData.map((day, idx) => {
       let val = 0;
       let label = '';
@@ -191,7 +197,7 @@ export default function WeeklyHeatmapMatrix({
         label = `${day.waterL}L water, ${day.calories} kcal`;
       }
 
-      const isToday = isSameDay(day.date, new Date());
+      const isToday = mounted && day.dateStr === todayStr;
 
       return (
         <div
@@ -211,11 +217,14 @@ export default function WeeklyHeatmapMatrix({
     });
   };
 
-  // Compute 3-character day labels memoized once
+  // Compute 3-character day labels and date strings memoized once
   const weekdayLabels = useMemo(() => {
     return Array.from({ length: range }).map((_, i) => {
       const d = subDays(new Date(), (range - 1) - i);
-      return format(d, 'eee'); // e.g. Mon, Tue, Wed...
+      return {
+        label: format(d, 'eee'),
+        dateStr: format(d, 'yyyy-MM-dd')
+      };
     });
   }, []);
 
@@ -278,17 +287,17 @@ export default function WeeklyHeatmapMatrix({
                 Category
               </div>
               <div className="flex gap-2 flex-1">
-                {weekdayLabels.map((lbl, idx) => (
+                {weekdayLabels.map((item, idx) => (
                   <div
                     key={idx}
                     role="columnheader"
                     className={`flex-1 text-center text-[10px] font-mono font-bold ${
-                      isSameDay(subDays(new Date(), (range - 1) - idx), new Date())
+                      mounted && item.dateStr === format(new Date(), 'yyyy-MM-dd')
                         ? 'text-emerald-400 font-black'
                         : 'text-white/20'
                     }`}
                   >
-                    {lbl}
+                    {item.label}
                   </div>
                 ))}
               </div>

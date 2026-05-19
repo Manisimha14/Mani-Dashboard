@@ -56,8 +56,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (newSession) {
         setAuthError(null); // clear error once successfully signed in
+        if (newSession.provider_token) {
+          localStorage.setItem('google_fit_provider_token', newSession.provider_token);
+        }
       }
       if (event === 'SIGNED_OUT') {
+        localStorage.removeItem('google_fit_provider_token');
         // Only clear stores and local storage if we actually had a previous authenticated user session.
         // This stops the initial passive unauthenticated load from destroying local guest data.
         if (previousUser) {
@@ -107,6 +111,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    localStorage.removeItem('google_fit_provider_token');
     useAppStore.getState().resetData();
     useHealthStore.setState({
       meals: [],

@@ -8,7 +8,13 @@ export interface GoogleFitData {
 
 export async function fetchTodayGoogleFitData(): Promise<GoogleFitData> {
   const { data: { session } } = await supabase.auth.getSession();
-  const token = session?.provider_token ?? undefined;
+  let token = session?.provider_token ?? undefined;
+
+  if (token) {
+    localStorage.setItem('google_fit_provider_token', token);
+  } else {
+    token = localStorage.getItem('google_fit_provider_token') ?? undefined;
+  }
 
   if (!token) {
     throw new Error('Google Fit access is unavailable for this session. Sign in with Google again and grant fitness scopes.');
@@ -47,6 +53,9 @@ export async function fetchTodayGoogleFitData(): Promise<GoogleFitData> {
     });
 
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        localStorage.removeItem('google_fit_provider_token');
+      }
       let errorText = '';
       try {
         const errorJson = await response.json();
