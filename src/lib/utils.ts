@@ -7,8 +7,14 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatDate(date: string | Date): string {
-  const d = typeof date === 'string' ? parseISO(date) : date;
-  return format(d, 'MMM d, yyyy');
+  if (typeof date === 'string') {
+    if (date.length === 10 && date.includes('-')) {
+      const [year, month, day] = date.split('-').map(Number);
+      return format(new Date(year, month - 1, day), 'MMM d, yyyy');
+    }
+    return format(parseISO(date), 'MMM d, yyyy');
+  }
+  return format(date, 'MMM d, yyyy');
 }
 
 export function formatTime(seconds: number): string {
@@ -109,7 +115,13 @@ export function generateId(): string {
 }
 
 export function getDateLabel(dateStr: string): string {
-  const d = parseISO(dateStr);
+  let d;
+  if (dateStr.length === 10 && dateStr.includes('-')) {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    d = new Date(year, month - 1, day);
+  } else {
+    d = parseISO(dateStr);
+  }
   if (isToday(d)) return 'Today';
   if (isYesterday(d)) return 'Yesterday';
   return format(d, 'MMM d');

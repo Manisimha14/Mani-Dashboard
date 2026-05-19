@@ -80,15 +80,15 @@ export async function fetchTodayGoogleFitData(): Promise<GoogleFitData> {
         if (!point) continue;
 
         if (source.includes('step_count')) {
-          steps = point.value?.[0]?.intVal ?? 0;
+          steps = point.value?.[0]?.intVal ?? Math.round(point.value?.[0]?.fpVal ?? 0);
         }
 
         if (source.includes('calories')) {
-          calories = Math.round(point.value?.[0]?.fpVal ?? 0);
+          calories = Math.round(point.value?.[0]?.fpVal ?? point.value?.[0]?.intVal ?? 0);
         }
 
         if (source.includes('active_minutes')) {
-          activeMinutes = point.value?.[0]?.intVal ?? 0;
+          activeMinutes = point.value?.[0]?.intVal ?? Math.round(point.value?.[0]?.fpVal ?? 0);
         }
       }
     }

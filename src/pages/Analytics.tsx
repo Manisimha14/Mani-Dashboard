@@ -264,8 +264,14 @@ export default function Analytics() {
     const div = Math.max(1, range);
     const inRangeWorkouts = workouts.filter(w => {
       try {
-        const d = parseISO(w.date);
-        return !isNaN(d.getTime()) && d >= subDays(new Date(), range);
+        if (w.date.length === 10 && w.date.includes('-')) {
+          const [year, month, day] = w.date.split('-').map(Number);
+          const d = new Date(year, month - 1, day);
+          const startRange = subDays(new Date(), range);
+          startRange.setHours(0, 0, 0, 0);
+          return d >= startRange;
+        }
+        return false;
       } catch {
         return false;
       }
@@ -405,7 +411,12 @@ export default function Analytics() {
         if (score > maxScore) {
           maxScore = score;
           try {
-            bestDay = format(parseISO(date), 'EEEE');
+            if (date.length === 10 && date.includes('-')) {
+              const [year, month, day] = date.split('-').map(Number);
+              bestDay = format(new Date(year, month - 1, day), 'EEEE');
+            } else {
+              bestDay = format(parseISO(date), 'EEEE');
+            }
           } catch {
             bestDay = 'N/A';
           }
