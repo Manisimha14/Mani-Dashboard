@@ -62,6 +62,17 @@ export default function CalorieTracker({ today }: { today: string }) {
     try {
       const data = await fetchTodayGoogleFitData();
       fitSyncResultRef.current = data;
+      // Proactively trigger mutations immediately in the background for zero-latency updates
+      logStepsMut.mutate({ date: today, steps: data.steps });
+      addWorkoutMut.mutate({
+        date: today,
+        startTime: '08:30',
+        name: 'Google Fit Synced Walk',
+        type: 'walking',
+        durationMinutes: data.activeMinutes,
+        caloriesBurned: data.calories,
+        notes: 'Imported steps and movement duration from Google Fit API.'
+      });
     } catch (err: any) {
       console.error('Failed to fetch Google Fit data:', err);
       setTimeout(() => {
@@ -81,32 +92,15 @@ export default function CalorieTracker({ today }: { today: string }) {
           clearInterval(timer);
           
           setTimeout(() => {
-            if (!fitSyncResultRef.current) {
-              setIsSyncingFit(false);
-              return;
-            }
-
-            const data = fitSyncResultRef.current;
-
-            logStepsMut.mutate({ date: today, steps: data.steps });
-            addWorkoutMut.mutate({
-              date: today,
-              startTime: '08:30',
-              name: 'Google Fit Synced Walk',
-              type: 'walking',
-              durationMinutes: data.activeMinutes,
-              caloriesBurned: data.calories,
-              notes: 'Imported steps and movement duration from Google Fit API.'
-            });
             setIsSyncingFit(false);
             play('success');
-          }, 1000);
+          }, 300);
           return prev;
         }
         play('click');
         return prev + 1;
       });
-    }, 1500);
+    }, 250); // High performance, snappy 250ms transition intervals
 
     return () => clearInterval(timer);
   }, [isSyncingFit]);
