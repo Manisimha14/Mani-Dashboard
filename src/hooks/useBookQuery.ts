@@ -2,7 +2,10 @@ import { useQuery, useMutation, useQueryClient, type UseMutationResult } from '@
 import { useAuth } from '../contexts/AuthContext';
 import { useAppStore } from '../store/useAppStore';
 import * as BookSvc from '../services/books.service';
-import type { Book } from '../types';
+import * as ActivitySvc from '../services/activity.service';
+import { todayString, getProductivityScore } from '../lib/utils';
+import type { Book, DailyActivity } from '../types';
+import { activityKeys } from './useActivityQuery';
 
 export const bookKeys = {
   all: (uid: string) => ['books', uid] as const,
@@ -54,10 +57,53 @@ export function useUpdateChapter(): UseMutationResult<
       );
 
       const updatedBook = { ...currentBook, chapters: updatedChapters };
+
+      // Update daily activity in Supabase if completed state is changing
+      if (updates.completed !== undefined) {
+        const prevChapter = currentBook.chapters.find(c => c.id === chapterId);
+        const prevCompleted = !!prevChapter?.completed;
+        const newCompleted = !!updates.completed;
+
+        if (prevCompleted !== newCompleted) {
+          const delta = newCompleted ? 1 : -1;
+          const today = todayString();
+
+          let todayAct: DailyActivity = {
+            date: today,
+            chaptersRead: 0,
+            problemsSolved: 0,
+            focusMinutes: 0,
+            productivityScore: 0
+          };
+
+          try {
+            const activities = await ActivitySvc.fetchDailyActivities(user.id);
+            const existing = activities.find(a => a.date === today);
+            if (existing) {
+              todayAct = { ...existing };
+            }
+          } catch (e) {
+            console.error('Failed to fetch daily activity:', e);
+          }
+
+          todayAct.chaptersRead = Math.max(0, todayAct.chaptersRead + delta);
+          todayAct.productivityScore = getProductivityScore(
+            todayAct.chaptersRead,
+            todayAct.problemsSolved,
+            todayAct.focusMinutes
+          );
+
+          await ActivitySvc.upsertDailyActivity(user.id, todayAct);
+        }
+      }
+
       return BookSvc.upsertBook(user.id, updatedBook);
     },
     onSuccess: (data) => {
       qc.setQueryData(bookKeys.all(user?.id ?? 'local'), data);
+      if (user) {
+        qc.invalidateQueries({ queryKey: activityKeys.all(user.id) });
+      }
     },
   });
 }

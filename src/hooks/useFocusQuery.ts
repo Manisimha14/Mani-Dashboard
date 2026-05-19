@@ -2,7 +2,10 @@ import { useQuery, useMutation, useQueryClient, type UseMutationResult } from '@
 import { useAuth } from '../contexts/AuthContext';
 import { useAppStore } from '../store/useAppStore';
 import * as FocusSvc from '../services/focus.service';
-import type { FocusSession } from '../types';
+import * as ActivitySvc from '../services/activity.service';
+import { todayString, getProductivityScore } from '../lib/utils';
+import type { FocusSession, DailyActivity } from '../types';
+import { activityKeys } from './useActivityQuery';
 
 export const focusKeys = {
   all: (uid: string) => ['focus', uid] as const,
@@ -26,11 +29,52 @@ export function useAddFocusSession(): UseMutationResult<FocusSession | void, Err
   const localStore = useAppStore();
 
   return useMutation({
-    mutationFn: async (session): Promise<FocusSession | void> => user
-      ? FocusSvc.insertFocusSession(user.id, session)
-      : localStore.addFocusSession(session),
+    mutationFn: async (session): Promise<FocusSession | void> => {
+      if (!user) {
+        return localStore.addFocusSession(session);
+      }
+
+      const res = await FocusSvc.insertFocusSession(user.id, session);
+
+      if (session.completed) {
+        const duration = session.actualDuration || session.duration;
+        const today = todayString();
+        
+        let todayAct: DailyActivity = {
+          date: today,
+          chaptersRead: 0,
+          problemsSolved: 0,
+          focusMinutes: 0,
+          productivityScore: 0
+        };
+
+        try {
+          const activities = await ActivitySvc.fetchDailyActivities(user.id);
+          const existing = activities.find(a => a.date === today);
+          if (existing) {
+            todayAct = { ...existing };
+          }
+        } catch (e) {
+          console.error('Failed to fetch daily activity:', e);
+        }
+
+        todayAct.focusMinutes = Math.max(0, todayAct.focusMinutes + duration);
+        todayAct.productivityScore = getProductivityScore(
+          todayAct.chaptersRead,
+          todayAct.problemsSolved,
+          todayAct.focusMinutes
+        );
+
+        await ActivitySvc.upsertDailyActivity(user.id, todayAct);
+      }
+
+      return res;
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: focusKeys.all(user?.id ?? 'local') });
+      if (user) {
+        qc.invalidateQueries({ queryKey: activityKeys.all(user.id) });
+      }
     },
   });
 }

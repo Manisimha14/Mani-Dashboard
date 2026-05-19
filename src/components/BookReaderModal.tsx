@@ -20,6 +20,7 @@ import toast from 'react-hot-toast';
 import Modal from './Modal';
 import { useAppStore } from '../store/useAppStore';
 import { db } from '../lib/db';
+import { useBook, useUpdateChapter } from '../hooks/useBookQuery';
 
 interface BookReaderModalProps {
   open: boolean;
@@ -87,7 +88,9 @@ const ChapterItem = React.memo(function ChapterItem({
 });
 
 export default function BookReaderModal({ open, onClose }: BookReaderModalProps) {
-  const { book, updateChapter } = useAppStore();
+  const localStore = useAppStore();
+  const { data: book = localStore.book } = useBook();
+  const { mutate: updateChapterMut } = useUpdateChapter();
 
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -269,9 +272,12 @@ export default function BookReaderModal({ open, onClose }: BookReaderModalProps)
   };
 
   const toggleChapter = (id: number, completed: boolean) => {
-    updateChapter(id, {
-      completed,
-      status: completed ? 'completed' : 'not_started',
+    updateChapterMut({
+      chapterId: id,
+      updates: {
+        completed,
+        status: completed ? 'completed' : 'not_started',
+      },
     });
   };
 

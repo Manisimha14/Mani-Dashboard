@@ -2,7 +2,10 @@ import { useQuery, useMutation, useQueryClient, type UseMutationResult } from '@
 import { useAuth } from '../contexts/AuthContext';
 import { useAppStore } from '../store/useAppStore';
 import * as LeetCodeSvc from '../services/leetcode.service';
-import type { LeetCodeProblem } from '../types';
+import * as ActivitySvc from '../services/activity.service';
+import { todayString, getProductivityScore } from '../lib/utils';
+import type { LeetCodeProblem, DailyActivity } from '../types';
+import { activityKeys } from './useActivityQuery';
 
 export const leetcodeKeys = {
   all: (uid: string) => ['leetcode', uid] as const,
@@ -26,11 +29,50 @@ export function useAddProblem(): UseMutationResult<unknown, Error, Omit<LeetCode
   const localStore = useAppStore();
 
   return useMutation({
-    mutationFn: async (problem): Promise<unknown> => user
-      ? LeetCodeSvc.insertProblem(user.id, problem)
-      : localStore.addProblem(problem),
+    mutationFn: async (problem): Promise<unknown> => {
+      if (!user) {
+        return localStore.addProblem(problem);
+      }
+      
+      const res = await LeetCodeSvc.insertProblem(user.id, problem);
+      
+      if (problem.completed) {
+        const today = todayString();
+        let todayAct: DailyActivity = {
+          date: today,
+          chaptersRead: 0,
+          problemsSolved: 0,
+          focusMinutes: 0,
+          productivityScore: 0
+        };
+
+        try {
+          const activities = await ActivitySvc.fetchDailyActivities(user.id);
+          const existing = activities.find(a => a.date === today);
+          if (existing) {
+            todayAct = { ...existing };
+          }
+        } catch (e) {
+          console.error('Failed to fetch daily activity:', e);
+        }
+
+        todayAct.problemsSolved = Math.max(0, todayAct.problemsSolved + 1);
+        todayAct.productivityScore = getProductivityScore(
+          todayAct.chaptersRead,
+          todayAct.problemsSolved,
+          todayAct.focusMinutes
+        );
+
+        await ActivitySvc.upsertDailyActivity(user.id, todayAct);
+      }
+      
+      return res;
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: leetcodeKeys.all(user?.id ?? 'local') });
+      if (user) {
+        qc.invalidateQueries({ queryKey: activityKeys.all(user.id) });
+      }
     },
   });
 }
@@ -56,11 +98,53 @@ export function useDeleteProblem(): UseMutationResult<void, Error, string> {
   const localStore = useAppStore();
 
   return useMutation({
-    mutationFn: async (id) => user
-      ? LeetCodeSvc.deleteProblem(id)
-      : localStore.deleteProblem(id),
+    mutationFn: async (id) => {
+      if (!user) {
+        return localStore.deleteProblem(id);
+      }
+
+      const currentProblems = await qc.fetchQuery<LeetCodeProblem[]>({
+        queryKey: leetcodeKeys.all(user.id),
+      });
+      const problem = currentProblems.find(p => p.id === id);
+
+      await LeetCodeSvc.deleteProblem(id);
+
+      if (problem?.completed) {
+        const today = todayString();
+        let todayAct: DailyActivity = {
+          date: today,
+          chaptersRead: 0,
+          problemsSolved: 0,
+          focusMinutes: 0,
+          productivityScore: 0
+        };
+
+        try {
+          const activities = await ActivitySvc.fetchDailyActivities(user.id);
+          const existing = activities.find(a => a.date === today);
+          if (existing) {
+            todayAct = { ...existing };
+          }
+        } catch (e) {
+          console.error('Failed to fetch daily activity:', e);
+        }
+
+        todayAct.problemsSolved = Math.max(0, todayAct.problemsSolved - 1);
+        todayAct.productivityScore = getProductivityScore(
+          todayAct.chaptersRead,
+          todayAct.problemsSolved,
+          todayAct.focusMinutes
+        );
+
+        await ActivitySvc.upsertDailyActivity(user.id, todayAct);
+      }
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: leetcodeKeys.all(user?.id ?? 'local') });
+      if (user) {
+        qc.invalidateQueries({ queryKey: activityKeys.all(user.id) });
+      }
     },
   });
 }
@@ -71,11 +155,51 @@ export function useToggleProblem(): UseMutationResult<void, Error, { id: string,
   const localStore = useAppStore();
 
   return useMutation({
-    mutationFn: async ({ id, current, status }) => user
-      ? LeetCodeSvc.updateProblem(id, { completed: !current, status: !current ? 'solved' : (status === 'solved' ? 'attempted' : status as any) })
-      : localStore.toggleProblem(id),
+    mutationFn: async ({ id, current, status }) => {
+      if (!user) {
+        return localStore.toggleProblem(id);
+      }
+
+      const newCompleted = !current;
+      await LeetCodeSvc.updateProblem(id, { 
+        completed: newCompleted, 
+        status: newCompleted ? 'solved' : (status === 'solved' ? 'attempted' : status as any) 
+      });
+
+      const today = todayString();
+      let todayAct: DailyActivity = {
+        date: today,
+        chaptersRead: 0,
+        problemsSolved: 0,
+        focusMinutes: 0,
+        productivityScore: 0
+      };
+
+      try {
+        const activities = await ActivitySvc.fetchDailyActivities(user.id);
+        const existing = activities.find(a => a.date === today);
+        if (existing) {
+          todayAct = { ...existing };
+        }
+      } catch (e) {
+        console.error('Failed to fetch daily activity:', e);
+      }
+
+      const delta = newCompleted ? 1 : -1;
+      todayAct.problemsSolved = Math.max(0, todayAct.problemsSolved + delta);
+      todayAct.productivityScore = getProductivityScore(
+        todayAct.chaptersRead,
+        todayAct.problemsSolved,
+        todayAct.focusMinutes
+      );
+
+      await ActivitySvc.upsertDailyActivity(user.id, todayAct);
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: leetcodeKeys.all(user?.id ?? 'local') });
+      if (user) {
+        qc.invalidateQueries({ queryKey: activityKeys.all(user.id) });
+      }
     },
   });
 }
