@@ -13,7 +13,7 @@ import { useSoundFX } from '../hooks/useSoundFX';
 import {
   BookOpen, Code2, Timer, Flame, Trophy, TrendingUp,
   Target, Zap, ChevronRight, Star, CheckCircle2, Clock, Sparkles, BarChart3,
-  Heart, Droplets, Dumbbell, Moon, Plus
+  Heart, Droplets, Dumbbell, Moon, Plus, Info
 } from 'lucide-react';
 import { formatDuration, todayString, getProductivityScore } from '../lib/utils';
 import { format, parseISO } from 'date-fns';
@@ -22,6 +22,7 @@ import TiltCard from '../components/TiltCard';
 import Skeleton, { StatCardSkeleton, InsightSkeleton } from '../components/Skeleton';
 import MissionControl from '../components/MissionControl';
 import QuickLauncher from '../components/QuickLauncher';
+import Modal from '../components/Modal';
 import { useMemo } from 'react';
 import DeferredOnVisible from '../components/DeferredOnVisible';
 import FinanceWidget from '../components/dashboard/FinanceWidget';
@@ -76,6 +77,7 @@ export default function Dashboard() {
   const userSettings = profile?.settings ?? { name: '', theme: 'dark', accentColor: '#7c3aed' };
   const navigate = useNavigate();
   const [loading, setLoading] = React.useState(true);
+  const [showScoreDetails, setShowScoreDetails] = React.useState(false);
 
   React.useEffect(() => {
     // Immediate load if data is ready, but keep a tiny gap for mount animations
@@ -151,6 +153,7 @@ export default function Dashboard() {
     chaptersToday,
     problemsToday,
     focusMinutesToday,
+    customTrackersToday,
     completedChapters,
     completedSessions,
     totalFocusMin,
@@ -161,24 +164,28 @@ export default function Dashboard() {
     const chaptersToday = todayData.chaptersRead;
     const problemsToday = todayData.problemsSolved;
     const focusMinutesToday = todayData.focusMinutes;
+    const customTrackersToday = trackers.reduce((sum, t) => {
+      return sum + t.items.filter(i => i.dateCompleted && i.dateCompleted.startsWith(today)).length;
+    }, 0);
 
     const completedChapters = book.chapters.filter(c => c.completed).length;
     const completedSessions = focusSessions.filter(s => s.completed).length;
     const totalFocusMin = focusSessions.filter(s => s.completed).reduce((a, s) => a + (s.actualDuration || s.duration), 0);
     const progressPct = Math.round((completedChapters / Math.max(1, book.chapters.length)) * 100);
-    const prodScore = getProductivityScore(chaptersToday, problemsToday, focusMinutesToday);
+    const prodScore = getProductivityScore(chaptersToday, problemsToday, focusMinutesToday, customTrackersToday);
 
     return {
       chaptersToday,
       problemsToday,
       focusMinutesToday,
+      customTrackersToday,
       completedChapters,
       completedSessions,
       totalFocusMin,
       progressPct,
       prodScore
     };
-  }, [book.chapters, focusSessions, today, activityMap]);
+  }, [book.chapters, focusSessions, today, activityMap, trackers]);
 
   const nextChapter = book.chapters.find(c => !c.completed);
   const recentAchievements = useMemo(() => achievements.filter(a => a.unlocked).slice(0, 3), [achievements]);
@@ -285,6 +292,13 @@ export default function Dashboard() {
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                   <div className="text-[10px] text-white/50 uppercase tracking-[0.2em] font-black">Live Productivity Status</div>
+                  <button
+                    onClick={() => setShowScoreDetails(true)}
+                    className="p-1 rounded bg-white/5 hover:bg-white/10 text-white/40 hover:text-violet-400 transition-colors ml-1"
+                    title="Formula Breakdown"
+                  >
+                    <Info size={10} />
+                  </button>
                 </div>
                 <div className="flex items-end gap-3">
                   <motion.span 
@@ -313,7 +327,7 @@ export default function Dashboard() {
                   </p>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-3 md:gap-6 w-full lg:w-auto">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4 w-full lg:w-auto">
                 <ScorePill 
                   icon={<BookOpen size={18} />} 
                   label="Library" 
@@ -323,6 +337,7 @@ export default function Dashboard() {
                 />
                 <ScorePill icon={<Code2 size={18} />} label="Coding" value={problemsToday} color="cyan" />
                 <ScorePill icon={<Timer size={18} />} label="Focus" value={focusMinutesToday} color="emerald" />
+                <ScorePill icon={<Target size={18} />} label="Missions" value={customTrackersToday} color="amber" />
               </div>
             </div>
           </div>
@@ -601,20 +616,119 @@ export default function Dashboard() {
           <QuickAction icon={<BarChart3 size={18} />} label="Analytics" desc="View Insights" color="emerald" onClick={() => navigate('/analytics')} />
         </div>
       </motion.div>
+
+      {/* Score Breakdown Modal */}
+      <Modal open={showScoreDetails} onClose={() => setShowScoreDetails(false)} title="Productivity Score Formula">
+        <div className="space-y-6">
+          <div className="p-5 rounded-2xl bg-gradient-to-br from-violet-500/10 via-fuchsia-500/5 to-transparent border border-white/5 text-center">
+            <span className="text-[10px] font-black uppercase tracking-widest text-violet-400">Balanced Formula Limit</span>
+            <div className="text-4xl font-black text-white italic mt-1 font-intel">100 POINTS</div>
+            <p className="text-[11px] text-white/40 leading-relaxed mt-2 max-w-sm mx-auto">
+              Your daily productivity score dynamically weights core deep work, coding, learning, and your daily custom habits to incentivize behavioral consistency.
+            </p>
+          </div>
+
+          <div className="space-y-3.5">
+            <div className="text-[10px] text-white/30 uppercase font-black tracking-widest">Weighting Metrics</div>
+            
+            {/* Library / Reading */}
+            <div className="p-4 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400">
+                  <BookOpen size={16} />
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-white">Core Study &amp; Reading</div>
+                  <div className="text-[10px] text-white/40">15 points per completed chapter</div>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-xs font-black text-violet-400 uppercase italic font-sans">Max 35 pts</span>
+                <div className="text-[10px] text-emerald-400 font-bold font-intel">+{Math.min(chaptersToday * 15, 35)} today</div>
+              </div>
+            </div>
+
+            {/* Coding / LeetCode */}
+            <div className="p-4 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
+                  <Code2 size={16} />
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-white">Algorithms &amp; Engineering</div>
+                  <div className="text-[10px] text-white/40">20 points per solved problem</div>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-xs font-black text-cyan-400 uppercase italic font-sans">Max 35 pts</span>
+                <div className="text-[10px] text-emerald-400 font-bold font-intel">+{Math.min(problemsToday * 20, 35)} today</div>
+              </div>
+            </div>
+
+            {/* Focus Sessions */}
+            <div className="p-4 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                  <Timer size={16} />
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-white">Deep Work Focus</div>
+                  <div className="text-[10px] text-white/40">0.125 points per focus minute</div>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-xs font-black text-emerald-400 uppercase italic font-sans">Max 15 pts</span>
+                <div className="text-[10px] text-emerald-400 font-bold font-intel">+{Math.min(Math.round((focusMinutesToday / 120) * 15), 15)} today</div>
+              </div>
+            </div>
+
+            {/* Custom Trackers */}
+            <div className="p-4 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                  <Target size={16} />
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-white">Missions &amp; Custom Habits</div>
+                  <div className="text-[10px] text-white/40">5 points per logged target action</div>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-xs font-black text-amber-400 uppercase italic font-sans">Max 15 pts</span>
+                <div className="text-[10px] text-emerald-400 font-bold font-intel">+{Math.min(customTrackersToday * 5, 15)} today</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-4 border-t border-white/5 flex justify-end">
+            <button
+              onClick={() => setShowScoreDetails(false)}
+              className="btn-glow px-5 py-2.5 text-xs font-black uppercase tracking-wider"
+            >
+              Acknowledged
+            </button>
+          </div>
+        </div>
+      </Modal>
     </motion.div>
   );
 }
 
 const ScorePill = React.memo(function ScorePill({ icon, label, value, color, subText }: { icon: React.ReactNode; label: string; value: number; color: string; subText?: string }) {
-  const colors: Record<string, string> = { violet: 'text-violet-400', cyan: 'text-cyan-400', emerald: 'text-emerald-400' };
+  const colors: Record<string, string> = { 
+    violet: 'text-violet-400 bg-violet-500/5 border border-violet-500/10', 
+    cyan: 'text-cyan-400 bg-cyan-500/5 border border-cyan-500/10', 
+    emerald: 'text-emerald-400 bg-emerald-500/5 border border-emerald-500/10',
+    amber: 'text-amber-400 bg-amber-500/5 border border-amber-500/10' 
+  };
   return (
-    <div className="glass-card px-3 py-2 flex flex-col items-center gap-1 text-center group">
-      <span className={`${colors[color]} group-hover:scale-110 transition-transform`}>{icon}</span>
+    <div className={`px-3 py-2 flex flex-col items-center gap-1 text-center rounded-xl transition-all hover:scale-105 duration-250 ${colors[color] || 'bg-white/5 border border-white/10 text-white/40'}`}>
+      <span className="group-hover:scale-110 transition-transform">{icon}</span>
       <motion.span 
         key={value}
         initial={{ scale: 1.5, opacity: 0.5 }}
         animate={{ scale: 1, opacity: 1 }}
-        className={`text-xl font-bold ${colors[color]}`}
+        className="text-xl font-black italic font-intel"
       >
         {value}
       </motion.span>

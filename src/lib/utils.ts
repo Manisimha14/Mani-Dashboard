@@ -87,12 +87,21 @@ export function updateStreakData(streak: { currentStreak: number; longestStreak:
 export function getProductivityScore(
   chaptersToday: number,
   problemsToday: number,
-  focusMinutesToday: number
+  focusMinutesToday: number,
+  customTrackersToday: number = 0
 ): number {
-  const readingScore = Math.min(chaptersToday * 20, 40);
-  const codingScore = Math.min(problemsToday * 30, 40);
-  const focusScore = Math.min(focusMinutesToday / 120 * 20, 20);
-  return Math.round(readingScore + codingScore + focusScore);
+  // Production-grade balanced scoring algorithm:
+  // - Study/Reading: Up to 35 pts (15 pts per chapter completed, capped at 35)
+  // - Coding/Engineering: Up to 35 pts (20 pts per LeetCode solved, capped at 35)
+  // - Deep Work Focus: Up to 15 pts (0.125 pts per focus minute, i.e., 120 mins = 15 pts max)
+  // - Custom Habits/Missions: Up to 15 pts (5 pts per logged custom tracker goal, capped at 15)
+  // Total Max possible score = 35 + 35 + 15 + 15 = 100 points
+  const readingScore = Math.min(chaptersToday * 15, 35);
+  const codingScore = Math.min(problemsToday * 20, 35);
+  const focusScore = Math.min((focusMinutesToday / 120) * 15, 15);
+  const customScore = Math.min(customTrackersToday * 5, 15);
+  
+  return Math.min(100, Math.round(readingScore + codingScore + focusScore + customScore));
 }
 
 export function formatDuration(minutes: number): string {
