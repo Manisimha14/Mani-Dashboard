@@ -15,6 +15,7 @@ import { useHealthGoals, useWater, useSleepEntries, useWorkouts, useSteps, useMe
 import { useTrackers } from '../hooks/useTrackerQuery';
 import { useSoundFX } from '../hooks/useSoundFX';
 import { useAppStore } from '../store/useAppStore';
+import { useUpdateProfile } from '../hooks/useProfileQuery';
 import { normalizeToLocalDateString } from '../utils/dateNormalization';
 import { calculateWeeklyReport } from '../services/reports/weeklyReportCalculator';
 import { generateWeeklyReportPDF } from '../services/reports/weeklyReportPdf';
@@ -90,7 +91,8 @@ const ConsistencyRing = ({ score }: { score: number }) => {
 
 export default function Reports() {
   const { play } = useSoundFX();
-  const { deletedReports, deleteReport } = useAppStore();
+  const { deletedReports, deleteReport, userSettings } = useAppStore();
+  const { mutate: updateProfile } = useUpdateProfile();
   const [countdown, setCountdown] = useState(() => getNextMondayCountdown());
   const [selectedWeeksAgo, setSelectedWeeksAgo] = useState<number | null>(null);
   const [pdfGeneratingWeek, setPdfGeneratingWeek] = useState<number | null>(null);
@@ -116,6 +118,20 @@ export default function Reports() {
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  const handleConfirmDelete = () => {
+    if (confirmDeleteKey) {
+      deleteReport(confirmDeleteKey);
+      updateProfile({
+        settings: {
+          ...userSettings,
+          deletedReports: [...deletedReports, confirmDeleteKey]
+        }
+      });
+      setConfirmDeleteKey(null);
+      play('success');
+    }
+  };
 
   // Format week cycles
   const getWeekCycleInfo = (weeksAgo: number) => {

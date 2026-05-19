@@ -163,6 +163,7 @@ export interface UserSettings {
   proteinAlerts?: boolean;
   focusAlerts?: boolean;
   streakAlerts?: boolean;
+  deletedReports?: string[];
   leetcodeAlerts?: boolean;
   workoutAlerts?: boolean;
   scratchpadNote?: string;

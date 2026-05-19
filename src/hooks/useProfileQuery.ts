@@ -54,6 +54,7 @@ export function useProfile() {
         readingStreak: query.data.readingStreak,
         codingStreak: query.data.codingStreak,
         focusStreak: query.data.focusStreak,
+        deletedReports: query.data.settings?.deletedReports || localStore.deletedReports || [],
       });
     }
   }, [query.data, user]);
