@@ -83,7 +83,7 @@ export default function HourlyPerformance({ focusSessions }: HourlyPerformancePr
         <Clock className="text-violet-400" size={16} />
         <div>
           <h3 className="text-lg font-black text-white tracking-tight">Time-of-Day Focus Distribution</h3>
-          <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest mt-0.5">24-hour cognitive efficiency mapping & peak performance windows</p>
+          <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest mt-0.5">Daily focus hours logged by time of day</p>
         </div>
       </div>
 
@@ -106,7 +106,7 @@ export default function HourlyPerformance({ focusSessions }: HourlyPerformancePr
           <div className="p-4 rounded-xl bg-white/[0.01] border border-white/5 flex flex-col gap-1.5">
             <div className="flex items-center gap-2">
               <Zap size={14} className="text-emerald-400" />
-              <span className="text-[10px] font-bold text-white/40 uppercase tracking-wider">Peak Cognitive Window</span>
+              <span className="text-[10px] font-bold text-white/40 uppercase tracking-wider">Peak Focus Hours</span>
             </div>
             <div className="text-lg font-black text-white font-mono">{insights.peakWindow}</div>
             <span className="text-[9px] text-emerald-400 font-bold">Highest daily focus minutes accumulation</span>
@@ -115,7 +115,7 @@ export default function HourlyPerformance({ focusSessions }: HourlyPerformancePr
           <div className="p-4 rounded-xl bg-white/[0.01] border border-white/5 flex flex-col gap-1.5">
             <div className="flex items-center gap-2">
               <AlertCircle size={14} className="text-rose-400" />
-              <span className="text-[10px] font-bold text-white/40 uppercase tracking-wider">Interruption Vulnerability</span>
+              <span className="text-[10px] font-bold text-white/40 uppercase tracking-wider">High Interruption Hours</span>
             </div>
             <div className="text-lg font-black text-white font-mono">
               {insights.interruptionHour !== 'None detected' ? `${insights.interruptionHour}` : 'None'}
@@ -127,9 +127,9 @@ export default function HourlyPerformance({ focusSessions }: HourlyPerformancePr
         </div>
       </div>
 
-      {/* 24-hour visual intensity grid bar */}
+      {/* 24-hour visual focus intensity bar */}
       <div className="mt-6 pt-5 border-t border-white/5 space-y-2">
-        <div className="text-[9px] font-bold text-white/30 uppercase tracking-widest">24-Hour Intensity Baseline Spectrum</div>
+        <div className="text-[9px] font-bold text-white/30 uppercase tracking-widest">Hourly Focus Intensity</div>
         <div className="flex gap-1.5 h-6">
           {hourlyData.map(h => {
             const intensity = Math.min(h.focusMinutes / 120, 1);

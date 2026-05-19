@@ -70,6 +70,41 @@ export default function FocusMode() {
   const [volume, setVolume]             = useState(pomodoroSettings.ambienceVolume);
   const [isZen, setIsZen]               = useState(false);
   const [activeTab, setActiveTab]       = useState<'timer' | 'analytics'>('timer');
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  const [selectedActivities, setSelectedActivities] = useState<string[]>([]);
+  const [quantities, setQuantities] = useState({
+    problemsSolved: 0,
+    minutesOfLearning: 0,
+    pagesRead: 0,
+    featuresShipped: 0,
+    notesCreated: 0,
+    exercisesCompleted: 0
+  });
+  const [sessionQuality, setSessionQuality] = useState<string>('Average');
+
+  const computedSessionScore = useMemo(() => {
+    let score = 25; // completed focus session gets +25
+    if (pomodoroSettings.focusDuration >= 45) score += 20;
+    
+    const hasCoding = quantities.problemsSolved > 0 || quantities.featuresShipped > 0 || selectedActivities.includes('Solved coding problems');
+    if (hasCoding) score += 15;
+    
+    const hasLearning = quantities.minutesOfLearning > 0 || quantities.notesCreated > 0 || selectedActivities.includes('Studied concepts') || selectedActivities.includes('Learning') || selectedActivities.includes('Read documentation');
+    if (hasLearning) score += 10;
+    
+    const hasProject = quantities.featuresShipped > 0 || selectedActivities.includes('Built project feature') || selectedActivities.includes('Debugged issue');
+    if (hasProject) score += 15;
+    
+    score += 15; // Reflection submitted bonus
+    
+    if (sessionQuality === 'Locked in') score += 10;
+    else if (sessionQuality === 'Deep work') score += 10;
+    else if (sessionQuality === 'Distracted' || sessionQuality === 'Interrupted') score -= 15;
+    else if (sessionQuality === 'Low energy') score -= 5;
+    
+    return Math.max(10, Math.min(100, score));
+  }, [pomodoroSettings.focusDuration, selectedActivities, quantities, sessionQuality]);
 
   const particles = useMemo(() => Array.from({ length: 24 }).map((_, i) => ({
     id: i,
@@ -97,14 +132,73 @@ export default function FocusMode() {
   const circumference = 2 * Math.PI * 120;
   const strokeDashoffset = circumference * (1 - progress / 100);
 
+  // Load saved timer state on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('active_focus_timer_v1');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed) {
+          setMode(parsed.mode);
+          setTaskName(parsed.taskName || '');
+          setMood(parsed.mood || '');
+          setCurrentSession(parsed.currentSession || null);
+          
+          if (parsed.isRunning) {
+            const elapsed = Math.floor((Date.now() - parsed.savedAt) / 1000);
+            const remaining = Math.max(0, parsed.timeLeft - elapsed);
+            if (remaining > 0) {
+              setTimeLeft(remaining);
+              setIsRunning(true);
+              // Restore startTimeRef
+              const originalElapsedMs = Date.now() - parsed.savedAt;
+              startTimeRef.current = Date.now() - originalElapsedMs;
+            } else {
+              // Timer completed while away
+              setTimeLeft(0);
+              setIsRunning(false);
+              // Wait a tick then trigger complete
+              setTimeout(() => {
+                handleSessionComplete();
+              }, 100);
+            }
+          } else {
+            setTimeLeft(parsed.timeLeft);
+            setIsRunning(false);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load focus state', e);
+      }
+    }
+    setIsInitialized(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persist timer state on change
+  useEffect(() => {
+    if (!isInitialized) return;
+    const timerState = {
+      timeLeft,
+      isRunning,
+      mode,
+      taskName,
+      mood,
+      currentSession,
+      savedAt: Date.now()
+    };
+    localStorage.setItem('active_focus_timer_v1', JSON.stringify(timerState));
+  }, [timeLeft, isRunning, mode, taskName, mood, currentSession, isInitialized]);
+
   /* ── reset when mode/duration settings change ── */
   useEffect(() => {
+    if (!isInitialized) return;
     if (!isRunning) { 
       setTimeLeft(totalDuration); 
       setGrowthProgress(0); 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, pomodoroSettings.focusDuration, pomodoroSettings.shortBreakDuration, pomodoroSettings.longBreakDuration]);
+  }, [mode, pomodoroSettings.focusDuration, pomodoroSettings.shortBreakDuration, pomodoroSettings.longBreakDuration, isInitialized]);
 
   // Sync volume state with settings
   useEffect(() => {
@@ -164,6 +258,17 @@ export default function FocusMode() {
       const duration = pomodoroSettings.focusDuration;
       const score = Math.min(100, Math.round((duration / 25) * 80 + (mood === 'energetic' ? 20 : mood === 'motivated' ? 15 : 10)));
       
+      setSelectedActivities([]);
+      setQuantities({
+        problemsSolved: 0,
+        minutesOfLearning: 0,
+        pagesRead: 0,
+        featuresShipped: 0,
+        notesCreated: 0,
+        exercisesCompleted: 0
+      });
+      setSessionQuality('Average');
+
       const createdSession = await addFocusSession({
         ...currentSession,
         endTime: new Date().toISOString(),
@@ -172,7 +277,7 @@ export default function FocusMode() {
         failed: false,
         mood,
         productivityScore: score,
-        reflection: reflection || undefined,
+        reflection: '',
       } as Omit<FocusSession, 'id'>);
       setLastCompletedSessionId((createdSession as FocusSession | undefined)?.id ?? null);
       soundEngine.sessionEnd(0.5);
@@ -580,6 +685,7 @@ export default function FocusMode() {
                             </>
                           )}
                         </div>
+                        {renderReflection(s.reflection)}
                       </div>
                       <div className="flex flex-col items-end gap-1.5">
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${s.completed ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
@@ -656,51 +762,174 @@ export default function FocusMode() {
 
       {/* Reflection & Timeline Replay */}
       <Modal open={showReflection} onClose={() => { setShowReflection(false); setReflection(''); }}
-        maxWidth="max-w-md" showClose={false}>
+        maxWidth="max-w-xl" showClose={false}>
         <div className="text-center mb-5">
           <motion.div className="text-5xl mb-3" animate={{ scale: [1, 1.15, 1] }}
             transition={{ duration: 0.6, repeat: 2 }}>{growthEmoji}</motion.div>
-          <h3 className="font-bold text-white text-lg">Session Complete!</h3>
-          <p className="text-white/40 text-sm mt-1">You focused for {pomodoroSettings.focusDuration} minutes</p>
+          <h3 className="font-black text-white text-xl uppercase tracking-wider">Reflection Intelligence</h3>
+          <p className="text-white/40 text-xs mt-1">Structured analysis of your {pomodoroSettings.focusDuration}-minute focus sprint</p>
         </div>
 
-        {/* Timeline Replay Visualization */}
-        <div className="mb-6 p-4 glass-card relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-r from-violet-600/10 to-emerald-600/10" />
-          <h4 className="text-xs font-bold text-white/50 uppercase tracking-widest mb-3 relative z-10">Session Timeline</h4>
-          <div className="h-2 w-full bg-white/10 rounded-full relative overflow-hidden mb-2 z-10">
-            <motion.div 
-              className="absolute top-0 bottom-0 left-0 bg-gradient-to-r from-violet-500 to-emerald-400"
-              initial={{ width: 0 }}
-              animate={{ width: '100%' }}
-              transition={{ duration: 2, ease: 'easeInOut', delay: 0.2 }}
-            />
+        <div className="space-y-5 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar">
+          {/* Timeline Replay Visualization */}
+          <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-r from-violet-600/5 to-emerald-600/5 pointer-events-none" />
+            <h4 className="text-[10px] font-black text-white/50 uppercase tracking-[0.2em] mb-2.5 relative z-10">Session Timeline Replay</h4>
+            <div className="h-2 w-full bg-white/5 rounded-full relative overflow-hidden mb-2 z-10">
+              <motion.div 
+                className="absolute top-0 bottom-0 left-0 bg-gradient-to-r from-violet-500 to-emerald-400"
+                initial={{ width: 0 }}
+                animate={{ width: '100%' }}
+                transition={{ duration: 2, ease: 'easeInOut', delay: 0.2 }}
+              />
+            </div>
+            <div className="flex justify-between text-[8px] uppercase tracking-wider font-black text-white/30 relative z-10">
+              <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>Started</motion.span>
+              <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.2 }}>Deep Focus</motion.span>
+              <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 2.2 }}>Completed</motion.span>
+            </div>
           </div>
-          <div className="flex justify-between text-[10px] text-white/40 relative z-10">
-            <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>Started</motion.span>
-            <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.2 }}>Deep Focus</motion.span>
-            <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 2.2 }}>Completed</motion.span>
+
+          {/* Activities Multi-select */}
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase font-black tracking-widest text-white/40 block">What did you do during this session?</label>
+            <div className="flex flex-wrap gap-2">
+              {[
+                'Solved coding problems', 'Watched educational video', 'Built project feature',
+                'Debugged issue', 'Studied concepts', 'Read documentation', 'Reading',
+                'Research', 'Planning', 'Writing', 'Revision', 'Learning'
+              ].map(act => {
+                const isSelected = selectedActivities.includes(act);
+                return (
+                  <button
+                    key={act}
+                    onClick={() => {
+                      setSelectedActivities(prev => 
+                        isSelected ? prev.filter(a => a !== act) : [...prev, act]
+                      );
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+                      isSelected
+                        ? 'bg-violet-500/10 border-violet-500/30 text-violet-400 shadow-[0_0_12px_rgba(139,92,246,0.1)]'
+                        : 'bg-white/5 border-white/5 text-white/50 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    {act}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Quantify Output fields */}
+          <div className="space-y-3">
+            <label className="text-[10px] uppercase font-black tracking-widest text-white/40 block">Quantify your outputs</label>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { label: 'Problems Solved', key: 'problemsSolved' },
+                { label: 'Minutes of Learning', key: 'minutesOfLearning' },
+                { label: 'Pages Read', key: 'pagesRead' },
+                { label: 'Features Shipped', key: 'featuresShipped' },
+                { label: 'Notes Created', key: 'notesCreated' },
+                { label: 'Exercises Completed', key: 'exercisesCompleted' }
+              ].map(f => (
+                <div key={f.key} className="p-3 rounded-xl bg-white/[0.02] border border-white/5 flex flex-col gap-1.5">
+                  <span className="text-[10px] font-bold text-white/40 uppercase tracking-wider">{f.label}</span>
+                  <div className="flex items-center justify-between gap-2">
+                    <button
+                      onClick={() => setQuantities(q => ({ ...q, [f.key]: Math.max(0, (q as any)[f.key] - 1) }))}
+                      className="w-7 h-7 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 text-white/60 transition-colors flex items-center justify-center font-bold text-xs"
+                    >
+                      -
+                    </button>
+                    <span className="font-mono text-base font-black text-white">{(quantities as any)[f.key]}</span>
+                    <button
+                      onClick={() => setQuantities(q => ({ ...q, [f.key]: (q as any)[f.key] + 1 }))}
+                      className="w-7 h-7 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 text-white/60 transition-colors flex items-center justify-center font-bold text-xs"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Session Quality inputs */}
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase font-black tracking-widest text-white/40 block">Session Quality</label>
+            <div className="flex flex-wrap gap-2">
+              {['Locked in', 'Deep work', 'Average', 'Distracted', 'Interrupted', 'Low energy'].map(q => {
+                const isSelected = sessionQuality === q;
+                const colors: Record<string, string> = {
+                  'Locked in': 'bg-amber-500/10 border-amber-500/30 text-amber-400',
+                  'Deep work': 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400',
+                  'Average': 'bg-violet-500/10 border-violet-500/30 text-violet-400',
+                  'Distracted': 'bg-red-500/10 border-red-500/30 text-red-400',
+                  'Interrupted': 'bg-orange-500/10 border-orange-500/30 text-orange-400',
+                  'Low energy': 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400'
+                };
+                return (
+                  <button
+                    key={q}
+                    onClick={() => setSessionQuality(q)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+                      isSelected
+                        ? colors[q] || 'bg-white/10 border-white/20 text-white'
+                        : 'bg-white/5 border-white/5 text-white/50 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    {q}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Dynamically Computed Score Banner */}
+          <div className="p-4 rounded-2xl bg-gradient-to-br from-violet-600/10 to-indigo-600/5 border border-white/5 flex items-center justify-between">
+            <div>
+              <div className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">Computed Session Quality</div>
+              <div className="flex items-baseline gap-1 mt-1">
+                <span className="text-3xl font-black text-white italic">{computedSessionScore}</span>
+                <span className="text-white/20 text-sm font-bold">/ 100</span>
+              </div>
+            </div>
+            <div className="text-right">
+              <span className="text-[8px] uppercase tracking-[0.2em] font-black text-violet-400">Score Rule breakdown</span>
+              <div className="text-[10px] text-white/40 font-bold mt-1">
+                +25 Session • +15 Ref • {pomodoroSettings.focusDuration >= 45 ? '+20 Deep' : '+0 Dur'}
+              </div>
+            </div>
           </div>
         </div>
 
-        <textarea
-          className="input-glass w-full px-3 py-2 text-sm resize-none mb-4"
-          rows={3}
-          placeholder="Reflect on your session. What did you accomplish?"
-          value={reflection}
-          onChange={e => setReflection(e.target.value)}
-        />
-        <button onClick={() => {
-          if (reflection && lastCompletedSessionId) {
-            updateFocusSession({ id: lastCompletedSessionId, updates: { reflection } });
-          }
-          setShowReflection(false);
-          setReflection('');
-          setLastCompletedSessionId(null);
-        }}
-          className="btn-glow w-full py-2.5 text-sm font-semibold">
-          Complete Reflection →
-        </button>
+        <div className="pt-4 mt-4 border-t border-white/5 flex justify-end">
+          <button
+            onClick={() => {
+              if (lastCompletedSessionId) {
+                updateFocusSession({
+                  id: lastCompletedSessionId,
+                  updates: {
+                    reflection: JSON.stringify({
+                      activities: selectedActivities,
+                      quantities,
+                      quality: sessionQuality,
+                    }),
+                    productivityScore: computedSessionScore
+                  }
+                });
+              }
+              setShowReflection(false);
+              setReflection('');
+              setLastCompletedSessionId(null);
+              toast.success(`⚡ Session Productivity Score: ${computedSessionScore}!`);
+            }}
+            className="btn-glow px-6 py-3 text-xs font-black uppercase tracking-wider"
+          >
+            Complete Reflection &amp; Submit Score →
+          </button>
+        </div>
       </Modal>
 
       {/* Settings */}
@@ -749,4 +978,35 @@ export default function FocusMode() {
   );
 
   return isFullscreen ? createPortal(content, document.body) : content;
+}
+
+function renderReflection(ref?: string) {
+  if (!ref) return null;
+  try {
+    const parsed = JSON.parse(ref);
+    if (parsed && typeof parsed === 'object') {
+      const acts = parsed.activities?.join(', ');
+      const q = parsed.quality ? `[${parsed.quality}]` : '';
+      const quantityTexts: string[] = [];
+      if (parsed.quantities) {
+        if (parsed.quantities.problemsSolved > 0) quantityTexts.push(`${parsed.quantities.problemsSolved} problems`);
+        if (parsed.quantities.pagesRead > 0) quantityTexts.push(`${parsed.quantities.pagesRead} pages`);
+        if (parsed.quantities.featuresShipped > 0) quantityTexts.push(`${parsed.quantities.featuresShipped} features`);
+        if (parsed.quantities.minutesOfLearning > 0) quantityTexts.push(`${parsed.quantities.minutesOfLearning}m learning`);
+      }
+      const qtyStr = quantityTexts.length > 0 ? ` • ${quantityTexts.join(', ')}` : '';
+      return (
+        <div className="text-[10px] text-violet-400 mt-1.5 font-bold italic bg-violet-500/5 py-1.5 px-3 rounded-xl border border-violet-500/10 w-max max-w-full">
+          {q} {acts || 'Focused sprint'}{qtyStr}
+        </div>
+      );
+    }
+  } catch (e) {
+    // Normal legacy reflection
+  }
+  return (
+    <div className="text-[10px] text-white/40 mt-1.5 italic bg-white/5 py-1.5 px-3 rounded-xl border border-white/5 w-max max-w-full">
+      {ref}
+    </div>
+  );
 }

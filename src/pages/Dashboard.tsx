@@ -8,12 +8,15 @@ import { useProfile } from '../hooks/useProfileQuery';
 import { useAchievements } from '../hooks/useAchievementQuery';
 import { useDailyActivity } from '../hooks/useActivityQuery';
 import { useTrackers } from '../hooks/useTrackerQuery';
-import { useTodayHealthData, useHealthGoals, useAddWater, useAddWorkout } from '../hooks/useHealthQuery';
+import { 
+  useTodayHealthData, useHealthGoals, useAddWater, useAddWorkout,
+  useWater, useSleepEntries, useWorkouts, useSteps
+} from '../hooks/useHealthQuery';
 import { useSoundFX } from '../hooks/useSoundFX';
 import {
   BookOpen, Code2, Timer, Flame, Trophy, TrendingUp,
   Target, Zap, ChevronRight, Star, CheckCircle2, Clock, Sparkles, BarChart3,
-  Heart, Droplets, Dumbbell, Moon, Plus, Info
+  Heart, Droplets, Dumbbell, Moon, Plus, Info, CalendarRange, Eye, Download, X
 } from 'lucide-react';
 import { formatDuration, todayString, getProductivityScore } from '../lib/utils';
 import { format, parseISO } from 'date-fns';
@@ -23,9 +26,10 @@ import Skeleton, { StatCardSkeleton, InsightSkeleton } from '../components/Skele
 import MissionControl from '../components/MissionControl';
 import QuickLauncher from '../components/QuickLauncher';
 import Modal from '../components/Modal';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import DeferredOnVisible from '../components/DeferredOnVisible';
 import FinanceWidget from '../components/dashboard/FinanceWidget';
+import WeeklyReportModal from '../components/dashboard/WeeklyReportModal';
 
 const SpaceClock = lazy(() => import('../components/dashboard/SpaceClock'));
 const QuickScratchpad = lazy(() => import('../components/QuickScratchpad'));
@@ -71,6 +75,12 @@ export default function Dashboard() {
   const addWorkout = useAddWorkout();
   const { play } = useSoundFX();
 
+  // Historical performance health datasets
+  const { data: waterEntries = [] } = useWater();
+  const { data: sleepEntries = [] } = useSleepEntries();
+  const { data: workoutEntries = [] } = useWorkouts();
+  const { data: stepsData = {} } = useSteps();
+
   const readingStreak = profile?.readingStreak ?? { currentStreak: 0, longestStreak: 0, history: {} };
   const codingStreak = profile?.codingStreak ?? { currentStreak: 0, longestStreak: 0, history: {} };
   const focusStreak = profile?.focusStreak ?? { currentStreak: 0, longestStreak: 0, history: {} };
@@ -78,6 +88,15 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [loading, setLoading] = React.useState(true);
   const [showScoreDetails, setShowScoreDetails] = React.useState(false);
+
+  // SaaS Weekly Executive Performance Report states
+  const [showWeeklyModal, setShowWeeklyModal] = useState(false);
+  const [weeklyReportDismissed, setWeeklyReportDismissed] = useState(() => 
+    localStorage.getItem('weekly_report_dismissed_v1') === 'true'
+  );
+  const [weeklyReportViewed, setWeeklyReportViewed] = useState(() => 
+    localStorage.getItem('weekly_report_viewed_v1') === 'true'
+  );
 
   React.useEffect(() => {
     // Immediate load if data is ready, but keep a tiny gap for mount animations
@@ -274,6 +293,68 @@ export default function Dashboard() {
           </div>
         </motion.div>
       </motion.div>
+
+      {/* SaaS Weekly Performance Report Banner */}
+      {!weeklyReportDismissed && (
+        <motion.div 
+          variants={item}
+          className="p-5 rounded-2xl bg-gradient-to-r from-violet-600/10 via-indigo-600/5 to-transparent border border-violet-500/15 relative overflow-hidden group shadow-lg"
+        >
+          <div className="absolute top-0 right-0 w-32 h-32 bg-violet-600/10 blur-[50px] pointer-events-none group-hover:bg-violet-600/15 transition-all" />
+          <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-violet-500/15 flex items-center justify-center border border-violet-500/20 shadow-[0_0_15px_rgba(139,92,246,0.15)] shrink-0">
+                <CalendarRange size={20} className="text-violet-400" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-violet-400 font-black uppercase tracking-[0.2em]">Weekly Summary</span>
+                  {!weeklyReportViewed && (
+                    <span className="w-2 h-2 rounded-full bg-violet-500 animate-ping" />
+                  )}
+                </div>
+                <h3 className="text-sm font-black text-white uppercase tracking-wider mt-0.5">Your Weekly Performance Summary is Ready</h3>
+                <p className="text-xs text-white/45 font-medium mt-0.5">Analyze your focus duration changes, habit logs, health trends, and weekly recommendations.</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-3.5 shrink-0 self-end md:self-center">
+              <button
+                onClick={() => {
+                  setShowWeeklyModal(true);
+                  setWeeklyReportViewed(true);
+                  localStorage.setItem('weekly_report_viewed_v1', 'true');
+                }}
+                className="btn-glow px-4 py-2.5 text-xs font-black uppercase tracking-wider flex items-center gap-1.5"
+              >
+                <Eye size={13} /> View Report
+              </button>
+              
+              <button
+                onClick={() => {
+                  setWeeklyReportViewed(true);
+                  localStorage.setItem('weekly_report_viewed_v1', 'true');
+                  setShowWeeklyModal(true);
+                }}
+                className="btn-ghost px-4 py-2.5 text-xs font-black uppercase tracking-wider flex items-center gap-1.5"
+              >
+                <Download size={13} /> Download PDF
+              </button>
+            </div>
+          </div>
+          
+          <button 
+            onClick={() => {
+              setWeeklyReportDismissed(true);
+              localStorage.setItem('weekly_report_dismissed_v1', 'true');
+            }}
+            className="absolute top-3.5 right-3.5 text-white/20 hover:text-white/60 transition-colors p-1"
+            title="Dismiss Notification"
+          >
+            <X size={14} />
+          </button>
+        </motion.div>
+      )}
 
       {/* Productivity Score Banner */}
       <motion.div variants={item}>
@@ -710,6 +791,19 @@ export default function Dashboard() {
           </div>
         </div>
       </Modal>
+
+      {/* Weekly Summary Report Modal */}
+      <WeeklyReportModal 
+        open={showWeeklyModal}
+        onClose={() => setShowWeeklyModal(false)}
+        focusSessions={focusSessions}
+        problems={problems}
+        waterEntries={waterEntries}
+        sleepEntries={sleepEntries}
+        workoutEntries={workoutEntries}
+        stepsData={stepsData}
+        healthGoals={healthGoals}
+      />
     </motion.div>
   );
 }

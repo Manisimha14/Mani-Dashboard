@@ -274,11 +274,11 @@ export default function WeeklyHeatmapMatrix({
               Activity Overview (10 Days)
             </h2>
             <p className="text-[10px] text-white/40 mt-0.5">
-              Habit tracking matrix mapped across Focus, Coding, and Health
+              Activity heatmap across Focus, Coding, and Health
             </p>
           </div>
 
-          {/* Heatmap Matrix Grid */}
+          {/* Heatmap Grid */}
           <div className="space-y-4 flex-1 flex flex-col justify-center select-none" role="grid" aria-readonly="true">
             
             {/* Day of Week Headers */}

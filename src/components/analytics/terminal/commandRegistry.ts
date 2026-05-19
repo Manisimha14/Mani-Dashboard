@@ -23,17 +23,17 @@ export const COMMAND_REGISTRY: Record<string, CommandHandler> = {
   help: () => [
     'Available Commands:',
     '------------------',
-    'focus [7d|30d|90d]  - Core focus metrics over custom window',
-    'focus streak        - Diagnostics for focus continuity',
+    'focus [7d|30d|90d]  - Focus metrics over custom window',
+    'focus streak        - Check your focus streak statistics',
     'focus weekly        - Summary metrics of the current week',
-    'code                - Completed coding solves & difficulty',
-    'leetcode            - Breakdown of algorithmic metrics',
-    'health              - Wellness aggregates & biometric scores',
-    'water               - Hydration summary & logging indicator',
-    'sleep               - Sleep rest analysis & quality logs',
-    'calories            - Calories average summary',
-    'today               - Real-time snapshot of today\'s telemetry',
-    'insights            - Computed cognitive coach recommendations',
+    'code                - Completed coding exercises & difficulty',
+    'leetcode            - Breakdown of solved problems',
+    'health              - Health totals & average metrics',
+    'water               - Hydration summary and status',
+    'sleep               - Sleep duration summary and logs',
+    'calories            - Calorie intake averages',
+    'today               - Today\'s summary snapshot',
+    'insights            - Recommendations and daily statistics',
     'go [health|analytics] - Instantly navigate active tabs',
     'log water [ml]      - Log custom volume (e.g., log water 500)',
     'log calories [kcal] - Log caloric intake (e.g., log calories 600)',
@@ -56,8 +56,8 @@ export const COMMAND_REGISTRY: Record<string, CommandHandler> = {
     const longest = durations.length > 0 ? Math.max(...durations) : 0;
 
     return [
-      `Focus Analytics — Last ${windowDays} Days`,
-      '------------------------------------',
+      `Focus Summary — Last ${windowDays} Days`,
+      '----------------------------------',
       `Total Sessions  : ${windowSessions.length}`,
       `Completed Blocks: ${completedCount}`,
       `Failed Blocks   : ${failedCount}`,
@@ -68,11 +68,11 @@ export const COMMAND_REGISTRY: Record<string, CommandHandler> = {
   },
 
   'focus streak': (args, ctx) => [
-    'Focus Streak Diagnostics',
-    '------------------------',
+    'Focus Streak History',
+    '--------------------',
     `Current Streak : ${ctx.focusStreak.currentStreak} days`,
-    'Status         : Continuous focus momentum active.',
-    'Ready for next deep work catalyst block.',
+    'Status         : Focus routine tracked correctly.',
+    'Ready for your next scheduled focus block.',
   ],
 
   'focus weekly': (args, ctx) => {
@@ -82,12 +82,12 @@ export const COMMAND_REGISTRY: Record<string, CommandHandler> = {
     const totalProblems = ctx.problems.filter(p => p.completed).length;
 
     return [
-      'Weekly Performance Report Summary',
-      '---------------------------------',
+      'Weekly Summary Report',
+      '---------------------',
       `Focus Sessions   : ${completed.length} completed`,
       `Problems Solved  : ${totalProblems} solved`,
       `Avg Session Time : ${avg} min`,
-      'Momentum Status  : Active operations aligned.',
+      'Weekly Status    : Tracked successfully.',
     ];
   },
 
@@ -98,8 +98,8 @@ export const COMMAND_REGISTRY: Record<string, CommandHandler> = {
     const hardCount = completed.filter(p => p.difficulty === 'Hard').length;
 
     return [
-      'LeetCode Forge Performance',
-      '--------------------------',
+      'LeetCode Performance',
+      '--------------------',
       `Total Solved    : ${completed.length} problems`,
       'Difficulty Distribution:',
       `  - Easy   : ${easyCount}`,
@@ -112,8 +112,8 @@ export const COMMAND_REGISTRY: Record<string, CommandHandler> = {
   problems: (args, ctx) => COMMAND_REGISTRY.code(args, ctx),
 
   health: (args, ctx) => [
-    'Biometrics Summary Averages',
-    '---------------------------',
+    'Health Summary Averages',
+    '-----------------------',
     `Water Average   : ${ctx.biometricStats.avgWaterL} L/day`,
     `Sleep Average   : ${ctx.biometricStats.avgSleepHrs} h/day`,
     `Calories Average: ${ctx.biometricStats.avgCalories} kcal/day`,
@@ -121,27 +121,27 @@ export const COMMAND_REGISTRY: Record<string, CommandHandler> = {
   ],
 
   water: (args, ctx) => [
-    'Hydration Analysis',
-    '------------------',
+    'Hydration Summary',
+    '-----------------',
     `Average Intake  : ${ctx.biometricStats.avgWaterL} L/day`,
     'Goal Target     : 3.0 L/day',
-    'Status          : Within normal operating boundaries.',
+    'Status          : Logged water is within target bounds.',
   ],
 
   sleep: (args, ctx) => [
-    'Sleep Quality Analysis',
-    '----------------------',
-    `30d Avg Rest    : ${ctx.biometricStats.avgSleepHrs} h/day`,
+    'Sleep Summary',
+    '-------------',
+    `30d Avg Sleep   : ${ctx.biometricStats.avgSleepHrs} h/day`,
     'Goal Target     : 7.5 h/day',
     'Status          : Based on logged sleep data only.',
   ],
 
   calories: (args, ctx) => [
-    'Metabolic Calorie Intake',
-    '------------------------',
+    'Calorie Intake Summary',
+    '----------------------',
     `30d Avg Intake  : ${ctx.biometricStats.avgCalories} kcal/day`,
     'Goal Target     : 2100 kcal/day',
-    'Status          : Descriptive average, not a metabolic assessment.',
+    'Status          : Simple mathematical average over active days.',
   ],
 
   today: (args, ctx) => {
@@ -152,8 +152,8 @@ export const COMMAND_REGISTRY: Record<string, CommandHandler> = {
     const totalProblems = ctx.problems.filter(p => p.completed && (p as { date?: string }).date === today).length;
 
     return [
-      'Today Telemetry Snapshot',
-      '------------------------',
+      'Today\'s Summary',
+      '---------------',
       `Focus Completed : ${focusMinutes} minutes`,
       `Problems Solved : ${totalProblems} exercises`,
       `Water Intake    : ${ctx.biometricStats.todayWaterL} L`,
@@ -162,11 +162,11 @@ export const COMMAND_REGISTRY: Record<string, CommandHandler> = {
   },
 
   insights: (args, ctx) => [
-    'Productivity Coach Insights',
-    '---------------------------',
-    '- Insights are generated from logged data only.',
-    '- No confidence-scored model is running in this console yet.',
-    '- Use analytics views for computed trends and raw totals.',
+    'Recommendations & Insights',
+    '--------------------------',
+    '- Insights are generated strictly from logged data.',
+    '- Calculations are based strictly on manual session reflections.',
+    '- Use analytics views for detailed trends and history.',
   ],
 
   go: (args, ctx) => {
@@ -186,7 +186,7 @@ export const COMMAND_REGISTRY: Record<string, CommandHandler> = {
     const targetPath = routesMap[destination];
     if (targetPath) {
       ctx.onNavigate(targetPath);
-      return [`Command Executed: Navigating successfully to "${destination}"...`];
+      return [`Navigating successfully to "${destination}"...`];
     }
     return [
       `Error: Unknown path "${destination || ''}".`,
@@ -209,13 +209,13 @@ export const COMMAND_REGISTRY: Record<string, CommandHandler> = {
       ctx.onLogWater(amount);
       return [
         `Success: Hydration logged +${amount}ml!`,
-        'Refreshing biometric registers...',
+        'Updating hydration logs...',
       ];
     } else if (subAction === 'calories' || subAction === 'calorie') {
       ctx.onLogCalories(amount);
       return [
         `Success: Caloric intake logged +${amount}kcal!`,
-        'Refreshing metabolic registers...',
+        'Updating calorie logs...',
       ];
     }
 

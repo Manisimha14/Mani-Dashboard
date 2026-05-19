@@ -581,7 +581,7 @@ export default function Analytics() {
         </div>
       </motion.div>
 
-      {/* ── Activity Heatmap Matrix ── */}
+      {/* ── Activity Heatmap ── */}
       <div className="relative z-10">
         <WeeklyHeatmapMatrix
           focusSessions={focusSessions}
