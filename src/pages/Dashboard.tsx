@@ -156,19 +156,84 @@ export default function Dashboard() {
     };
   }, [focusSessions, problems, book.chapters, focusMinutesToday, todayHealth.totalWaterMl, problemsToday]);
 
+  // Robust derived daily activity map for 7-day dashboard chart
+  const activityMap = useMemo(() => {
+    const map: Record<string, { chaptersRead: number; problemsSolved: number; focusMinutes: number }> = {};
+
+    // 1. Initialize map with existing dailyActivity records from Supabase
+    dailyActivity.forEach(a => {
+      map[a.date] = {
+        chaptersRead: a.chaptersRead,
+        problemsSolved: a.problemsSolved,
+        focusMinutes: a.focusMinutes,
+      };
+    });
+
+    // 2. Derive problems solved from the real problems database query
+    problems.forEach(p => {
+      if (p.completed && p.date) {
+        const dateStr = p.date;
+        if (!map[dateStr]) {
+          map[dateStr] = { chaptersRead: 0, problemsSolved: 0, focusMinutes: 0 };
+        }
+        map[dateStr].problemsSolved = Math.max(map[dateStr].problemsSolved, problems.filter(pr => pr.completed && pr.date === dateStr).length);
+      }
+    });
+
+    // 3. Derive focus minutes from the real focus sessions database query
+    focusSessions.forEach(s => {
+      if (s.completed && s.date) {
+        const dateStr = s.date;
+        if (!map[dateStr]) {
+          map[dateStr] = { chaptersRead: 0, problemsSolved: 0, focusMinutes: 0 };
+        }
+        const totalMin = focusSessions.filter(fs => fs.completed && fs.date === dateStr).reduce((acc, fs) => acc + (fs.actualDuration || fs.duration), 0);
+        map[dateStr].focusMinutes = Math.max(map[dateStr].focusMinutes, totalMin);
+      }
+    });
+
+    // 4. Derive book chapters read from the real chapters array
+    if (book && book.chapters) {
+      book.chapters.forEach((c: any) => {
+        if (c.completed && c.dateCompleted) {
+          const dateStr = c.dateCompleted;
+          if (!map[dateStr]) {
+            map[dateStr] = { chaptersRead: 0, problemsSolved: 0, focusMinutes: 0 };
+          }
+          const totalChapters = book.chapters.filter(ch => ch.completed && ch.dateCompleted === dateStr).length;
+          map[dateStr].chaptersRead = Math.max(map[dateStr].chaptersRead, totalChapters);
+        }
+      });
+    }
+
+    // Ensure no undercounting from original daily_activity rows
+    dailyActivity.forEach(a => {
+      const entry = map[a.date];
+      if (entry) {
+        entry.chaptersRead = Math.max(entry.chaptersRead, a.chaptersRead);
+        entry.problemsSolved = Math.max(entry.problemsSolved, a.problemsSolved);
+        entry.focusMinutes = Math.max(entry.focusMinutes, a.focusMinutes);
+      }
+    });
+
+    return map;
+  }, [dailyActivity, problems, focusSessions, book]);
+
   // Last 7 days activity
-  const last7 = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() - (6 - i));
-    const key = format(d, 'yyyy-MM-dd');
-    const act = dailyActivity.find(a => a.date === key);
-    return {
-      day: format(d, 'EEE'),
-      focus: act?.focusMinutes || 0,
-      problems: act?.problemsSolved || 0,
-      chapters: act?.chaptersRead || 0,
-    };
-  });
+  const last7 = useMemo(() => {
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (6 - i));
+      const key = format(d, 'yyyy-MM-dd');
+      const act = activityMap[key];
+      return {
+        day: format(d, 'EEE'),
+        focus: act?.focusMinutes || 0,
+        problems: act?.problemsSolved || 0,
+        chapters: act?.chaptersRead || 0,
+      };
+    });
+  }, [activityMap]);
 
   return (
     <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-8 max-w-7xl pb-12">

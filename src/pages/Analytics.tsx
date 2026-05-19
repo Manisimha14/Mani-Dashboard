@@ -16,6 +16,7 @@ import {
   TrendingUp, Target, Zap, BookOpen, Clock, Activity,
   Download, Heart, Droplets, Dumbbell, Moon,
 } from 'lucide-react';
+import { getProductivityScore } from '../lib/utils';
 
 import WeeklyHeatmapMatrix from '../components/analytics/WeeklyHeatmapMatrix';
 import WeeklyPerformance from '../components/analytics/WeeklyPerformance';
@@ -93,12 +94,87 @@ export default function Analytics() {
       : addGoalMut.mutate({ label: 'Daily Water', type: 'water', targetValue: v, unit: 'ml' });
   }, [activeWaterGoalObj, updateGoalMut, addGoalMut]);
 
-  // ── Indexed maps for O(1) lookups ───────────────────────────────────────
+  // ── Robust derived daily activity map ──────────────────────────────────
   const activityMap = useMemo(() => {
-    const map: Record<string, typeof dailyActivity[0]> = {};
-    dailyActivity.forEach(a => { map[a.date] = a; });
+    const map: Record<string, { chaptersRead: number; problemsSolved: number; focusMinutes: number; productivityScore: number }> = {};
+
+    // 1. Initialize map with existing dailyActivity records from Supabase
+    dailyActivity.forEach(a => {
+      map[a.date] = {
+        chaptersRead: a.chaptersRead,
+        problemsSolved: a.problemsSolved,
+        focusMinutes: a.focusMinutes,
+        productivityScore: a.productivityScore,
+      };
+    });
+
+    // 2. Derive problems solved from the real problems database query
+    problems.forEach(p => {
+      if (p.completed && p.date) {
+        const dateStr = p.date;
+        if (!map[dateStr]) {
+          map[dateStr] = { chaptersRead: 0, problemsSolved: 0, focusMinutes: 0, productivityScore: 0 };
+        }
+        map[dateStr].problemsSolved = Math.max(map[dateStr].problemsSolved, problems.filter(pr => pr.completed && pr.date === dateStr).length);
+      }
+    });
+
+    // 3. Derive focus minutes from the real focus sessions database query
+    focusSessions.forEach(s => {
+      if (s.completed && s.date) {
+        const dateStr = s.date;
+        if (!map[dateStr]) {
+          map[dateStr] = { chaptersRead: 0, problemsSolved: 0, focusMinutes: 0, productivityScore: 0 };
+        }
+        const totalMin = focusSessions.filter(fs => fs.completed && fs.date === dateStr).reduce((acc, fs) => acc + (fs.actualDuration || fs.duration), 0);
+        map[dateStr].focusMinutes = Math.max(map[dateStr].focusMinutes, totalMin);
+      }
+    });
+
+    // 4. Derive book chapters read from the real chapters array
+    if (book && book.chapters) {
+      book.chapters.forEach((c: any) => {
+        if (c.completed && c.dateCompleted) {
+          const dateStr = c.dateCompleted;
+          if (!map[dateStr]) {
+            map[dateStr] = { chaptersRead: 0, problemsSolved: 0, focusMinutes: 0, productivityScore: 0 };
+          }
+          const totalChapters = book.chapters.filter(ch => ch.completed && ch.dateCompleted === dateStr).length;
+          map[dateStr].chaptersRead = Math.max(map[dateStr].chaptersRead, totalChapters);
+        }
+      });
+    }
+
+    // Ensure no undercounting from original daily_activity rows
+    dailyActivity.forEach(a => {
+      const entry = map[a.date];
+      if (entry) {
+        entry.chaptersRead = Math.max(entry.chaptersRead, a.chaptersRead);
+        entry.problemsSolved = Math.max(entry.problemsSolved, a.problemsSolved);
+        entry.focusMinutes = Math.max(entry.focusMinutes, a.focusMinutes);
+        entry.productivityScore = getProductivityScore(entry.chaptersRead, entry.problemsSolved, entry.focusMinutes);
+      }
+    });
+
+    // Populate productivityScore for all derived entries
+    Object.keys(map).forEach(key => {
+      const entry = map[key];
+      entry.productivityScore = getProductivityScore(entry.chaptersRead, entry.problemsSolved, entry.focusMinutes);
+    });
+
     return map;
-  }, [dailyActivity]);
+  }, [dailyActivity, problems, focusSessions, book]);
+
+  // Robust daily activity array derived from the dynamic activityMap
+  const robustDailyActivity = useMemo(() => {
+    return Object.keys(activityMap).map(dateStr => ({
+      date: dateStr,
+      chaptersRead: activityMap[dateStr].chaptersRead,
+      problemsSolved: activityMap[dateStr].problemsSolved,
+      focusMinutes: activityMap[dateStr].focusMinutes,
+      productivityScore: activityMap[dateStr].productivityScore,
+    }));
+  }, [activityMap]);
 
   const sessionsByDate = useMemo(() => {
     const map: Record<string, typeof focusSessions> = {};
@@ -501,7 +577,7 @@ export default function Analytics() {
           problems={problems}
           waterLogs={waterLogs}
           meals={meals}
-          dailyActivity={dailyActivity}
+          dailyActivity={robustDailyActivity}
           focusStreak={focusStreak}
         />
       </div>
