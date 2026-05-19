@@ -79,9 +79,7 @@ export function useAddProblem(): UseMutationResult<unknown, Error, Omit<LeetCode
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: leetcodeKeys.all(user?.id ?? 'local') });
-      if (user) {
-        qc.invalidateQueries({ queryKey: activityKeys.all(user.id) });
-      }
+      qc.invalidateQueries({ queryKey: activityKeys.all(user?.id ?? 'local') });
     },
   });
 }
@@ -151,9 +149,7 @@ export function useDeleteProblem(): UseMutationResult<void, Error, string> {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: leetcodeKeys.all(user?.id ?? 'local') });
-      if (user) {
-        qc.invalidateQueries({ queryKey: activityKeys.all(user.id) });
-      }
+      qc.invalidateQueries({ queryKey: activityKeys.all(user?.id ?? 'local') });
     },
   });
 }
@@ -225,9 +221,7 @@ export function useToggleProblem(): UseMutationResult<void, Error, { id: string,
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: leetcodeKeys.all(user?.id ?? 'local') });
-      if (user) {
-        qc.invalidateQueries({ queryKey: activityKeys.all(user.id) });
-      }
+      qc.invalidateQueries({ queryKey: activityKeys.all(user?.id ?? 'local') });
     },
   });
 }
