@@ -85,78 +85,6 @@ export default function Dashboard() {
 
   const today = todayString();
   
-  const {
-    chaptersToday,
-    problemsToday,
-    focusMinutesToday,
-    completedChapters,
-    completedSessions,
-    totalFocusMin,
-    progressPct,
-    prodScore
-  } = useMemo(() => {
-    const chaptersToday = book.chapters.filter(c => c.completed && c.dateCompleted === today).length;
-    const problemsToday = problems.filter(p => p.completed && p.date === today).length;
-    const focusMinutesToday = focusSessions.filter(s => s.completed && s.date === today).reduce((acc, s) => acc + (s.actualDuration || s.duration), 0);
-
-    const completedChapters = book.chapters.filter(c => c.completed).length;
-    const completedSessions = focusSessions.filter(s => s.completed).length;
-    const totalFocusMin = focusSessions.filter(s => s.completed).reduce((a, s) => a + (s.actualDuration || s.duration), 0);
-    const progressPct = Math.round((completedChapters / Math.max(1, book.chapters.length)) * 100);
-    const prodScore = getProductivityScore(chaptersToday, problemsToday, focusMinutesToday);
-
-    return {
-      chaptersToday,
-      problemsToday,
-      focusMinutesToday,
-      completedChapters,
-      completedSessions,
-      totalFocusMin,
-      progressPct,
-      prodScore
-    };
-  }, [book.chapters, problems, focusSessions, today]);
-
-  const nextChapter = book.chapters.find(c => !c.completed);
-  const recentAchievements = useMemo(() => achievements.filter(a => a.unlocked).slice(0, 3), [achievements]);
-  
-  const dynamicInsight = useMemo(() => {
-    const focusTotal = focusSessions.filter(s => s.completed).length;
-    const problemsTotal = problems.filter(p => p.completed).length;
-    const chaptersTotal = book.chapters.filter(c => c.completed).length;
-
-    // Premium Telemetry Heuristics
-    if (problemsTotal > 0 && focusTotal === 0) {
-      return {
-        title: "Optimize Focus Sprints",
-        desc: `You have completed ${problemsTotal} coding tasks but no structured focus sprints. Try pairing code with Forest sessions to improve depth.`
-      };
-    }
-    if (focusMinutesToday > 0 && todayHealth.totalWaterMl < 500) {
-      return {
-        title: "Cognitive Hydration Warning",
-        desc: `Great focus velocity (${focusMinutesToday}m)! However, your water intake is low. Sip 250ml now to prevent cognitive fatigue.`
-      };
-    }
-    if (problemsToday >= 2) {
-      return {
-        title: "Elite Coding Velocity",
-        desc: `You have solved ${problemsToday} LeetCode problems today! Dynamic mental momentum is extremely high right now.`
-      };
-    }
-    if (focusMinutesToday >= 50) {
-      return {
-        title: "Deep Work Flowstate",
-        desc: `You have locked in ${focusMinutesToday} minutes of focus today. Excellent deep work consistency, legend!`
-      };
-    }
-    return {
-      title: "Core Operations Online",
-      desc: "Maintain your daily reading and coding commitments to unlock compounding cognitive gains."
-    };
-  }, [focusSessions, problems, book.chapters, focusMinutesToday, todayHealth.totalWaterMl, problemsToday]);
-
-  // Robust derived daily activity map for 7-day dashboard chart
   const activityMap = useMemo(() => {
     const map: Record<string, { chaptersRead: number; problemsSolved: number; focusMinutes: number }> = {};
 
@@ -218,6 +146,78 @@ export default function Dashboard() {
 
     return map;
   }, [dailyActivity, problems, focusSessions, book]);
+
+  const {
+    chaptersToday,
+    problemsToday,
+    focusMinutesToday,
+    completedChapters,
+    completedSessions,
+    totalFocusMin,
+    progressPct,
+    prodScore
+  } = useMemo(() => {
+    const todayData = activityMap[today] || { chaptersRead: 0, problemsSolved: 0, focusMinutes: 0 };
+    const chaptersToday = todayData.chaptersRead;
+    const problemsToday = todayData.problemsSolved;
+    const focusMinutesToday = todayData.focusMinutes;
+
+    const completedChapters = book.chapters.filter(c => c.completed).length;
+    const completedSessions = focusSessions.filter(s => s.completed).length;
+    const totalFocusMin = focusSessions.filter(s => s.completed).reduce((a, s) => a + (s.actualDuration || s.duration), 0);
+    const progressPct = Math.round((completedChapters / Math.max(1, book.chapters.length)) * 100);
+    const prodScore = getProductivityScore(chaptersToday, problemsToday, focusMinutesToday);
+
+    return {
+      chaptersToday,
+      problemsToday,
+      focusMinutesToday,
+      completedChapters,
+      completedSessions,
+      totalFocusMin,
+      progressPct,
+      prodScore
+    };
+  }, [book.chapters, focusSessions, today, activityMap]);
+
+  const nextChapter = book.chapters.find(c => !c.completed);
+  const recentAchievements = useMemo(() => achievements.filter(a => a.unlocked).slice(0, 3), [achievements]);
+  
+  const dynamicInsight = useMemo(() => {
+    const focusTotal = focusSessions.filter(s => s.completed).length;
+    const problemsTotal = problems.filter(p => p.completed).length;
+    const chaptersTotal = book.chapters.filter(c => c.completed).length;
+
+    // Premium Telemetry Heuristics
+    if (problemsTotal > 0 && focusTotal === 0) {
+      return {
+        title: "Optimize Focus Sprints",
+        desc: `You have completed ${problemsTotal} coding tasks but no structured focus sprints. Try pairing code with Forest sessions to improve depth.`
+      };
+    }
+    if (focusMinutesToday > 0 && todayHealth.totalWaterMl < 500) {
+      return {
+        title: "Cognitive Hydration Warning",
+        desc: `Great focus velocity (${focusMinutesToday}m)! However, your water intake is low. Sip 250ml now to prevent cognitive fatigue.`
+      };
+    }
+    if (problemsToday >= 2) {
+      return {
+        title: "Elite Coding Velocity",
+        desc: `You have solved ${problemsToday} LeetCode problems today! Dynamic mental momentum is extremely high right now.`
+      };
+    }
+    if (focusMinutesToday >= 50) {
+      return {
+        title: "Deep Work Flowstate",
+        desc: `You have locked in ${focusMinutesToday} minutes of focus today. Excellent deep work consistency, legend!`
+      };
+    }
+    return {
+      title: "Core Operations Online",
+      desc: "Maintain your daily reading and coding commitments to unlock compounding cognitive gains."
+    };
+  }, [focusSessions, problems, book.chapters, focusMinutesToday, todayHealth.totalWaterMl, problemsToday]);
 
   // Last 7 days activity
   const last7 = useMemo(() => {

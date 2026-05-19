@@ -140,23 +140,23 @@ export default function WeeklyHeatmapMatrix({
     if (value === 0) return 'bg-white/[0.04] border border-white/5 hover:border-white/20';
 
     if (type === 'focus') {
-      if (value < 30) return 'bg-violet-500/20 border border-violet-500/30';
-      if (value < 60) return 'bg-violet-500/50 border border-violet-500/60';
-      return 'bg-violet-400 border border-violet-300';
+      if (value < 30) return 'bg-violet-500/40 border border-violet-500/50';
+      if (value < 60) return 'bg-violet-500/70 border border-violet-500/80';
+      return 'bg-violet-400 border border-violet-350 shadow-[0_0_10px_rgba(167,139,250,0.3)]';
     }
     if (type === 'coding') {
-      if (value === 1) return 'bg-fuchsia-500/20 border border-fuchsia-500/30';
-      if (value === 2) return 'bg-fuchsia-500/50 border border-fuchsia-500/60';
-      return 'bg-fuchsia-400 border border-fuchsia-300';
+      if (value === 1) return 'bg-fuchsia-500/40 border border-fuchsia-500/50';
+      if (value === 2) return 'bg-fuchsia-500/70 border border-fuchsia-500/80';
+      return 'bg-fuchsia-400 border border-fuchsia-350 shadow-[0_0_10px_rgba(232,121,249,0.3)]';
     }
     if (type === 'reading') {
-      if (value === 1) return 'bg-cyan-500/20 border border-cyan-500/30';
-      if (value === 2) return 'bg-cyan-500/50 border border-cyan-500/60';
-      return 'bg-cyan-400 border border-cyan-300';
+      if (value === 1) return 'bg-cyan-500/40 border border-cyan-500/50';
+      if (value === 2) return 'bg-cyan-500/70 border border-cyan-500/80';
+      return 'bg-cyan-400 border border-cyan-350 shadow-[0_0_10px_rgba(34,211,238,0.3)]';
     }
     // health
-    if (value === 1) return 'bg-rose-500/30 border border-rose-500/40';
-    return 'bg-rose-400 border border-rose-300';
+    if (value === 1) return 'bg-rose-500/45 border border-rose-500/55';
+    return 'bg-rose-400 border border-rose-350 shadow-[0_0_10px_rgba(251,113,133,0.3)]';
   };
 
   // 7. Mouse-event handlers for positioning the shared absolute tooltip
