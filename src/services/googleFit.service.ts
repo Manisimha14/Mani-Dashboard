@@ -6,6 +6,31 @@ export interface GoogleFitData {
   activeMinutes: number;
 }
 
+async function refreshFitToken(): Promise<string | null> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return null;
+
+    // Call Supabase Edge Function
+    const { data, error } = await supabase.functions.invoke('refresh-google-fit', {
+      headers: {
+        Authorization: `Bearer ${session.access_token}`
+      }
+    });
+
+    if (error || !data?.access_token) {
+      console.error('Edge function token refresh failed:', error);
+      return null;
+    }
+
+    localStorage.setItem('google_fit_provider_token', data.access_token);
+    return data.access_token;
+  } catch (e) {
+    console.error('Failed to call refresh-google-fit:', e);
+    return null;
+  }
+}
+
 export async function fetchTodayGoogleFitData(): Promise<GoogleFitData> {
   const { data: { session } } = await supabase.auth.getSession();
   let token = session?.provider_token ?? undefined;
@@ -42,15 +67,28 @@ export async function fetchTodayGoogleFitData(): Promise<GoogleFitData> {
     endTimeMillis
   };
 
-  try {
-    const response = await fetch('https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate', {
+  const makeRequest = async (accessToken: string) => {
+    return fetch('https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${token}`,
+        'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(requestBody)
     });
+  };
+
+  try {
+    let response = await makeRequest(token);
+
+    if (response.status === 401 || response.status === 403) {
+      console.warn('Google Fit token expired. Attempting secure serverless token refresh...');
+      const newToken = await refreshFitToken();
+      if (newToken) {
+        token = newToken;
+        response = await makeRequest(token);
+      }
+    }
 
     if (!response.ok) {
       if (response.status === 401 || response.status === 403) {

@@ -85,11 +85,59 @@ export function useUpdateFocusSession(): UseMutationResult<void, Error, { id: st
   const localStore = useAppStore();
 
   return useMutation({
-    mutationFn: async ({ id, updates }) => user
-      ? FocusSvc.updateFocusSession(id, updates)
-      : localStore.updateFocusSession(id, updates),
+    mutationFn: async ({ id, updates }) => {
+      if (!user) {
+        return localStore.updateFocusSession(id, updates);
+      }
+
+      const currentSessions = await qc.fetchQuery<FocusSession[]>({
+        queryKey: focusKeys.all(user.id),
+      });
+      const session = currentSessions.find(s => s.id === id);
+
+      await FocusSvc.updateFocusSession(id, updates);
+
+      const isCompletedNow = updates.completed === true && (!session || !session.completed);
+      const isUncompletedNow = updates.completed === false && session?.completed;
+
+      if (isCompletedNow || isUncompletedNow) {
+        const today = todayString();
+        const duration = updates.actualDuration || updates.duration || session?.actualDuration || session?.duration || 0;
+        
+        let todayAct: DailyActivity = {
+          date: today,
+          chaptersRead: 0,
+          problemsSolved: 0,
+          focusMinutes: 0,
+          productivityScore: 0
+        };
+
+        try {
+          const activities = await ActivitySvc.fetchDailyActivities(user.id);
+          const existing = activities.find(a => a.date === today);
+          if (existing) {
+            todayAct = { ...existing };
+          }
+        } catch (e) {
+          console.error('Failed to fetch daily activity:', e);
+        }
+
+        const delta = isCompletedNow ? duration : -duration;
+        todayAct.focusMinutes = Math.max(0, todayAct.focusMinutes + delta);
+        todayAct.productivityScore = getProductivityScore(
+          todayAct.chaptersRead,
+          todayAct.problemsSolved,
+          todayAct.focusMinutes
+        );
+
+        await ActivitySvc.upsertDailyActivity(user.id, todayAct);
+      }
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: focusKeys.all(user?.id ?? 'local') });
+      if (user) {
+        qc.invalidateQueries({ queryKey: activityKeys.all(user.id) });
+      }
     },
   });
 }

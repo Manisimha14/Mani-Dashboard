@@ -52,9 +52,17 @@ export function useUpdateChapter(): UseMutationResult<
         queryKey: bookKeys.all(user.id),
       });
 
-      const updatedChapters = currentBook.chapters.map(c => 
-         c.id === chapterId ? { ...c, ...updates } : c
-      );
+      const updatedChapters = currentBook.chapters.map(c => {
+        if (c.id === chapterId) {
+          const completed = updates.completed !== undefined ? updates.completed : c.completed;
+          return {
+            ...c,
+            ...updates,
+            dateCompleted: completed && !c.completed ? todayString() : (completed === false ? undefined : c.dateCompleted)
+          };
+        }
+        return c;
+      });
 
       const updatedBook = { ...currentBook, chapters: updatedChapters };
 

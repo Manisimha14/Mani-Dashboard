@@ -161,12 +161,13 @@ export function useToggleProblem(): UseMutationResult<void, Error, { id: string,
       }
 
       const newCompleted = !current;
+      const today = todayString();
       await LeetCodeSvc.updateProblem(id, { 
         completed: newCompleted, 
-        status: newCompleted ? 'solved' : (status === 'solved' ? 'attempted' : status as any) 
+        status: newCompleted ? 'solved' : (status === 'solved' ? 'attempted' : status as any),
+        date: newCompleted ? today : undefined
       });
 
-      const today = todayString();
       let todayAct: DailyActivity = {
         date: today,
         chaptersRead: 0,

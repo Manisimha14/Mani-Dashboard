@@ -370,7 +370,12 @@ export const useAppStore = create<AppStore>()(
         
         set(state => {
           const problems = state.problems.map(p =>
-            p.id === id ? { ...p, completed: isCompleting, status: (isCompleting ? 'solved' : 'todo') as LeetCodeStatus } : p
+            p.id === id ? { 
+              ...p, 
+              completed: isCompleting, 
+              status: (isCompleting ? 'solved' : 'todo') as LeetCodeStatus,
+              date: isCompleting ? todayString() : p.date 
+            } : p
           );
           
           let codingStreak = state.codingStreak;
@@ -404,9 +409,20 @@ export const useAppStore = create<AppStore>()(
       },
 
       updateFocusSession: (id, updates) => {
+        const session = get().focusSessions.find(s => s.id === id);
+        const wasCompleted = session?.completed ?? false;
+        const isCompleted = updates.completed !== undefined ? updates.completed : wasCompleted;
+        const duration = updates.actualDuration || updates.duration || session?.actualDuration || session?.duration || 0;
+
         set(state => ({
           focusSessions: state.focusSessions.map(s => s.id === id ? { ...s, ...updates } : s),
         }));
+
+        if (isCompleted && !wasCompleted) {
+          get().logActivity('focus', duration);
+        } else if (!isCompleted && wasCompleted) {
+          get().logActivity('focus', -duration);
+        }
       },
 
       updatePomodoroSettings: (settings) => {
@@ -483,33 +499,51 @@ export const useAppStore = create<AppStore>()(
         const today = todayString();
         set(state => {
           const existing = state.dailyActivity.find(a => a.date === today);
+          let updatedList;
           if (existing) {
-            return {
-              dailyActivity: state.dailyActivity.map(a =>
-                a.date === today
-                  ? {
-                      ...a,
-                      chaptersRead: type === 'reading' ? Math.max(0, a.chaptersRead + value) : a.chaptersRead,
-                      problemsSolved: type === 'coding' ? Math.max(0, a.problemsSolved + value) : a.problemsSolved,
-                      focusMinutes: type === 'focus' ? Math.max(0, a.focusMinutes + value) : a.focusMinutes,
-                    }
-                  : a
-              ),
-            };
+            updatedList = state.dailyActivity.map(a => {
+              if (a.date === today) {
+                const chaptersRead = type === 'reading' ? Math.max(0, a.chaptersRead + value) : a.chaptersRead;
+                const problemsSolved = type === 'coding' ? Math.max(0, a.problemsSolved + value) : a.problemsSolved;
+                const focusMinutes = type === 'focus' ? Math.max(0, a.focusMinutes + value) : a.focusMinutes;
+                
+                const readingScore = Math.min(chaptersRead * 20, 40);
+                const codingScore = Math.min(problemsSolved * 30, 40);
+                const focusScore = Math.min((focusMinutes / 120) * 20, 20);
+                const productivityScore = Math.round(readingScore + codingScore + focusScore);
+                
+                return {
+                  ...a,
+                  chaptersRead,
+                  problemsSolved,
+                  focusMinutes,
+                  productivityScore,
+                };
+              }
+              return a;
+            });
           } else {
-            return {
-              dailyActivity: [
-                ...state.dailyActivity,
-                {
-                  date: today,
-                  chaptersRead: type === 'reading' ? Math.max(0, value) : 0,
-                  problemsSolved: type === 'coding' ? Math.max(0, value) : 0,
-                  focusMinutes: type === 'focus' ? Math.max(0, value) : 0,
-                  productivityScore: 0,
-                },
-              ],
-            };
+            const chaptersRead = type === 'reading' ? Math.max(0, value) : 0;
+            const problemsSolved = type === 'coding' ? Math.max(0, value) : 0;
+            const focusMinutes = type === 'focus' ? Math.max(0, value) : 0;
+
+            const readingScore = Math.min(chaptersRead * 20, 40);
+            const codingScore = Math.min(problemsSolved * 30, 40);
+            const focusScore = Math.min((focusMinutes / 120) * 20, 20);
+            const productivityScore = Math.round(readingScore + codingScore + focusScore);
+
+            updatedList = [
+              ...state.dailyActivity,
+              {
+                date: today,
+                chaptersRead,
+                problemsSolved,
+                focusMinutes,
+                productivityScore,
+              }
+            ];
           }
+          return { dailyActivity: updatedList };
         });
       },
 
