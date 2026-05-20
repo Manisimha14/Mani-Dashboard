@@ -84,17 +84,18 @@ const MINDSET_MODES = {
   },
 };
 
-export default function CognitiveCockpit() {
-  const { userSettings, updateUserSettings } = useAppStore();
+const CognitiveCockpit = React.memo(function CognitiveCockpit() {
+  const userSettings = useAppStore((s) => s.userSettings);
+  const updateUserSettings = useAppStore((s) => s.updateUserSettings);
   const { play } = useSoundFX();
   
   const currentMood = userSettings.mood || 'focused';
   const activeMode = MINDSET_MODES[currentMood as keyof typeof MINDSET_MODES] || MINDSET_MODES.focused;
 
-  const handleModeChange = (modeId: string) => {
+  const handleModeChange = React.useCallback((modeId: string) => {
     play('success');
     updateUserSettings({ mood: modeId as AppMood });
-  };
+  }, [play, updateUserSettings]);
 
   return (
     <div className="w-full glass-card p-6 border border-white/10 rounded-3xl bg-black/40 backdrop-blur-xl relative overflow-hidden shadow-[0_15px_40px_rgba(0,0,0,0.6)]">
@@ -187,8 +188,9 @@ export default function CognitiveCockpit() {
               </div>
               <div className="h-2 bg-white/5 border border-white/10 rounded-full overflow-hidden p-[1px]">
                 <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${activeMode.load}%` }}
+                  initial={{ scaleX: 0 }}
+                  animate={{ scaleX: activeMode.load / 100 }}
+                  style={{ transformOrigin: 'left', width: '100%' }}
                   transition={{ type: 'spring', stiffness: 80, damping: 15 }}
                   className={`h-full rounded-full bg-gradient-to-r ${activeMode.gradient}`}
                 />
@@ -206,8 +208,9 @@ export default function CognitiveCockpit() {
               </div>
               <div className="h-2 bg-white/5 border border-white/10 rounded-full overflow-hidden p-[1px]">
                 <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${activeMode.intensity}%` }}
+                  initial={{ scaleX: 0 }}
+                  animate={{ scaleX: activeMode.intensity / 100 }}
+                  style={{ transformOrigin: 'left', width: '100%' }}
                   transition={{ type: 'spring', stiffness: 80, damping: 15 }}
                   className={`h-full rounded-full bg-gradient-to-r ${activeMode.gradient}`}
                 />
@@ -225,8 +228,9 @@ export default function CognitiveCockpit() {
               </div>
               <div className="h-2 bg-white/5 border border-white/10 rounded-full overflow-hidden p-[1px]">
                 <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${activeMode.depletion}%` }}
+                  initial={{ scaleX: 0 }}
+                  animate={{ scaleX: activeMode.depletion / 100 }}
+                  style={{ transformOrigin: 'left', width: '100%' }}
                   transition={{ type: 'spring', stiffness: 80, damping: 15 }}
                   className={`h-full rounded-full bg-gradient-to-r ${activeMode.gradient}`}
                 />
@@ -259,8 +263,9 @@ export default function CognitiveCockpit() {
                   <motion.div
                     key={i}
                     animate={{
-                      height: [4, 12, 4],
+                      scaleY: [0.33, 1, 0.33],
                     }}
+                    style={{ transformOrigin: 'bottom', height: '12px' }}
                     transition={{
                       duration: 0.6 + i * 0.1,
                       repeat: Infinity,
@@ -277,4 +282,6 @@ export default function CognitiveCockpit() {
       </div>
     </div>
   );
-}
+});
+
+export default CognitiveCockpit;

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppStore } from '../store/useAppStore';
@@ -483,6 +484,9 @@ export default function FocusMode() {
       background: 'radial-gradient(ellipse at 50% 40%, hsl(240,30%,8%) 0%, hsl(225,35%,3%) 100%)',
     } : undefined}
     >
+      <Helmet>
+        <title>{isRunning ? `(${formatTime(timeLeft)}) Focus` : 'Focus Hub'} | MANI OS</title>
+      </Helmet>
       {showConfetti && <Confetti recycle={false} numberOfPieces={300} />}
 
       <AnimatePresence>

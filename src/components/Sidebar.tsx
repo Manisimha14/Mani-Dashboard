@@ -28,7 +28,7 @@ const navItems = [
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];
 
-export default function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }) {
+function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }) {
   const { data: book = { id: 'main-book', title: 'My Book', author: 'Author', chapters: [], startDate: todayString(), coverColor: '#7c3aed' } } = useBook();
   const { data: problems = [] } = useProblems();
   const { data: focusSessions = [] } = useFocusSessions();
@@ -42,17 +42,39 @@ export default function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose
   const { play } = useSoundFX();
   const today = todayString();
 
-  const chaptersToday = book.chapters.filter(c => c.completed && c.dateCompleted === today).length;
-  const problemsToday = problems.filter(p => p.completed && p.date === today).length;
-  const focusMinutesToday = focusSessions.filter(s => s.completed && s.date === today).reduce((acc, s) => acc + (s.actualDuration || s.duration), 0);
+  const chaptersToday = React.useMemo(() => {
+    return book.chapters.filter(c => c.completed && c.dateCompleted === today).length;
+  }, [book.chapters, today]);
 
-  const prodScore = getProductivityScore(chaptersToday, problemsToday, focusMinutesToday);
-  const isElite = prodScore >= 80;
+  const problemsToday = React.useMemo(() => {
+    return problems.filter(p => p.completed && p.date === today).length;
+  }, [problems, today]);
 
-  const completedChapters = book.chapters.filter(c => c.completed).length;
-  const solvedProblems = problems.filter(p => p.completed).length;
-  const completedSessions = focusSessions.filter(s => s.completed).length;
-  const maxStreak = Math.max(readingStreak.currentStreak, codingStreak.currentStreak, focusStreak.currentStreak);
+  const focusMinutesToday = React.useMemo(() => {
+    return focusSessions.filter(s => s.completed && s.date === today).reduce((acc, s) => acc + (s.actualDuration || s.duration), 0);
+  }, [focusSessions, today]);
+
+  const prodScore = React.useMemo(() => {
+    return getProductivityScore(chaptersToday, problemsToday, focusMinutesToday);
+  }, [chaptersToday, problemsToday, focusMinutesToday]);
+
+  const isElite = React.useMemo(() => prodScore >= 80, [prodScore]);
+
+  const completedChapters = React.useMemo(() => {
+    return book.chapters.filter(c => c.completed).length;
+  }, [book.chapters]);
+
+  const solvedProblems = React.useMemo(() => {
+    return problems.filter(p => p.completed).length;
+  }, [problems]);
+
+  const completedSessions = React.useMemo(() => {
+    return focusSessions.filter(s => s.completed).length;
+  }, [focusSessions]);
+
+  const maxStreak = React.useMemo(() => {
+    return Math.max(readingStreak.currentStreak, codingStreak.currentStreak, focusStreak.currentStreak);
+  }, [readingStreak.currentStreak, codingStreak.currentStreak, focusStreak.currentStreak]);
 
   const circumference = 2 * Math.PI * 36;
   const strokeDashoffset = circumference * (1 - Math.min(prodScore, 100) / 100);
@@ -129,11 +151,12 @@ export default function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose
               <motion.div
                 whileHover={{ x: 6, backgroundColor: 'rgba(255,255,255,0.06)' }}
                 whileTap={{ scale: 0.96 }}
-                className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-300 ${
+                className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-300 focus-visible:ring-2 focus-visible:ring-violet-500 outline-none ${
                   isActive 
                     ? 'text-violet-400 bg-violet-600/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]' 
                     : 'text-white/40 hover:text-white'
                 }`}
+                aria-label={`Navigate to ${label}`}
               >
                 <div className={`transition-transform duration-300 ${isActive ? 'scale-110 drop-shadow-[0_0_8px_rgba(139,92,246,0.5)]' : ''}`}>
                   <Icon size={18} />
@@ -225,3 +248,5 @@ export default function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose
     </div>
   );
 }
+
+export default React.memo(Sidebar);

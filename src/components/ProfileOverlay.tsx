@@ -23,7 +23,16 @@ const MOODS: { id: AppMood; label: string; icon: any; color: string; desc: strin
 ];
 
 export default function ProfileOverlay({ open, onClose }: ProfileOverlayProps) {
-  const { userSettings, updateUserSettings, readingStreak, codingStreak, focusStreak, dailyActivity, problems, book, achievements } = useAppStore();
+  const userSettings = useAppStore(s => s.userSettings);
+  const updateUserSettings = useAppStore(s => s.updateUserSettings);
+  const readingStreak = useAppStore(s => s.readingStreak);
+  const codingStreak = useAppStore(s => s.codingStreak);
+  const focusStreak = useAppStore(s => s.focusStreak);
+  const dailyActivity = useAppStore(s => s.dailyActivity);
+  const problems = useAppStore(s => s.problems);
+  const book = useAppStore(s => s.book);
+  const achievements = useAppStore(s => s.achievements);
+
   const [view, setView] = React.useState<'settings' | 'showcase'>('settings');
   const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -54,13 +63,37 @@ export default function ProfileOverlay({ open, onClose }: ProfileOverlayProps) {
     y.set(0);
   };
 
-  const totalStreak = Math.max(readingStreak.currentStreak, codingStreak.currentStreak, focusStreak.currentStreak);
-  const currentMood = MOODS.find(m => m.id === userSettings.mood) || MOODS[0];
-  const totalFocusHours = Math.round(dailyActivity.reduce((sum, day) => sum + day.focusMinutes, 0) / 60);
-  const totalSolved = problems.filter(p => p.completed).length;
-  const completedChapters = book?.chapters.filter(c => c.completed).length ?? 0;
-  const unlockedAchievements = achievements.filter(a => a.unlocked).length;
-  const activeDays = new Set(dailyActivity.filter(day => day.focusMinutes > 0 || day.problemsSolved > 0 || day.chaptersRead > 0).map(day => day.date)).size;
+  const totalStreak = React.useMemo(() => {
+    return Math.max(readingStreak.currentStreak, codingStreak.currentStreak, focusStreak.currentStreak);
+  }, [readingStreak.currentStreak, codingStreak.currentStreak, focusStreak.currentStreak]);
+
+  const currentMood = React.useMemo(() => {
+    return MOODS.find(m => m.id === userSettings.mood) || MOODS[0];
+  }, [userSettings.mood]);
+
+  const totalFocusHours = React.useMemo(() => {
+    return Math.round(dailyActivity.reduce((sum, day) => sum + day.focusMinutes, 0) / 60);
+  }, [dailyActivity]);
+
+  const totalSolved = React.useMemo(() => {
+    return problems.filter(p => p.completed).length;
+  }, [problems]);
+
+  const completedChapters = React.useMemo(() => {
+    return book?.chapters.filter(c => c.completed).length ?? 0;
+  }, [book?.chapters]);
+
+  const unlockedAchievements = React.useMemo(() => {
+    return achievements.filter(a => a.unlocked).length;
+  }, [achievements]);
+
+  const activeDays = React.useMemo(() => {
+    return new Set(
+      dailyActivity
+        .filter(day => day.focusMinutes > 0 || day.problemsSolved > 0 || day.chaptersRead > 0)
+        .map(day => day.date)
+    ).size;
+  }, [dailyActivity]);
 
   return (
     <AnimatePresence>
@@ -346,9 +379,10 @@ function ShowcaseStat({ label, value, progress, color }: { label: string; value:
       </div>
       <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden relative">
         <motion.div 
-          initial={{ width: 0 }}
-          animate={{ width: `${progress}%` }}
+          initial={{ scaleX: 0 }}
+          animate={{ scaleX: progress / 100 }}
           transition={{ duration: 1.5, ease: "circOut" }}
+          style={{ transformOrigin: "left", width: "100%" }}
           className={`absolute inset-y-0 left-0 ${color} rounded-full`}
         />
         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer" />

@@ -1,4 +1,5 @@
 import React, { Suspense, lazy } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { motion, type Variants } from 'framer-motion';
 import { useAppStore } from '../store/useAppStore';
 import { useBook } from '../hooks/useBookQuery';
@@ -30,10 +31,11 @@ import { useMemo, useState } from 'react';
 import DeferredOnVisible from '../components/DeferredOnVisible';
 import FinanceWidget from '../components/dashboard/FinanceWidget';
 import WeeklyReportModal from '../components/dashboard/WeeklyReportModal';
+import { lazyWithRetry } from '../lib/lazyWithRetry';
 
-const SpaceClock = lazy(() => import('../components/dashboard/SpaceClock'));
-const QuickScratchpad = lazy(() => import('../components/QuickScratchpad'));
-const DashboardActivityChart = lazy(() => import('../components/dashboard/DashboardActivityChart'));
+const SpaceClock = lazyWithRetry(() => import('../components/dashboard/SpaceClock'));
+const QuickScratchpad = lazyWithRetry(() => import('../components/QuickScratchpad'));
+const DashboardActivityChart = lazyWithRetry(() => import('../components/dashboard/DashboardActivityChart'));
 
 const stagger: Variants = {
   hidden: { opacity: 0 },
@@ -277,6 +279,9 @@ export default function Dashboard() {
 
   return (
     <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-8 max-w-7xl pb-12">
+      <Helmet>
+        <title>Dashboard | MANI OS</title>
+      </Helmet>
       {/* Header */}
       <motion.div variants={item} className="flex flex-col md:flex-row md:items-start justify-between gap-6">
         <div className="space-y-1">

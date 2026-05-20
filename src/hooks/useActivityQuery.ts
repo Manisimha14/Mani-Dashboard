@@ -10,13 +10,13 @@ export const activityKeys = {
 
 export function useDailyActivity() {
   const { user } = useAuth();
-  const localStore = useAppStore();
+  const dailyActivity = useAppStore(s => s.dailyActivity);
 
   return useQuery({
     queryKey: activityKeys.all(user?.id ?? 'local'),
     queryFn: () => user
       ? ActivitySvc.fetchDailyActivities(user.id)
-      : Promise.resolve(localStore.dailyActivity),
+      : Promise.resolve(dailyActivity),
   });
 }
 

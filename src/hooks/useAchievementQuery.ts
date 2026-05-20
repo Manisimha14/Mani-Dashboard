@@ -10,13 +10,13 @@ export const achievementKeys = {
 
 export function useAchievements() {
   const { user } = useAuth();
-  const localStore = useAppStore();
+  const achievements = useAppStore(s => s.achievements);
 
   return useQuery({
     queryKey: achievementKeys.all(user?.id ?? 'local'),
     queryFn: () => user
       ? AchievementSvc.fetchAchievements(user.id)
-      : Promise.resolve(localStore.achievements),
+      : Promise.resolve(achievements),
   });
 }
 
@@ -27,12 +27,12 @@ export function useUpdateAchievement(): UseMutationResult<
 > {
   const { user } = useAuth();
   const qc = useQueryClient();
-  const localStore = useAppStore();
 
   return useMutation({
     mutationFn: async ({ id, updates }) => {
+      const store = useAppStore.getState();
       if (!user) {
-        localStore.updateAchievement(id, updates);
+        store.updateAchievement(id, updates);
         return;
       }
       return AchievementSvc.updateAchievement(user.id, id, updates);

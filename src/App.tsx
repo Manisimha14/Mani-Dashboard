@@ -4,24 +4,27 @@ import Login from './pages/Login';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 import AppQueryProvider from './components/AppQueryProvider';
+import PWAUpdater from './components/PWAUpdater';
 import { useAppStore } from './store/useAppStore';
 import { useAuth } from './contexts/AuthContext';
-import { applyTheme } from './lib/themes';
+import { applyTheme, THEME_MAP } from './lib/themes';
+import { Helmet } from 'react-helmet-async';
+import { lazyWithRetry } from './lib/lazyWithRetry';
 
 import Layout from './components/Layout';
-import Dashboard from './pages/Dashboard';
-import Reading from './pages/Reading';
-import FocusMode from './pages/FocusMode';
-import Trackers from './pages/Trackers';
+const Dashboard = lazyWithRetry(() => import('./pages/Dashboard'));
+const Reading = lazyWithRetry(() => import('./pages/Reading'));
+const FocusMode = lazyWithRetry(() => import('./pages/FocusMode'));
+const Trackers = lazyWithRetry(() => import('./pages/Trackers'));
 
-const LeetCode = lazy(() => import('./pages/LeetCode'));
-const Health = lazy(() => import('./pages/Health'));
-const Analytics = lazy(() => import('./pages/Analytics'));
-const Achievements = lazy(() => import('./pages/Achievements'));
-const Settings = lazy(() => import('./pages/Settings'));
-const Ambient = lazy(() => import('./pages/Ambient'));
-const Reports = lazy(() => import('./pages/Reports'));
-const Onboarding = lazy(() => import('./components/Onboarding'));
+const LeetCode = lazyWithRetry(() => import('./pages/LeetCode'));
+const Health = lazyWithRetry(() => import('./pages/Health'));
+const Ambient = lazyWithRetry(() => import('./pages/Ambient'));
+const Analytics = lazyWithRetry(() => import('./pages/Analytics'));
+const Achievements = lazyWithRetry(() => import('./pages/Achievements'));
+const Settings = lazyWithRetry(() => import('./pages/Settings'));
+const Reports = lazyWithRetry(() => import('./pages/Reports'));
+const Onboarding = lazyWithRetry(() => import('./components/Onboarding'));
 
 function RouteFallback() {
   return (
@@ -41,6 +44,8 @@ export default function App() {
   const { userSettings, notifications } = useAppStore();
   const { user } = useAuth();
   const [showOnboarding, setShowOnboarding] = useState(false);
+
+  const themeColorHex = THEME_MAP[userSettings.theme]?.vars['--bg-primary'] || '#0a0b14';
 
   const unreadCount = useMemo(() => {
     return notifications.filter(n => !n.read).length;
@@ -66,6 +71,10 @@ export default function App() {
 
   return (
     <AppQueryProvider>
+      <PWAUpdater />
+      <Helmet>
+        <meta name="theme-color" content={themeColorHex} />
+      </Helmet>
       <ErrorBoundary>
         <BrowserRouter>
           <Suspense fallback={<RouteFallback />}>

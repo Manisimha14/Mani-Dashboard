@@ -127,14 +127,16 @@ export default function QuickLauncher() {
         <div className="flex gap-2">
           <button 
             onClick={() => updateLauncher({ layoutMode: layoutMode === 'grid' ? 'list' : 'grid' })}
-            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/40 transition-all"
+            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/40 transition-all focus-visible:ring-2 focus-visible:ring-violet-500 outline-none"
             title="Toggle Layout"
+            aria-label={`Switch to ${layoutMode === 'grid' ? 'list' : 'grid'} layout`}
           >
             {layoutMode === 'grid' ? <List size={18} /> : <Layout size={18} />}
           </button>
           <button 
             onClick={() => setIsAdding(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold transition-all shadow-lg shadow-violet-900/20"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold transition-all shadow-lg shadow-violet-900/20 focus-visible:ring-2 focus-visible:ring-white outline-none"
+            aria-label="Add Application"
           >
             <Plus size={16} />
             ADD APP
@@ -151,14 +153,16 @@ export default function QuickLauncher() {
             placeholder="Search commands, apps, or tags... (Alt+K)"
             value={searchQuery}
             onChange={(e) => updateLauncher({ searchQuery: e.target.value })}
-            className="w-full bg-white/[0.03] border border-white/5 rounded-2xl py-3 pl-12 pr-4 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-violet-500/30 transition-all shadow-inner"
+            className="w-full bg-white/[0.03] border border-white/5 rounded-2xl py-3 pl-12 pr-4 text-sm text-white placeholder:text-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 transition-all shadow-inner"
+            aria-label="Search Applications"
           />
         </div>
         
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
           <button 
             onClick={() => updateLauncher({ selectedCategory: undefined })}
-            className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${!selectedCategory ? 'bg-white/10 text-white border border-white/10' : 'text-white/30 hover:text-white/50'}`}
+            className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap focus-visible:ring-2 focus-visible:ring-violet-500 outline-none ${!selectedCategory ? 'bg-white/10 text-white border border-white/10' : 'text-white/30 hover:text-white/50'}`}
+            aria-label="Filter by All Categories"
           >
             ALL
           </button>
@@ -166,7 +170,8 @@ export default function QuickLauncher() {
             <button 
               key={c.value}
               onClick={() => updateLauncher({ selectedCategory: c.value })}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${selectedCategory === c.value ? 'bg-white/10 text-white border border-white/10' : 'text-white/30 hover:text-white/50'}`}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap focus-visible:ring-2 focus-visible:ring-violet-500 outline-none ${selectedCategory === c.value ? 'bg-white/10 text-white border border-white/10' : 'text-white/30 hover:text-white/50'}`}
+              aria-label={`Filter by ${c.label}`}
             >
               <c.icon size={12} style={{ color: c.color }} />
               {c.label}
@@ -299,8 +304,12 @@ function AppItem({ link, layout, onOpen }: { link: AppLink; layout: 'grid' | 'li
         layout
         initial={{ opacity: 0, x: -10 }}
         animate={{ opacity: 1, x: 0 }}
-        className="group flex items-center justify-between p-3 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-white/10 transition-all cursor-pointer"
+        className="group flex items-center justify-between p-3 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-white/10 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-violet-500 outline-none"
         onClick={onOpen}
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter') onOpen(); }}
+        role="button"
+        aria-label={`Launch ${link.name}`}
       >
         <div className="flex items-center gap-4">
           <div 
@@ -317,13 +326,15 @@ function AppItem({ link, layout, onOpen }: { link: AppLink; layout: 'grid' | 'li
         <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
            <button 
             onClick={(e) => { e.stopPropagation(); toggleAppPin(link.id); }}
-            className={`p-2 rounded-lg bg-black/20 border border-white/5 hover:text-white transition-colors ${link.isPinned ? 'text-violet-400' : 'text-white/20'}`}
+            className={`p-2 rounded-lg bg-black/20 border border-white/5 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-violet-500 outline-none ${link.isPinned ? 'text-violet-400' : 'text-white/20'}`}
+            aria-label={link.isPinned ? "Unpin application" : "Pin application"}
           >
             {link.isPinned ? <PinOff size={14} /> : <Pin size={14} />}
           </button>
           <button 
             onClick={(e) => { e.stopPropagation(); deleteAppLink(link.id); }}
-            className="p-2 rounded-lg bg-black/20 border border-white/5 text-white/20 hover:text-red-500 hover:bg-red-500/10 transition-all"
+            className="p-2 rounded-lg bg-black/20 border border-white/5 text-white/20 hover:text-red-500 hover:bg-red-500/10 transition-all focus-visible:ring-2 focus-visible:ring-red-500 outline-none"
+            aria-label="Delete application"
           >
             <Trash2 size={14} />
           </button>
@@ -342,8 +353,9 @@ function AppItem({ link, layout, onOpen }: { link: AppLink; layout: 'grid' | 'li
     >
       <button
         onClick={onOpen}
-        className="w-full aspect-square glass-card flex flex-col items-center justify-center gap-3 group-hover:border-white/20 transition-all duration-300 relative overflow-hidden"
+        className="w-full aspect-square glass-card flex flex-col items-center justify-center gap-3 group-hover:border-white/20 transition-all duration-300 relative overflow-hidden focus-visible:ring-2 focus-visible:ring-violet-500 outline-none"
         style={{ background: `linear-gradient(135deg, ${link.color}10 0%, transparent 100%)` }}
+        aria-label={`Launch ${link.name}`}
       >
         <div 
           className="w-12 h-12 rounded-2xl flex items-center justify-center transition-transform duration-500 group-hover:scale-110 shadow-lg"
@@ -371,13 +383,15 @@ function AppItem({ link, layout, onOpen }: { link: AppLink; layout: 'grid' | 'li
       <div className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 flex gap-1 z-10 transition-all scale-75 group-hover:scale-100">
         <button 
           onClick={(e) => { e.stopPropagation(); toggleAppPin(link.id); }}
-          className="p-1.5 rounded-lg bg-slate-900 border border-white/10 text-white/40 hover:text-white shadow-xl"
+          className="p-1.5 rounded-lg bg-slate-900 border border-white/10 text-white/40 hover:text-white shadow-xl focus-visible:ring-2 focus-visible:ring-violet-500 outline-none"
+          aria-label={link.isPinned ? "Unpin application" : "Pin application"}
         >
           {link.isPinned ? <PinOff size={12} /> : <Pin size={12} />}
         </button>
         <button 
           onClick={(e) => { e.stopPropagation(); deleteAppLink(link.id); }}
-          className="p-1.5 rounded-lg bg-slate-900 border border-white/10 text-red-500/40 hover:text-red-500 shadow-xl"
+          className="p-1.5 rounded-lg bg-slate-900 border border-white/10 text-red-500/40 hover:text-red-500 shadow-xl focus-visible:ring-2 focus-visible:ring-red-500 outline-none"
+          aria-label="Delete application"
         >
           <Trash2 size={12} />
         </button>

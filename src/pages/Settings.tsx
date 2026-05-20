@@ -492,6 +492,43 @@ export default function Settings() {
                 </Section>
 
                 <Section title="Data Crypt" icon={<Shield size={16} />} description="Your data is stored locally. We never track or export your metrics.">
+                  <div className="space-y-4 mb-6">
+                    <ToggleRow 
+                      label="Automatic Secure Backups" 
+                      description="Silently generate a local encryption snapshot in the background to prevent data loss."
+                      active={userSettings.autoBackupEnabled ?? false}
+                      onToggle={() => updateUserSettings({ autoBackupEnabled: !(userSettings.autoBackupEnabled ?? false) })}
+                    />
+                    
+                    <AnimatePresence>
+                      {(userSettings.autoBackupEnabled ?? false) && (
+                        <motion.div 
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl bg-white/[0.02] border border-white/5 gap-4 overflow-hidden"
+                        >
+                          <div>
+                            <div className="text-sm font-bold text-white/80">Snapshot Frequency</div>
+                            <div className="text-[10px] text-white/20 mt-1">How often to generate an automated backup</div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <select 
+                              value={userSettings.autoBackupFrequencyHours ?? 24}
+                              onChange={e => updateUserSettings({ autoBackupFrequencyHours: parseInt(e.target.value) })}
+                              className="input-glass w-32 px-3 py-1.5 text-xs font-bold appearance-none bg-slate-900"
+                            >
+                              <option value={1}>Every 1 Hour</option>
+                              <option value={6}>Every 6 Hours</option>
+                              <option value={12}>Every 12 Hours</option>
+                              <option value={24}>Every 24 Hours</option>
+                              <option value={168}>Every 7 Days</option>
+                            </select>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                   <BackupManager />
                 </Section>
                 

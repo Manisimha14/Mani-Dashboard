@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppStore } from '../store/useAppStore';
-import { Search, Bell, Settings as SettingsIcon, User, Command, Menu } from 'lucide-react';
+import { Search, Bell, Settings as SettingsIcon, User, Command, Menu, WifiOff } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useSoundFX } from '../hooks/useSoundFX';
+import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import ProfileOverlay from './ProfileOverlay';
 import NotificationCenter from './NotificationCenter';
 import { useIsMobile } from '../hooks/useIsMobile';
@@ -24,27 +25,33 @@ const getPageTitle = (pathname: string) => {
   }
 };
 
-export default function TopHeader({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
-  const { userSettings, notifications } = useAppStore();
+function TopHeader({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
+  const userSettings = useAppStore(s => s.userSettings);
+  const notifications = useAppStore(s => s.notifications);
   const navigate = useNavigate();
   const location = useLocation();
   const { play } = useSoundFX();
   const isMobile = useIsMobile();
+  const isOnline = useNetworkStatus();
   const [showProfile, setShowProfile] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadCount = React.useMemo(() => {
+    return notifications.filter(n => !n.read).length;
+  }, [notifications]);
+
   const hour = new Date().getHours();
   
-  const baseGreeting = hour < 12 ? 'Good Morning' : hour < 18 ? 'Good Afternoon' : 'Good Evening';
-  const moodGreetings: Record<string, string> = {
-    focused: 'Stay Sharp',
-    grind: 'Keep Hustling',
-    chill: 'Enjoy the Flow',
-    zen: 'Peaceful Mind',
-    creative: 'Unleash Ideas'
-  };
-  const greeting = `${moodGreetings[userSettings.mood || 'focused']}, ${userSettings.name || 'Champion'}`;
+  const greeting = React.useMemo(() => {
+    const moodGreetings: Record<string, string> = {
+      focused: 'Stay Sharp',
+      grind: 'Keep Hustling',
+      chill: 'Enjoy the Flow',
+      zen: 'Peaceful Mind',
+      creative: 'Unleash Ideas'
+    };
+    return `${moodGreetings[userSettings.mood || 'focused']}, ${userSettings.name || 'Champion'}`;
+  }, [userSettings.mood, userSettings.name]);
 
   const handleSearchClick = () => {
     play('click');
@@ -67,7 +74,8 @@ export default function TopHeader({ onToggleSidebar }: { onToggleSidebar?: () =>
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => { play('click'); onToggleSidebar?.(); }}
-            className="p-2 rounded-xl bg-white/5 border border-white/10 text-white/70 hover:text-white transition-colors flex-shrink-0"
+            className="p-2 rounded-xl bg-white/5 border border-white/10 text-white/70 hover:text-white transition-colors flex-shrink-0 focus-visible:ring-2 focus-visible:ring-violet-500 outline-none"
+            aria-label="Toggle Sidebar"
           >
             <Menu size={18} />
           </motion.button>
@@ -82,10 +90,17 @@ export default function TopHeader({ onToggleSidebar }: { onToggleSidebar?: () =>
             >
               {getPageTitle(location.pathname)}
             </motion.h1>
-            <div className="flex items-center gap-1 mt-0.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-[7px] text-white/30 uppercase tracking-[0.2em] font-extrabold">Optimized</span>
-            </div>
+            {isOnline ? (
+              <div className="flex items-center gap-1 mt-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-[7px] text-white/30 uppercase tracking-[0.2em] font-extrabold">Optimized</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1 mt-0.5" title="Offline Mode: Changes will sync when reconnected">
+                <WifiOff size={8} className="text-amber-500" />
+                <span className="text-[7px] text-amber-500/80 uppercase tracking-[0.2em] font-extrabold">Offline</span>
+              </div>
+            )}
           </div>
 
           {/* Right: Search, Bell & Profile */}
@@ -94,7 +109,8 @@ export default function TopHeader({ onToggleSidebar }: { onToggleSidebar?: () =>
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
               onClick={handleSearchClick}
-              className="p-2 rounded-xl text-white/40 hover:text-white transition-all"
+              className="p-2 rounded-xl text-white/40 hover:text-white transition-all focus-visible:ring-2 focus-visible:ring-violet-500 outline-none"
+              aria-label="Search"
             >
               <Search size={18} strokeWidth={2} />
             </motion.button>
@@ -102,7 +118,8 @@ export default function TopHeader({ onToggleSidebar }: { onToggleSidebar?: () =>
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
               onClick={() => { play('click'); setShowNotifications(true); }}
-              className="p-2 rounded-xl text-white/40 hover:text-white transition-all relative mr-1"
+              className="p-2 rounded-xl text-white/40 hover:text-white transition-all relative mr-1 focus-visible:ring-2 focus-visible:ring-violet-500 outline-none"
+              aria-label="Notifications"
             >
               <Bell size={18} strokeWidth={2} />
               {unreadCount > 0 && (
@@ -113,7 +130,8 @@ export default function TopHeader({ onToggleSidebar }: { onToggleSidebar?: () =>
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => { play('click'); setShowProfile(true); }}
-              className="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 p-[1px] shadow-glow-sm"
+              className="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 p-[1px] shadow-glow-sm focus-visible:ring-2 focus-visible:ring-violet-500 outline-none"
+              aria-label="Profile Settings"
             >
               <div className="w-full h-full rounded-full bg-[#0f101c] flex items-center justify-center overflow-hidden">
                 <User size={14} className="text-white" />
@@ -138,7 +156,8 @@ export default function TopHeader({ onToggleSidebar }: { onToggleSidebar?: () =>
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => { play('click'); onToggleSidebar(); }}
-              className="md:hidden mr-3.5 p-2 rounded-xl bg-white/5 border border-white/10 text-white/70 hover:text-white transition-colors flex-shrink-0"
+              className="md:hidden mr-3.5 p-2 rounded-xl bg-white/5 border border-white/10 text-white/70 hover:text-white transition-colors flex-shrink-0 focus-visible:ring-2 focus-visible:ring-violet-500 outline-none"
+              aria-label="Toggle Sidebar"
             >
               <Menu size={18} />
             </motion.button>
@@ -156,9 +175,15 @@ export default function TopHeader({ onToggleSidebar }: { onToggleSidebar?: () =>
               {greeting}
             </h2>
           </motion.div>
-          <p className="text-[10px] text-white/30 uppercase tracking-[0.2em] font-bold mt-1">
-            System Status: <span className="text-emerald-500">Optimized</span>
-          </p>
+          {isOnline ? (
+            <p className="text-[10px] text-white/30 uppercase tracking-[0.2em] font-bold mt-1">
+              System Status: <span className="text-emerald-500">Optimized</span>
+            </p>
+          ) : (
+            <p className="text-[10px] flex items-center gap-1 text-amber-500/80 uppercase tracking-[0.2em] font-bold mt-1">
+              <WifiOff size={10} /> System Status: OFFLINE (Queueing)
+            </p>
+          )}
         </div>
       </div>
 
@@ -168,7 +193,8 @@ export default function TopHeader({ onToggleSidebar }: { onToggleSidebar?: () =>
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={handleSearchClick}
-            className="sm:hidden p-2.5 rounded-xl bg-white/5 border border-white/10 text-white/40 hover:text-white transition-all flex items-center justify-center"
+            className="sm:hidden p-2.5 rounded-xl bg-white/5 border border-white/10 text-white/40 hover:text-white transition-all flex items-center justify-center focus-visible:ring-2 focus-visible:ring-violet-500 outline-none"
+            aria-label="Search"
           >
             <Search size={18} strokeWidth={1.5} />
           </motion.button>
@@ -178,7 +204,8 @@ export default function TopHeader({ onToggleSidebar }: { onToggleSidebar?: () =>
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={handleSearchClick}
-            className="hidden sm:flex items-center gap-3 bg-white/5 border border-white/10 rounded-2xl px-4 py-2 text-xs text-white/40 hover:bg-white/10 hover:border-violet-500/50 transition-all duration-300 w-40 md:w-64 group"
+            className="hidden sm:flex items-center gap-3 bg-white/5 border border-white/10 rounded-2xl px-4 py-2 text-xs text-white/40 hover:bg-white/10 hover:border-violet-500/50 transition-all duration-300 w-40 md:w-64 group focus-visible:ring-2 focus-visible:ring-violet-500 outline-none"
+            aria-label="Search everything"
           >
             <Search size={14} className="group-hover:text-violet-400 transition-colors" />
             <span className="flex-1 text-left">Search everything...</span>
@@ -193,10 +220,12 @@ export default function TopHeader({ onToggleSidebar }: { onToggleSidebar?: () =>
               icon={Bell} 
               onClick={() => { play('click'); setShowNotifications(true); }}
               badge={unreadCount > 0}
+              ariaLabel="Notifications"
             />
             <HeaderButton 
               icon={SettingsIcon} 
               onClick={() => { play('click'); navigate('/settings'); }} 
+              ariaLabel="Settings"
             />
             
             <div className="h-8 w-[1px] bg-white/10 mx-2" />
@@ -205,7 +234,8 @@ export default function TopHeader({ onToggleSidebar }: { onToggleSidebar?: () =>
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => { play('click'); setShowProfile(true); }}
-              className="flex items-center gap-3 pl-1 pr-1 sm:pr-3 py-1 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all group"
+              className="flex items-center gap-3 pl-1 pr-1 sm:pr-3 py-1 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all group focus-visible:ring-2 focus-visible:ring-violet-500 outline-none"
+              aria-label="Profile Settings"
             >
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 p-[1px]">
                 <div className="w-full h-full rounded-full bg-[#0f101c] flex items-center justify-center overflow-hidden">
@@ -227,13 +257,14 @@ export default function TopHeader({ onToggleSidebar }: { onToggleSidebar?: () =>
   );
 }
 
-function HeaderButton({ icon: Icon, onClick, badge }: { icon: any, onClick: () => void, badge?: boolean }) {
+function HeaderButton({ icon: Icon, onClick, badge, ariaLabel }: { icon: any, onClick: () => void, badge?: boolean, ariaLabel?: string }) {
   return (
     <motion.button
       whileHover={{ scale: 1.1, backgroundColor: 'rgba(255,255,255,0.1)' }}
       whileTap={{ scale: 0.9 }}
       onClick={onClick}
-      className="p-2.5 rounded-xl text-white/40 hover:text-white transition-all relative"
+      className="p-2.5 rounded-xl text-white/40 hover:text-white transition-all relative focus-visible:ring-2 focus-visible:ring-violet-500 outline-none"
+      aria-label={ariaLabel}
     >
       <Icon size={20} strokeWidth={1.5} />
       {badge && (
@@ -242,3 +273,5 @@ function HeaderButton({ icon: Icon, onClick, badge }: { icon: any, onClick: () =
     </motion.button>
   );
 }
+
+export default React.memo(TopHeader);

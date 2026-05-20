@@ -172,6 +172,8 @@ export interface UserSettings {
   financeBudgetLimit?: number;
   simulateOffline?: boolean;
   pwaBadgingEnabled?: boolean;
+  autoBackupEnabled?: boolean;
+  autoBackupFrequencyHours?: number;
 }
 
 export interface XpLedgerEntry {

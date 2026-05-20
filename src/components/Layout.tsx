@@ -19,6 +19,7 @@ import { useExtensionSync } from '../hooks/useExtensionSync';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { getAppVersion } from '../lib/appVersion';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
+import { useAutoBackup } from '../hooks/useAutoBackup';
 
 const CommandPalette = lazy(() => import('./CommandPalette'));
 const WeatherOverlay = lazy(() => import('./WeatherOverlay'));
@@ -80,6 +81,7 @@ export default function Layout() {
   useRealtimeSync();
   useAchievementsEngine();
   useExtensionSync();
+  useAutoBackup();
 
   // PWA installation prompt states
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -196,19 +198,30 @@ export default function Layout() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
+  const handleToggleSidebar = useCallback(() => setSidebarOpen(true), []);
+  const handleCloseSidebar = useCallback(() => setSidebarOpen(false), []);
+  const handleCloseCmd = useCallback(() => setCmdOpen(false), []);
+  const handleCloseRem = useCallback(() => setRemModalOpen(false), []);
+  const handleCloseShortcuts = useCallback(() => setShortcutsOpen(false), []);
+  const handleCloseTerminal = useCallback(() => setTerminalOpen(false), []);
+
   const dailyActivity = useAppStore(s => s.dailyActivity);
   const userSettings = useAppStore(s => s.userSettings);
 
+  const todayActivity = React.useMemo(() => {
+    return dailyActivity.find(a => a.date === todayString());
+  }, [dailyActivity]);
 
-  const todayActivity = dailyActivity.find(a => a.date === todayString());
-  const prodScore = getProductivityScore(
-    todayActivity?.chaptersRead || 0,
-    todayActivity?.problemsSolved || 0,
-    todayActivity?.focusMinutes || 0
-  );
+  const prodScore = React.useMemo(() => {
+    return getProductivityScore(
+      todayActivity?.chaptersRead || 0,
+      todayActivity?.problemsSolved || 0,
+      todayActivity?.focusMinutes || 0
+    );
+  }, [todayActivity]);
 
   // Dynamic colors based on score and weather
-  const getAuraColor = () => {
+  const auraColor = React.useMemo(() => {
     if (weather.type === 'rainy') return 'bg-blue-900';
     if (weather.type === 'night') return 'bg-indigo-950';
     if (weather.type === 'sunny' && prodScore > 70) return 'bg-amber-500';
@@ -217,7 +230,7 @@ export default function Layout() {
     if (prodScore > 50) return 'bg-violet-600';
     if (prodScore > 20) return 'bg-blue-600';
     return 'bg-purple-800';
-  };
+  }, [weather.type, prodScore]);
 
   return (
     <div className="min-h-screen relative overflow-x-hidden" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
@@ -238,7 +251,7 @@ export default function Layout() {
               y: [0, 30, 0]
             }}
             transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-            className={`ambient-blob w-[500px] h-[500px] blur-[120px] rounded-full fixed top-[-10%] left-[-5%] ${getAuraColor()} pointer-events-none z-0`} 
+            className={`ambient-blob w-[500px] h-[500px] blur-[120px] rounded-full fixed top-[-10%] left-[-5%] ${auraColor} pointer-events-none z-0`} 
           />
           <motion.div 
             animate={{ 
@@ -264,7 +277,7 @@ export default function Layout() {
       ) : (
         <>
           {/* Static lightweight ambient glow for mobile */}
-          <div className={`ambient-blob w-[250px] h-[250px] blur-[80px] rounded-full fixed top-[-5%] left-[-10%] ${getAuraColor()} pointer-events-none z-0 opacity-20`} />
+          <div className={`ambient-blob w-[250px] h-[250px] blur-[80px] rounded-full fixed top-[-5%] left-[-10%] ${auraColor} pointer-events-none z-0 opacity-20`} />
           <div className="ambient-blob w-[200px] h-[200px] blur-[80px] rounded-full fixed top-[45%] right-[-15%] bg-indigo-950 pointer-events-none z-0 opacity-15" />
         </>
       )}
@@ -275,42 +288,48 @@ export default function Layout() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={() => setSidebarOpen(false)}
+            onClick={handleCloseSidebar}
             className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[45] md:hidden"
           />
         )}
       </AnimatePresence>
 
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Sidebar isOpen={sidebarOpen} onClose={handleCloseSidebar} />
  
       <main className="main-content flex flex-col min-h-screen relative z-10">
-        <TopHeader onToggleSidebar={() => setSidebarOpen(true)} />
+        <TopHeader onToggleSidebar={handleToggleSidebar} />
         <div 
           className="p-4 md:p-8 pt-4 flex-1"
           style={{
             paddingBottom: isMobile ? 'calc(env(safe-area-inset-bottom, 0px) + 24px)' : '32px'
           }}
         >
-          <AnimatePresence mode={isMobile ? undefined : "wait"}>
+              <AnimatePresence mode="popLayout">
             <motion.div
               key={location.pathname}
               initial={{ 
-                opacity: 0, 
-                y: isMobile ? 0 : 12 
+                opacity: 0,
+                scale: 0.97,
+                y: 10
               }}
               animate={{ 
-                opacity: 1, 
+                opacity: 1,
+                scale: 1,
                 y: 0 
               }}
-              exit={isMobile ? {
-                opacity: 0
-              } : { 
-                opacity: 0, 
-                y: -12 
+              exit={{ 
+                opacity: 0,
+                scale: 1.02,
+                y: -10
               }}
               transition={{ 
-                duration: isMobile ? 0.08 : 0.22, 
-                ease: "easeOut"
+                duration: 0.25,
+                ease: [0.25, 1, 0.5, 1]
+              }}
+              style={{ 
+                willChange: 'transform, opacity',
+                transformOrigin: 'top center',
+                width: '100%'
               }}
             >
               <Outlet />
@@ -321,9 +340,9 @@ export default function Layout() {
 
       {(cmdOpen || remModalOpen || shortcutsOpen) && (
         <Suspense fallback={null}>
-          {cmdOpen && <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />}
-          <ReminderModal open={remModalOpen} onClose={() => setRemModalOpen(false)} />
-          <ShortcutsHelp isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+          {cmdOpen && <CommandPalette open={cmdOpen} onClose={handleCloseCmd} />}
+          <ReminderModal open={remModalOpen} onClose={handleCloseRem} />
+          <ShortcutsHelp isOpen={shortcutsOpen} onClose={handleCloseShortcuts} />
         </Suspense>
       )}
       <Suspense fallback={null}>
@@ -337,7 +356,7 @@ export default function Layout() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[9990] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md"
-            onClick={() => setTerminalOpen(false)}
+            onClick={handleCloseTerminal}
           >
             <motion.div
               initial={{ scale: 0.95, y: 20 }}
@@ -349,7 +368,7 @@ export default function Layout() {
             >
               <Suspense fallback={null}>
                 <CompanionTerminal
-                  onClose={() => setTerminalOpen(false)}
+                  onClose={handleCloseTerminal}
                 />
               </Suspense>
             </motion.div>

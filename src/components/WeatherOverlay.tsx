@@ -7,8 +7,27 @@ interface WeatherOverlayProps {
   type: WeatherType;
 }
 
-export default function WeatherOverlay({ type }: WeatherOverlayProps) {
+const WeatherOverlay = React.memo(function WeatherOverlay({ type }: WeatherOverlayProps) {
   const isMobile = useIsMobile();
+
+  const rainDrops = React.useMemo(() => {
+    return Array.from({ length: 20 }).map((_, i) => ({
+      id: i,
+      x: `${Math.random() * 100}vw`,
+      duration: Math.random() * 0.5 + 0.5,
+      delay: Math.random() * 2,
+    }));
+  }, []);
+
+  const stars = React.useMemo(() => {
+    return Array.from({ length: 30 }).map((_, i) => ({
+      id: i,
+      top: `${Math.random() * 100}%`,
+      left: `${Math.random() * 100}%`,
+      duration: Math.random() * 3 + 2,
+      delay: Math.random() * 5,
+    }));
+  }, []);
 
   if (type === 'sunny') {
     return (
@@ -33,16 +52,16 @@ export default function WeatherOverlay({ type }: WeatherOverlayProps) {
         <div className="absolute inset-0 bg-blue-900/5" />
         {/* Skip heavy rain particles on mobile, or render very few static ones */}
         {!isMobile ? (
-          Array.from({ length: 20 }).map((_, i) => (
+          rainDrops.map((drop) => (
             <motion.div
-              key={i}
-              initial={{ y: -100, x: Math.random() * 100 + 'vw' }}
+              key={drop.id}
+              initial={{ y: -100, x: drop.x }}
               animate={{ y: '110vh' }}
               transition={{ 
-                duration: Math.random() * 0.5 + 0.5, 
+                duration: drop.duration, 
                 repeat: Infinity, 
                 ease: "linear",
-                delay: Math.random() * 2 
+                delay: drop.delay 
               }}
               className="absolute w-[1px] h-10 bg-white/10"
             />
@@ -70,13 +89,13 @@ export default function WeatherOverlay({ type }: WeatherOverlayProps) {
         <div className="absolute inset-0 bg-[#02040a]/40" />
         {/* Render static stars on mobile to avoid 30 simultaneous Framer Motion listeners */}
         {!isMobile ? (
-          Array.from({ length: 30 }).map((_, i) => (
+          stars.map((star) => (
             <motion.div
-              key={i}
+              key={star.id}
               animate={{ opacity: [0, 1, 0] }}
-              transition={{ duration: Math.random() * 3 + 2, repeat: Infinity, delay: Math.random() * 5 }}
+              transition={{ duration: star.duration, repeat: Infinity, delay: star.delay }}
               className="absolute w-[2px] h-[2px] bg-white rounded-full"
-              style={{ top: Math.random() * 100 + '%', left: Math.random() * 100 + '%' }}
+              style={{ top: star.top, left: star.left }}
             />
           ))
         ) : (
@@ -96,5 +115,7 @@ export default function WeatherOverlay({ type }: WeatherOverlayProps) {
   }
 
   return null;
-}
+});
+
+export default WeatherOverlay;
 

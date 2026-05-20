@@ -13,20 +13,20 @@ export const bookKeys = {
 
 export function useBook() {
   const { user } = useAuth();
-  const localStore = useAppStore();
+  const book = useAppStore(s => s.book);
 
   return useQuery({
     queryKey: bookKeys.all(user?.id ?? 'local'),
     queryFn: async (): Promise<Book> => {
       if (!user) {
-        return localStore.book;
+        return book;
       }
       const books = await BookSvc.fetchUserBooks(user.id);
       if (books.length > 0) {
         return books[0];
       }
       // Seed a default book in the database if the user has none
-      const defaultBook = { ...localStore.book, id: '' };
+      const defaultBook = { ...book, id: '' };
       return BookSvc.upsertBook(user.id, defaultBook);
     },
   });
@@ -39,13 +39,13 @@ export function useUpdateChapter(): UseMutationResult<
 > {
   const { user } = useAuth();
   const qc = useQueryClient();
-  const localStore = useAppStore();
 
   return useMutation({
     mutationFn: async ({ chapterId, updates }): Promise<Book> => {
+      const store = useAppStore.getState();
       if (!user) {
-        localStore.updateChapter(chapterId, updates);
-        return localStore.book;
+        store.updateChapter(chapterId, updates);
+        return store.book;
       }
       
       const currentBook = await qc.fetchQuery<Book>({
@@ -76,17 +76,17 @@ export function useUpdateChapter(): UseMutationResult<
           const delta = newCompleted ? 1 : -1;
           
           if (newCompleted) {
-            localStore.addXp(200, 'reading', `Completed Chapter ${prevChapter?.number ?? chapterId}: ${prevChapter?.title ?? ''}`);
-            localStore.addNotification({
+            store.addXp(200, 'reading', `Completed Chapter ${prevChapter?.number ?? chapterId}: ${prevChapter?.title ?? ''}`);
+            store.addNotification({
               title: 'Chapter Completed!',
               message: `Great read! You finished "Chapter ${prevChapter?.number ?? chapterId}: ${prevChapter?.title ?? ''}". +200 XP rewarded!`,
               category: 'reminders',
               priority: 'normal'
             });
           } else {
-            localStore.addXp(-200, 'reading', `Uncompleted Chapter ${prevChapter?.number ?? chapterId}`);
+            store.addXp(-200, 'reading', `Uncompleted Chapter ${prevChapter?.number ?? chapterId}`);
           }
-          localStore.checkAndUnlockAchievements();
+          store.checkAndUnlockAchievements();
 
           const today = todayString();
 
@@ -137,13 +137,13 @@ export function useSetBookMeta(): UseMutationResult<
 > {
   const { user } = useAuth();
   const qc = useQueryClient();
-  const localStore = useAppStore();
 
   return useMutation({
     mutationFn: async (meta): Promise<Book> => {
+      const store = useAppStore.getState();
       if (!user) {
-        localStore.setBookMeta(meta);
-        return localStore.book;
+        store.setBookMeta(meta);
+        return store.book;
       }
 
       const currentBook = await qc.fetchQuery<Book>({

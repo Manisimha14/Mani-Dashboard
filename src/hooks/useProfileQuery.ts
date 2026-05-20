@@ -12,11 +12,11 @@ export const profileKeys = {
 
 export function useProfile() {
   const { user } = useAuth();
-  const localStore = useAppStore();
 
   const query = useQuery({
     queryKey: profileKeys.detail(user?.id ?? 'local'),
     queryFn: async (): Promise<UserProfile> => {
+      const store = useAppStore.getState();
       try {
         return await ProfileSvc.fetchProfile(user!.id);
       } catch (err: any) {
@@ -24,37 +24,41 @@ export function useProfile() {
         const defaultProfile: Omit<UserProfile, 'id'> = {
           displayName: user?.email ? user.email.split('@')[0] : 'Member',
           avatarUrl: null,
-          settings: localStore.userSettings,
-          pomodoroSettings: localStore.pomodoroSettings,
-          readingStreak: localStore.readingStreak,
-          codingStreak: localStore.codingStreak,
-          focusStreak: localStore.focusStreak,
+          settings: store.userSettings,
+          pomodoroSettings: store.pomodoroSettings,
+          readingStreak: store.readingStreak,
+          codingStreak: store.codingStreak,
+          focusStreak: store.focusStreak,
         };
         return ProfileSvc.updateProfile(user!.id, defaultProfile);
       }
     },
     enabled: !!user,
-    placeholderData: user ? undefined : {
-      id: 'local',
-      displayName: 'Member',
-      avatarUrl: null,
-      settings: localStore.userSettings,
-      pomodoroSettings: localStore.pomodoroSettings,
-      readingStreak: localStore.readingStreak,
-      codingStreak: localStore.codingStreak,
-      focusStreak: localStore.focusStreak,
+    placeholderData: () => {
+      const store = useAppStore.getState();
+      return {
+        id: 'local',
+        displayName: 'Member',
+        avatarUrl: null,
+        settings: store.userSettings,
+        pomodoroSettings: store.pomodoroSettings,
+        readingStreak: store.readingStreak,
+        codingStreak: store.codingStreak,
+        focusStreak: store.focusStreak,
+      };
     },
   });
 
   useEffect(() => {
     if (query.data && user) {
+      const store = useAppStore.getState();
       useAppStore.setState({
-        userSettings: { ...localStore.userSettings, ...query.data.settings },
-        pomodoroSettings: { ...localStore.pomodoroSettings, ...query.data.pomodoroSettings },
+        userSettings: { ...store.userSettings, ...query.data.settings },
+        pomodoroSettings: { ...store.pomodoroSettings, ...query.data.pomodoroSettings },
         readingStreak: query.data.readingStreak,
         codingStreak: query.data.codingStreak,
         focusStreak: query.data.focusStreak,
-        deletedReports: query.data.settings?.deletedReports || localStore.deletedReports || [],
+        deletedReports: query.data.settings?.deletedReports || store.deletedReports || [],
       });
     }
   }, [query.data, user]);
@@ -69,23 +73,23 @@ export function useUpdateProfile(): UseMutationResult<
 > {
   const { user } = useAuth();
   const qc = useQueryClient();
-  const localStore = useAppStore();
 
   return useMutation({
     mutationFn: async (updates): Promise<UserProfile> => {
+      const store = useAppStore.getState();
       if (!user) {
-        if (updates.settings) localStore.updateUserSettings(updates.settings);
-        if (updates.pomodoroSettings) localStore.updatePomodoroSettings(updates.pomodoroSettings);
+        if (updates.settings) store.updateUserSettings(updates.settings);
+        if (updates.pomodoroSettings) store.updatePomodoroSettings(updates.pomodoroSettings);
         // offline updates for streaks could go here if needed, but normally handled by app actions
         return {
           id: 'local',
           displayName: 'Member',
           avatarUrl: null,
-          settings: localStore.userSettings,
-          pomodoroSettings: localStore.pomodoroSettings,
-          readingStreak: localStore.readingStreak,
-          codingStreak: localStore.codingStreak,
-          focusStreak: localStore.focusStreak,
+          settings: store.userSettings,
+          pomodoroSettings: store.pomodoroSettings,
+          readingStreak: store.readingStreak,
+          codingStreak: store.codingStreak,
+          focusStreak: store.focusStreak,
         };
       }
       return ProfileSvc.updateProfile(user.id, updates);

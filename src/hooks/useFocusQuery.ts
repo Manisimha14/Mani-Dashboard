@@ -13,25 +13,25 @@ export const focusKeys = {
 
 export function useFocusSessions() {
   const { user } = useAuth();
-  const localStore = useAppStore();
+  const focusSessions = useAppStore(s => s.focusSessions);
 
   return useQuery({
     queryKey: focusKeys.all(user?.id ?? 'local'),
     queryFn: () => user
       ? FocusSvc.fetchFocusSessions(user.id)
-      : Promise.resolve(localStore.focusSessions),
+      : Promise.resolve(focusSessions),
   });
 }
 
 export function useAddFocusSession(): UseMutationResult<FocusSession | void, Error, Omit<FocusSession, 'id'>> {
   const { user } = useAuth();
   const qc = useQueryClient();
-  const localStore = useAppStore();
 
   return useMutation({
     mutationFn: async (session): Promise<FocusSession | void> => {
+      const store = useAppStore.getState();
       if (!user) {
-        return localStore.addFocusSession(session);
+        return store.addFocusSession(session);
       }
 
       const res = await FocusSvc.insertFocusSession(user.id, session);
@@ -40,14 +40,14 @@ export function useAddFocusSession(): UseMutationResult<FocusSession | void, Err
         const duration = session.actualDuration || session.duration;
         
         // Award XP and dispatch notification in the local store
-        localStore.addXp(duration * 10, 'focus', `Completed Pomodoro session: ${duration} min focused`);
-        localStore.addNotification({
+        store.addXp(duration * 10, 'focus', `Completed Pomodoro session: ${duration} min focused`);
+        store.addNotification({
           title: 'Focus Cycle Complete',
           message: `Superb! You finished your "${session.taskName || 'Pomodoro'}" focus block. Tree planted successfully.`,
           category: 'focus',
           priority: 'normal'
         });
-        localStore.checkAndUnlockAchievements();
+        store.checkAndUnlockAchievements();
 
         const today = todayString();
         
@@ -93,12 +93,12 @@ export function useAddFocusSession(): UseMutationResult<FocusSession | void, Err
 export function useUpdateFocusSession(): UseMutationResult<void, Error, { id: string; updates: Partial<FocusSession> }> {
   const { user } = useAuth();
   const qc = useQueryClient();
-  const localStore = useAppStore();
 
   return useMutation({
     mutationFn: async ({ id, updates }) => {
+      const store = useAppStore.getState();
       if (!user) {
-        return localStore.updateFocusSession(id, updates);
+        return store.updateFocusSession(id, updates);
       }
 
       const currentSessions = await qc.fetchQuery<FocusSession[]>({
@@ -116,17 +116,17 @@ export function useUpdateFocusSession(): UseMutationResult<void, Error, { id: st
         const duration = updates.actualDuration || updates.duration || session?.actualDuration || session?.duration || 0;
         
         if (isCompletedNow) {
-          localStore.addXp(duration * 10, 'focus', `Completed Pomodoro session: ${duration} min focused`);
-          localStore.addNotification({
+          store.addXp(duration * 10, 'focus', `Completed Pomodoro session: ${duration} min focused`);
+          store.addNotification({
             title: 'Focus Cycle Complete',
             message: `Superb! You finished your "${updates.taskName || session?.taskName || 'Pomodoro'}" focus block. Tree planted successfully.`,
             category: 'focus',
             priority: 'normal'
           });
         } else {
-          localStore.addXp(-duration * 10, 'focus', `Uncompleted Pomodoro session`);
+          store.addXp(-duration * 10, 'focus', `Uncompleted Pomodoro session`);
         }
-        localStore.checkAndUnlockAchievements();
+        store.checkAndUnlockAchievements();
         
         let todayAct: DailyActivity = {
           date: today,

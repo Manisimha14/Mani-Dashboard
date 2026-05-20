@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { motion, useMotionValue, useSpring } from 'framer-motion';
 import { useIsMobile } from '../hooks/useIsMobile';
 
-export default function InteractiveGrid() {
+const InteractiveGrid = React.memo(function InteractiveGrid() {
   const isMobile = useIsMobile();
   const containerRef = useRef<HTMLDivElement>(null);
   const mouseX = useMotionValue(0);
@@ -24,6 +24,16 @@ export default function InteractiveGrid() {
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, [mouseX, mouseY, isMobile]);
 
+  const constellationPoints = React.useMemo(() => {
+    return Array.from({ length: 30 }).map((_, i) => ({
+      id: i,
+      left: `${Math.random() * 100}%`,
+      top: `${Math.random() * 100}%`,
+      duration: 3 + Math.random() * 5,
+      delay: Math.random() * 5,
+    }));
+  }, []);
+
   if (isMobile) return null;
 
   return (
@@ -41,23 +51,23 @@ export default function InteractiveGrid() {
 
       {/* Constellation Points */}
       <div className="absolute inset-0 z-0">
-        {Array.from({ length: 30 }).map((_, i) => (
+        {constellationPoints.map((pt) => (
           <motion.div
-            key={i}
+            key={pt.id}
             initial={{ opacity: 0 }}
             animate={{ 
               opacity: [0.1, 0.3, 0.1],
               scale: [1, 1.2, 1],
             }}
             transition={{ 
-              duration: 3 + Math.random() * 5, 
+              duration: pt.duration, 
               repeat: Infinity,
-              delay: Math.random() * 5 
+              delay: pt.delay 
             }}
             className="absolute w-1 h-1 bg-violet-400 rounded-full"
             style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
+              left: pt.left,
+              top: pt.top,
               boxShadow: '0 0 10px rgba(139,92,246,0.5)',
             }}
           />
@@ -77,5 +87,7 @@ export default function InteractiveGrid() {
       />
     </div>
   );
-}
+});
+
+export default InteractiveGrid;
 

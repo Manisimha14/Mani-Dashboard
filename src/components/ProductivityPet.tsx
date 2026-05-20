@@ -5,9 +5,11 @@ import { getProductivityScore, todayString } from '../lib/utils';
 import { Settings, X, MessageSquare, Zap, Heart } from 'lucide-react';
 import { useIsMobile } from '../hooks/useIsMobile';
 
-export default function ProductivityPet() {
+function ProductivityPet() {
   const isMobile = useIsMobile();
-  const { dailyActivity, readingStreak, codingStreak, focusStreak, userSettings, updateUserSettings } = useAppStore();
+  const dailyActivity = useAppStore(s => s.dailyActivity);
+  const userSettings = useAppStore(s => s.userSettings);
+  const updateUserSettings = useAppStore(s => s.updateUserSettings);
   const [isOpen, setIsOpen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [isBlinking, setIsBlinking] = useState(false);
@@ -41,16 +43,24 @@ export default function ProductivityPet() {
     };
   }, [isMobile]);
 
+  const todayActivity = React.useMemo(() => {
+    return dailyActivity.find(a => a.date === todayString());
+  }, [dailyActivity]);
+
+  const prodScore = React.useMemo(() => {
+    return getProductivityScore(
+      todayActivity?.chaptersRead || 0,
+      todayActivity?.problemsSolved || 0,
+      todayActivity?.focusMinutes || 0
+    );
+  }, [todayActivity]);
+  
+  const state = React.useMemo(() => {
+    return prodScore >= 70 ? 'excited' : prodScore >= 20 ? 'awake' : 'sleepy';
+  }, [prodScore]);
+
   if (isMobile) return null;
 
-  const todayActivity = dailyActivity.find(a => a.date === todayString());
-  const prodScore = getProductivityScore(
-    todayActivity?.chaptersRead || 0,
-    todayActivity?.problemsSolved || 0,
-    todayActivity?.focusMinutes || 0
-  );
-  
-  const state = prodScore >= 70 ? 'excited' : prodScore >= 20 ? 'awake' : 'sleepy';
   const petType = userSettings.petType || 'owl';
 
   // Animation variants
@@ -234,5 +244,7 @@ export default function ProductivityPet() {
     </motion.div>
   );
 }
+
+export default React.memo(ProductivityPet);
 
 
