@@ -68,6 +68,22 @@ export default defineConfig({
             },
           },
           {
+            urlPattern: /^https:\/\/.*\.supabase\.co\/(auth|functions)\/v1\/.*/i,
+            handler: 'NetworkOnly',
+          },
+          {
+            urlPattern: /^https:\/\/www\.googleapis\.com\/fitness\/.*/i,
+            handler: 'NetworkOnly',
+          },
+          {
+            urlPattern: /^https:\/\/api\.nal\.usda\.gov\/.*/i,
+            handler: 'NetworkOnly',
+          },
+          {
+            urlPattern: /^https:\/\/world\.openfoodfacts\.org\/.*/i,
+            handler: 'NetworkOnly',
+          },
+          {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: 'StaleWhileRevalidate',
             options: {

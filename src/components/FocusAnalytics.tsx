@@ -5,6 +5,7 @@ import {
   LineChart, Line, AreaChart, Area, Cell, PieChart, Pie
 } from 'recharts';
 import { useAppStore } from '../store/useAppStore';
+import { useFocusSessions } from '../hooks/useFocusQuery';
 import { 
   TrendingUp, Clock, Target, Calendar, 
   Zap, Brain, Award, BarChart3, PieChart as PieChartIcon
@@ -12,7 +13,7 @@ import {
 import { format, subDays, startOfDay, isWithinInterval, parseISO } from 'date-fns';
 
 export default function FocusAnalytics() {
-  const { focusSessions } = useAppStore();
+  const { data: focusSessions = [] } = useFocusSessions();
 
   const stats = useMemo(() => {
     const completed = focusSessions.filter(s => s.completed);

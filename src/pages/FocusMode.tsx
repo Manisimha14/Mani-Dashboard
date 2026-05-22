@@ -13,7 +13,7 @@ import type { PomodoroMode, GrowthTheme, AmbienceType, FocusSession } from '../t
 import toast from 'react-hot-toast';
 import Confetti from 'react-confetti';
 import Modal from '../components/Modal';
-import { soundEngine } from '../hooks/useSoundFX';
+import { soundEngine, useSoundFX } from '../hooks/useSoundFX';
 import FocusAnalytics from '../components/FocusAnalytics';
 import { BarChart3, Timer as TimerIcon, Target, Clock, Award, Calendar } from 'lucide-react';
 
@@ -47,6 +47,8 @@ const GROWTH_EMOJIS: Record<GrowthTheme, { growing: string; done: string; failed
 export default function FocusMode() {
   const pomodoroSettings = useAppStore(s => s.pomodoroSettings);
   const updatePomodoroSettings = useAppStore(s => s.updatePomodoroSettings);
+  const addNotification = useAppStore(s => s.addNotification);
+  const { play } = useSoundFX();
   
   const { data: focusSessions = [] } = useFocusSessions();
   const { mutateAsync: addFocusSession } = useAddFocusSession();
@@ -72,6 +74,13 @@ export default function FocusMode() {
   const [isZen, setIsZen]               = useState(false);
   const [activeTab, setActiveTab]       = useState<'timer' | 'analytics'>('timer');
   const [isInitialized, setIsInitialized] = useState(false);
+
+  const prevModeRef = useRef(mode);
+  const prevDurationsRef = useRef({
+    focusDuration: pomodoroSettings.focusDuration,
+    shortBreakDuration: pomodoroSettings.shortBreakDuration,
+    longBreakDuration: pomodoroSettings.longBreakDuration
+  });
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -142,10 +151,12 @@ export default function FocusMode() {
   // Load saved timer state on mount
   useEffect(() => {
     const saved = localStorage.getItem('active_focus_timer_v1');
+    let loadedMode = mode;
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (parsed) {
+          loadedMode = parsed.mode;
           setMode(parsed.mode);
           setTaskName(parsed.taskName || '');
           setMood(parsed.mood || '');
@@ -178,6 +189,15 @@ export default function FocusMode() {
         console.error('Failed to load focus state', e);
       }
     }
+    
+    // Initialize refs with actual restored or initial values
+    prevModeRef.current = loadedMode;
+    prevDurationsRef.current = {
+      focusDuration: pomodoroSettings.focusDuration,
+      shortBreakDuration: pomodoroSettings.shortBreakDuration,
+      longBreakDuration: pomodoroSettings.longBreakDuration
+    };
+    
     setIsInitialized(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -200,12 +220,28 @@ export default function FocusMode() {
   /* ── reset when mode/duration settings change ── */
   useEffect(() => {
     if (!isInitialized) return;
-    if (!isRunning) { 
-      setTimeLeft(totalDuration); 
-      setGrowthProgress(0); 
+    
+    const modeChanged = prevModeRef.current !== mode;
+    const durationsChanged = 
+      prevDurationsRef.current.focusDuration !== pomodoroSettings.focusDuration ||
+      prevDurationsRef.current.shortBreakDuration !== pomodoroSettings.shortBreakDuration ||
+      prevDurationsRef.current.longBreakDuration !== pomodoroSettings.longBreakDuration;
+      
+    if (modeChanged || durationsChanged) {
+      if (!isRunning) { 
+        setTimeLeft(totalDuration); 
+        setGrowthProgress(0); 
+      }
+      
+      prevModeRef.current = mode;
+      prevDurationsRef.current = {
+        focusDuration: pomodoroSettings.focusDuration,
+        shortBreakDuration: pomodoroSettings.shortBreakDuration,
+        longBreakDuration: pomodoroSettings.longBreakDuration
+      };
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, pomodoroSettings.focusDuration, pomodoroSettings.shortBreakDuration, pomodoroSettings.longBreakDuration, isInitialized]);
+  }, [mode, pomodoroSettings.focusDuration, pomodoroSettings.shortBreakDuration, pomodoroSettings.longBreakDuration, isInitialized, isRunning, totalDuration]);
 
   // Sync volume state with settings
   useEffect(() => {
@@ -246,7 +282,7 @@ export default function FocusMode() {
             return 0;
           }
           // subtle tick every 60 s
-          if (prev % 60 === 0) soundEngine.tick(0.08);
+          if (prev % 60 === 0) play('tick', 0.08);
           // Use a ref for totalDuration if needed, but let's ensure it's in deps
           setGrowthProgress(((getDurationForMode(mode) - prev + 1) / getDurationForMode(mode)) * 100);
           return prev - 1;
@@ -287,7 +323,7 @@ export default function FocusMode() {
         reflection: '',
       } as Omit<FocusSession, 'id'>);
       setLastCompletedSessionId((createdSession as FocusSession | undefined)?.id ?? null);
-      soundEngine.sessionEnd(0.5);
+      play('sessionEnd', 0.5);
       setSessionCount(c => c + 1);
       setShowConfetti(true);
       setTimeout(() => setShowConfetti(false), 5000);
@@ -299,7 +335,13 @@ export default function FocusMode() {
       setMode(nextMode);
       setTimeLeft(getDurationForMode(nextMode));
     } else {
-      soundEngine.success(0.35);
+      play('success', 0.35);
+      addNotification({
+        title: 'Break Over! ☕',
+        message: 'Your break has finished. Ready to focus again?',
+        category: 'focus',
+        priority: 'high'
+      });
       toast.success('Break over! Ready to focus?');
       setMode('focus');
       setTimeLeft(getDurationForMode('focus'));
@@ -307,14 +349,14 @@ export default function FocusMode() {
     setGrowthProgress(0);
     setSessionFailed(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, currentSession, sessionCount, pomodoroSettings, mood, reflection, getDurationForMode, addFocusSession]);
+  }, [mode, currentSession, sessionCount, pomodoroSettings, mood, reflection, getDurationForMode, addFocusSession, play, addNotification]);
 
   const handleStart = () => {
     if (!isRunning && mode === 'focus' && !currentSession) {
       setShowTaskPrompt(true);
     } else {
       setIsRunning(true);
-      soundEngine.sessionStart(0.3);
+      play('sessionStart', 0.3);
     }
   };
 
@@ -331,7 +373,7 @@ export default function FocusMode() {
       mode: 'focus',
     });
     startTimeRef.current = Date.now();
-    soundEngine.sessionStart(0.4);
+    play('sessionStart', 0.4);
     setIsRunning(true);
     setSessionFailed(false);
   };
@@ -347,7 +389,7 @@ export default function FocusMode() {
       completed: false,
       failed: true,
     } as Omit<FocusSession, 'id'>);
-    soundEngine.error(0.3);
+    play('error', 0.3);
     setIsRunning(false);
     setCurrentSession(null);
     setSessionFailed(true);

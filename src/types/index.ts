@@ -38,6 +38,7 @@ export interface LeetCodeProblem {
   completed: boolean;
   notes?: string;
   timeSpent?: number; // minutes
+  silent?: boolean;
 }
 
 // ─── Pomodoro Types ─────────────────────────────────────────────────────────

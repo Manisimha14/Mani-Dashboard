@@ -152,7 +152,7 @@ export default function LeetCode() {
     // Mutate each problem sequentially
     names.forEach((name) => {
       addProblemMut.mutate({
-        name,
+        name: `${name} - ${form.difficulty}`,
         link: form.link,
         difficulty: form.difficulty,
         topic: form.topic,
@@ -160,7 +160,8 @@ export default function LeetCode() {
         notes: form.notes,
         date: form.date,
         completed: form.completed,
-        timeSpent: 0
+        timeSpent: 0,
+        silent: true
       });
     });
 

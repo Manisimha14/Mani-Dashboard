@@ -67,12 +67,14 @@ export function useAddProblem(): UseMutationResult<unknown, Error, Omit<LeetCode
 
         // Award XP and dispatch notification for authenticated LeetCode solves
         store.addXp(150, 'coding', `Solved problem: ${problem.name}`);
-        store.addNotification({
-          title: 'LeetCode Problem Solved',
-          message: `"${problem.name}" [${problem.difficulty}] logged successfully. +150 XP rewarded!`,
-          category: 'streak',
-          priority: 'normal'
-        });
+        if (!problem.silent) {
+          store.addNotification({
+            title: 'LeetCode Problem Solved',
+            message: `"${problem.name}" [${problem.difficulty}] logged successfully. +150 XP rewarded!`,
+            category: 'streak',
+            priority: 'normal'
+          });
+        }
       }
       
       return res;

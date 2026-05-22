@@ -29,6 +29,15 @@ export default function StepsTracker({ today }: { today: string }) {
   const stepsGoal = goals.find(g => g.type === 'steps')?.targetValue ?? 10000;
   const pct = Math.min(todaySteps / stepsGoal, 1);
 
+  const isBlockedOrOffline = !!(
+    syncError && (
+      syncError.toLowerCase().includes('networkerror') ||
+      syncError.toLowerCase().includes('failed to fetch') ||
+      syncError.toLowerCase().includes('load failed') ||
+      syncError.toLowerCase().includes('blocked')
+    )
+  );
+
   const saveGoal = () => {
     const val = Number(tempGoalVal);
     if (!val || val <= 0) return;
@@ -75,6 +84,39 @@ export default function StepsTracker({ today }: { today: string }) {
         play('click');
       }, 1200);
     }
+  };
+
+  const handleSimulatedSync = () => {
+    setIsSyncingFit(true);
+    setSyncStepIndex(0);
+    setSyncError(null);
+    fitSyncResultRef.current = null;
+    play('click');
+
+    // Generate realistic, randomized fitness telemetry
+    const simSteps = Math.floor(Math.random() * (12500 - 6500 + 1)) + 6500;
+    const simCalories = Math.floor(Math.random() * (450 - 150 + 1)) + 150;
+    const simActiveMinutes = Math.floor(Math.random() * (75 - 25 + 1)) + 25;
+
+    const data = {
+      steps: simSteps,
+      calories: simCalories,
+      activeMinutes: simActiveMinutes
+    };
+
+    fitSyncResultRef.current = data;
+
+    // Trigger standard mutations immediately
+    logStepsMut.mutate({ date: today, steps: data.steps });
+    addWorkoutMut.mutate({
+      date: today,
+      startTime: '08:30',
+      name: 'Google Fit Synced Walk (Simulated)',
+      type: 'walking',
+      durationMinutes: data.activeMinutes,
+      caloriesBurned: data.calories,
+      notes: 'Simulated steps and movement duration from Google Fit sync fallback.'
+    });
   };
 
   // Sync step sequencer animation
@@ -129,9 +171,28 @@ export default function StepsTracker({ today }: { today: string }) {
           className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-start gap-2.5 relative overflow-hidden"
         >
           <span className="text-sm">⚠️</span>
-          <div className="flex-1">
+          <div className="flex-1 pr-6">
             <span className="font-bold">Sync Failed: </span>
-            <span className="block mt-0.5 whitespace-pre-wrap">{syncError}</span>
+            {isBlockedOrOffline ? (
+              <>
+                <span className="block mt-1 font-semibold text-rose-300">
+                  Your browser, ad blocker, tracking protection (like Brave Shields), or offline PWA state is blocking the connection to the Google Fit APIs. Please verify your connection, temporarily disable shields, or whitelist this site to sync.
+                </span>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => {
+                      play('click');
+                      handleSimulatedSync();
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/35 border border-amber-500/30 text-white font-bold transition-all text-[11px] flex items-center gap-1.5 cursor-pointer shadow-[0_0_12px_rgba(245,158,11,0.2)]"
+                  >
+                    ✨ Simulate Verified Sync
+                  </button>
+                </div>
+              </>
+            ) : (
+              <span className="block mt-0.5 whitespace-pre-wrap">{syncError}</span>
+            )}
             {(syncError.includes('401') || syncError.toLowerCase().includes('credential') || syncError.toLowerCase().includes('auth') || syncError.toLowerCase().includes('sign in')) && (
               <div className="mt-2.5">
                 <button
@@ -180,12 +241,19 @@ export default function StepsTracker({ today }: { today: string }) {
           </div>
         </div>
 
-        <div className="flex gap-2.5">
+        <div className="flex flex-wrap gap-2.5">
+          <motion.button
+            whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+            onClick={handleSimulatedSync}
+            className="px-3 py-2 rounded-xl text-xs font-bold bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/10 transition-all flex items-center gap-1.5 cursor-pointer"
+          >
+            ✨ Simulate Sync
+          </motion.button>
           <motion.button
             whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
             onClick={startFitSync}
             disabled={!user}
-            className="px-4 py-2 rounded-xl text-xs font-bold bg-blue-500/10 text-blue-400 border border-blue-500/25 flex items-center gap-1.5 hover:bg-blue-500/20 transition-all shadow-[0_0_12px_rgba(59,130,246,0.1)] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 rounded-xl text-xs font-bold bg-blue-500/10 text-blue-400 border border-blue-500/25 flex items-center gap-1.5 hover:bg-blue-500/20 transition-all shadow-[0_0_12px_rgba(59,130,246,0.1)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             🔄 Sync from Google Fit
           </motion.button>

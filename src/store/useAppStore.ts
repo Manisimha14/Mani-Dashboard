@@ -369,12 +369,14 @@ export const useAppStore = create<AppStore>()(
         if (problem.completed) {
           get().logActivity('coding', 1);
           get().addXp(150, 'coding', `Solved problem: ${problem.name}`);
-          get().addNotification({
-            title: 'LeetCode Problem Solved',
-            message: `"${problem.name}" [${problem.difficulty}] logged successfully. +150 XP rewarded!`,
-            category: 'streak',
-            priority: 'normal'
-          });
+          if (!problem.silent) {
+            get().addNotification({
+              title: 'LeetCode Problem Solved',
+              message: `"${problem.name}" [${problem.difficulty}] logged successfully. +150 XP rewarded!`,
+              category: 'streak',
+              priority: 'normal'
+            });
+          }
         }
         get().checkAndUnlockAchievements();
       },
