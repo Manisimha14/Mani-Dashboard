@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
+import { useAddMeal } from './useHealthQuery';
+import { format } from 'date-fns';
 
 export type FoodItem = {
   id?: string;
@@ -41,6 +43,8 @@ export function useFoodLogger() {
   const [parsedData, setParsedData] = useState<ParsedMealData | null>(null);
   const [metaData, setMetaData] = useState<ParseResultMeta | null>(null);
   const [rawInput, setRawInput] = useState('');
+  
+  const addMealMutation = useAddMeal();
 
   const parseFood = async (input: string) => {
     if (!input.trim()) return;
@@ -87,8 +91,26 @@ export function useFoodLogger() {
   const updateItem = (index: number, updatedItem: FoodItem) => {
     if (!parsedData) return;
     
+    const oldItem = parsedData.items[index];
+    const oldQuantity = oldItem.quantity;
+    const newQuantity = updatedItem.quantity;
+    
+    let adjustedItem = { ...updatedItem };
+    
+    if (oldQuantity > 0 && newQuantity !== oldQuantity) {
+      const ratio = newQuantity / oldQuantity;
+      adjustedItem = {
+        ...updatedItem,
+        calories: oldItem.calories * ratio,
+        protein: oldItem.protein * ratio,
+        carbs: oldItem.carbs * ratio,
+        fat: oldItem.fat * ratio,
+        fiber: oldItem.fiber * ratio,
+      };
+    }
+
     const newItems = [...parsedData.items];
-    newItems[index] = updatedItem;
+    newItems[index] = adjustedItem;
     
     // Recalculate totals
     const newTotals = newItems.reduce((acc, item) => ({
@@ -156,6 +178,20 @@ export function useFoodLogger() {
         .insert(itemsToInsert);
 
       if (itemsError) throw itemsError;
+
+      // 3. Save to health_meals so it shows up in the Calorie Tracker dashboard widget
+      const now = new Date();
+      await addMealMutation.mutateAsync({
+        date: format(now, 'yyyy-MM-dd'),
+        time: format(now, 'HH:mm'),
+        mealType: parsedData.meal_type as any, // 'breakfast' | 'lunch' | 'dinner' | 'snacks' | 'custom'
+        name: parsedData.items.map(i => i.food_name).join(', '),
+        calories: parsedData.totals.calories,
+        protein: parsedData.totals.protein,
+        carbs: parsedData.totals.carbs,
+        fat: parsedData.totals.fat,
+        fiber: parsedData.totals.fiber
+      });
 
       toast.success('Meal saved successfully!');
       setParsedData(null);

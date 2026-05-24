@@ -3,10 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Flame, Plus, Trash2, Star, ChevronDown, ChevronUp, Edit2, Check, X } from 'lucide-react';
 import { useMeals, useHealthGoals, useAddMeal, useDeleteMeal, useToggleMealFavorite, useAddGoal, useUpdateGoal, useLogSteps, useAddWorkout, useWorkouts, useDeleteWorkout } from '../../hooks/useHealthQuery';
 import type { MealType } from '../../types/health';
-import { parseNaturalLanguageNutrition, searchOpenFoodFacts, type OpenFoodFactsProduct } from '../../lib/nutritionParser';
 import { useSoundFX } from '../../hooks/useSoundFX';
 import { useAuth } from '../../contexts/AuthContext';
 import { fetchTodayGoogleFitData, getGoogleFitSyncFeedback, type GoogleFitSyncFeedback } from '../../services/googleFit.service';
+import { FoodLogger } from '../food-logger/FoodLogger';
 
 const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snacks', 'custom'];
 const MEAL_EMOJI: Record<MealType, string> = {
@@ -14,21 +14,6 @@ const MEAL_EMOJI: Record<MealType, string> = {
 };
 const MEAL_COLOR: Record<MealType, string> = {
   breakfast: '#fb923c', lunch: '#facc15', dinner: '#818cf8', snacks: '#34d399', custom: '#f472b6'
-};
-
-const CALORIE_PRESETS = [
-  { name: 'Whey Protein', emoji: '🥤', calories: 120, protein: 24, carbs: 3, fat: 1.5, mealType: 'snacks' as MealType },
-  { name: 'Boiled Eggs (2)', emoji: '🥚', calories: 156, protein: 12.6, carbs: 1.2, fat: 10.6, mealType: 'breakfast' as MealType },
-  { name: 'Paneer Bhurji', emoji: '🧀', calories: 280, protein: 18, carbs: 6, fat: 20, mealType: 'lunch' as MealType },
-  { name: 'Chicken Breast', emoji: '🍗', calories: 165, protein: 31, carbs: 0, fat: 3.6, mealType: 'lunch' as MealType },
-  { name: 'Oatmeal & Milk', emoji: '🥣', calories: 270, protein: 13, carbs: 39, fat: 7.5, mealType: 'breakfast' as MealType },
-  { name: 'Salmon & Veggies', emoji: '🍣', calories: 420, protein: 35, carbs: 12, fat: 26, mealType: 'dinner' as MealType },
-  { name: 'Greek Yogurt', emoji: '🥛', calories: 120, protein: 20, carbs: 7.2, fat: 0.8, mealType: 'snacks' as MealType },
-  { name: 'Mixed Almonds', emoji: '🥜', calories: 160, protein: 6, carbs: 6, fat: 14, mealType: 'snacks' as MealType },
-];
-
-const EMPTY_FORM = {
-  name: '', calories: '', protein: '', carbs: '', fat: '', quantity: '', mealType: 'breakfast' as MealType
 };
 
 export default function CalorieTracker({ today }: { today: string }) {
@@ -123,117 +108,9 @@ export default function CalorieTracker({ today }: { today: string }) {
     return () => clearInterval(timer);
   }, [isSyncingFit]);
 
-  const [form, setForm] = useState(EMPTY_FORM);
-  const [showForm, setShowForm] = useState(false);
   const [expandedMeal, setExpandedMeal] = useState<MealType | null>('breakfast');
-  const [matchedNlpItems, setMatchedNlpItems] = useState<string[]>([]);
-
-  // Debounced database search
-  useEffect(() => {
-    if (!form.name || form.name.length < 3) {
-      setDbResults([]);
-      return;
-    }
-    const delayDebounceFn = setTimeout(async () => {
-      setSearchingDb(true);
-      try {
-        const results = await searchOpenFoodFacts(form.name);
-        setDbResults(results);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setSearchingDb(false);
-      }
-    }, 300);
-
-    return () => clearTimeout(delayDebounceFn);
-  }, [form.name]);
 
   const formatDecimal = (num: number) => Number((num || 0).toFixed(1));
-
-  const [dbResults, setDbResults] = useState<OpenFoodFactsProduct[]>([]);
-  const [searchingDb, setSearchingDb] = useState(false);
-
-  const [baseMacros, setBaseMacros] = useState<{
-    calories: number;
-    protein: number;
-    carbs: number;
-    fat: number;
-    isPer100g: boolean;
-  } | null>(null);
-
-  const [multiplier, setMultiplier] = useState(1);
-  const [qtyUnit, setQtyUnit] = useState<'servings' | 'grams'>('servings');
-
-  // Perform dynamic live scaling of calories & macros
-  const scaleMacros = (newMult: number, newUnit: 'servings' | 'grams') => {
-    if (!baseMacros) return;
-    
-    let scale = newMult;
-    if (newUnit === 'grams') {
-      scale = newMult / 100;
-    }
-
-    setForm(f => ({
-      ...f,
-      calories: String(Math.round(baseMacros.calories * scale * 10) / 10),
-      protein: String(Math.round((baseMacros.protein * scale) * 10) / 10),
-      carbs: String(Math.round((baseMacros.carbs * scale) * 10) / 10),
-      fat: String(Math.round((baseMacros.fat * scale) * 10) / 10),
-      quantity: `${newMult} ${newUnit}`,
-    }));
-  };
-
-  const handleMultiplierChange = (val: number) => {
-    const clamped = Math.max(0, val);
-    setMultiplier(clamped);
-    scaleMacros(clamped, qtyUnit);
-  };
-
-  const handleUnitChange = (unit: 'servings' | 'grams') => {
-    setQtyUnit(unit);
-    const newMult = unit === 'grams' ? 100 : 1;
-    setMultiplier(newMult);
-    scaleMacros(newMult, unit);
-  };
-
-  const handleNameChange = (name: string) => {
-    setForm(f => ({ ...f, name }));
-
-    // Client-side NLP heuristic auto-fill
-    const nlp = parseNaturalLanguageNutrition(name);
-    if (nlp.matched) {
-      setMatchedNlpItems(nlp.matchedItems || []);
-      const base = {
-        calories: nlp.calories,
-        protein: nlp.protein,
-        carbs: nlp.carbs,
-        fat: nlp.fat,
-        isPer100g: false,
-      };
-      setBaseMacros(base);
-      setMultiplier(1);
-      setQtyUnit('servings');
-      setForm(f => ({
-        ...f,
-        calories: String(nlp.calories),
-        protein: String(nlp.protein),
-        carbs: String(nlp.carbs),
-        fat: String(nlp.fat),
-        quantity: '1 servings',
-      }));
-    } else {
-      setMatchedNlpItems([]);
-    }
-  };
-
-  const triggerDbSearch = async () => {
-    if (form.name.length < 2) return;
-    setSearchingDb(true);
-    const results = await searchOpenFoodFacts(form.name);
-    setDbResults(results);
-    setSearchingDb(false);
-  };
 
   const todayMeals = meals; // already filtered by date from the hook
   const totalCal   = formatDecimal(todayMeals.reduce((a, m) => a + m.calories, 0));
@@ -260,25 +137,6 @@ export default function CalorieTracker({ today }: { today: string }) {
       addGoalMut.mutate({ label: 'Daily Calories', type: 'calories', targetValue: val, unit: 'kcal' });
     }
     setIsEditingGoal(false);
-  };
-
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.name || !form.calories) return;
-    const now = new Date().toTimeString().slice(0, 5);
-    addMealMut.mutate({
-      date: today, time: now,
-      mealType: form.mealType,
-      name: form.name,
-      calories: Number(form.calories),
-      protein: Number(form.protein) || 0,
-      carbs: Number(form.carbs) || 0,
-      fat: Number(form.fat) || 0,
-      quantity: form.quantity || undefined,
-    });
-    setForm(EMPTY_FORM);
-    setMatchedNlpItems([]);
-    setShowForm(false);
   };
 
   // Macro percentages for pie-like bars
@@ -325,14 +183,6 @@ export default function CalorieTracker({ today }: { today: string }) {
               </div>
             )}
           </div>
-          <motion.button
-            whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-            onClick={() => setShowForm(v => !v)}
-            className="btn-glow px-4 py-2 text-sm flex items-center gap-2"
-            style={{ background: 'linear-gradient(135deg, #f43f5e, #fb923c)' }}
-          >
-            <Plus size={16} /> Log Food
-          </motion.button>
         </div>
 
         {/* Calorie bar */}
@@ -477,273 +327,10 @@ export default function CalorieTracker({ today }: { today: string }) {
         </div>
       </div>
 
-      {/* Quick Add Presets */}
-      <div className="glass-card p-5">
-        <div className="text-xs text-white/30 uppercase tracking-widest font-bold mb-3">Popular Healthy Presets</div>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          {CALORIE_PRESETS.map(p => (
-            <motion.button
-              key={p.name}
-              type="button"
-              whileHover={{ scale: 1.04, y: -2 }}
-              whileTap={{ scale: 0.96 }}
-              onClick={() => {
-                const nowStr = new Date().toTimeString().slice(0, 5);
-                addMealMut.mutate({
-                  date: today,
-                  time: nowStr,
-                  mealType: p.mealType,
-                  name: p.name,
-                  calories: p.calories,
-                  protein: p.protein,
-                  carbs: p.carbs,
-                  fat: p.fat,
-                });
-              }}
-              className="glass-card p-3 flex flex-col items-center gap-1 bg-white/[0.01] hover:bg-white/[0.03] hover:border-rose-500/30 hover:shadow-[0_0_15px_rgba(244,63,94,0.12)] transition-all text-center group rounded-2xl"
-            >
-              <span className="text-2xl group-hover:scale-110 transition-transform duration-200">{p.emoji}</span>
-              <div className="text-xs font-bold text-white tracking-tight mt-1 truncate w-full">{p.name}</div>
-              <div className="text-[10px] text-white/40">{p.calories} kcal</div>
-              <div className="text-[9px] text-rose-400 font-bold font-mono">P: {p.protein}g</div>
-            </motion.button>
-          ))}
-        </div>
+      {/* AI Food Logger Integration */}
+      <div className="mb-6">
+        <FoodLogger />
       </div>
-
-      {/* Add form */}
-      <AnimatePresence>
-        {showForm && (
-          <motion.div
-            initial={{ opacity: 0, y: -12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -12 }}
-            className="glass-card p-5"
-          >
-            <div className="text-xs text-white/30 uppercase tracking-widest font-bold mb-4">Log Food Entry</div>
-            <form onSubmit={submit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2">
-                  <div className="flex justify-between items-center mb-1">
-                    <label className="text-xs text-white/40 block">Food name *</label>
-                    <span className="text-[9px] text-emerald-400 font-semibold bg-emerald-500/10 px-1.5 py-0.5 rounded-full animate-pulse">
-                      ✨ Auto-Fill Active
-                    </span>
-                  </div>
-                  <div className="flex gap-2">
-                    <input
-                      className="input-glass w-full px-3 py-2 text-sm"
-                      placeholder="e.g. 2 eggs or Protein Powder"
-                      value={form.name}
-                      onChange={e => handleNameChange(e.target.value)}
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={triggerDbSearch}
-                      disabled={searchingDb}
-                      className="px-4 py-2 text-xs font-bold rounded-xl border border-rose-500/20 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-colors flex items-center gap-1.5 flex-shrink-0"
-                    >
-                      {searchingDb ? 'Searching...' : '🔍 Search DB'}
-                    </button>
-                  </div>
-
-                  {matchedNlpItems.length > 0 && (
-                    <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                      <span className="text-[10px] font-black text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded-lg flex items-center gap-1.5 animate-pulse">
-                        ✨ Parsed components:
-                      </span>
-                      {matchedNlpItems.map((item, idx) => (
-                        <span key={idx} className="text-[10px] font-semibold text-white/80 bg-white/5 border border-white/10 px-2.5 py-0.5 rounded-lg shadow-sm">
-                          {item}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  {dbResults.length > 0 && (
-                    <div className="mt-3 p-4 glass-card bg-black/40 border border-white/5 rounded-2xl space-y-2 max-h-64 overflow-y-auto shadow-2xl backdrop-blur-md">
-                      <div className="flex justify-between items-center mb-2 pb-1 border-b border-white/5">
-                        <span className="text-[10px] text-white/30 uppercase tracking-widest font-black">Search Results ({dbResults.length})</span>
-                        <span className="text-[9px] text-white/20">Click to import portion</span>
-                      </div>
-                      <div className="grid grid-cols-1 gap-2">
-                        {dbResults.map((p, idx) => {
-                          const isLocal = p.source === 'Local Cooked DB';
-                          const isUsda = p.source === 'USDA Survey Foods';
-                          const sourceBg = isLocal 
-                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                            : isUsda
-                            ? 'bg-violet-500/10 text-violet-400 border-violet-500/20'
-                            : 'bg-orange-500/10 text-orange-400 border-orange-500/20';
-
-                          return (
-                            <motion.button
-                              key={idx}
-                              type="button"
-                              whileHover={{ scale: 1.01, x: 2 }}
-                              whileTap={{ scale: 0.99 }}
-                              onClick={() => {
-                                const is100g = p.brand?.includes('100g') || p.brand?.includes('per 100g') || false;
-                                const base = {
-                                  calories: p.calories,
-                                  protein: p.protein,
-                                  carbs: p.carbs,
-                                  fat: p.fat,
-                                  isPer100g: is100g,
-                                };
-                                setBaseMacros(base);
-                                const defaultUnit = is100g ? 'grams' : 'servings';
-                                const defaultMult = is100g ? 100 : 1;
-                                setQtyUnit(defaultUnit);
-                                setMultiplier(defaultMult);
-
-                                setForm(f => ({
-                                  ...f,
-                                  name: p.name,
-                                  calories: String(p.calories),
-                                  protein: String(p.protein),
-                                  carbs: String(p.carbs),
-                                  fat: String(p.fat),
-                                  quantity: `${defaultMult} ${defaultUnit}`,
-                                }));
-                                setDbResults([]);
-                              }}
-                              className="w-full text-left p-3 rounded-xl bg-white/[0.01] hover:bg-white/[0.04] border border-white/5 hover:border-rose-500/30 flex flex-col md:flex-row md:items-center justify-between gap-2 transition-all group"
-                            >
-                              <div className="flex items-center gap-3 truncate">
-                                {p.image ? (
-                                  <img src={p.image} className="w-8 h-8 rounded-lg object-cover bg-white/5 border border-white/10" alt="" />
-                                ) : (
-                                  <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-sm">
-                                    {isLocal ? '🍳' : isUsda ? '🍲' : '📦'}
-                                  </div>
-                                )}
-                                <div className="truncate">
-                                  <div className="font-bold text-white/80 group-hover:text-white truncate text-xs">
-                                    {p.name}
-                                  </div>
-                                  <div className="flex items-center gap-1.5 mt-0.5">
-                                    <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full border ${sourceBg}`}>
-                                      {p.source}
-                                    </span>
-                                    <span className="text-[9px] text-white/30 truncate">
-                                      {p.brand}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-1.5 flex-shrink-0 text-[10px] font-mono font-bold">
-                                <span className="text-white/60 bg-white/5 px-2 py-0.5 rounded-md border border-white/5">
-                                  {p.calories} kcal
-                                </span>
-                                <span className="text-purple-400 bg-purple-500/5 px-1.5 py-0.5 rounded-md border border-purple-500/10">
-                                  P: {p.protein}g
-                                </span>
-                                <span className="text-yellow-400 bg-yellow-500/5 px-1.5 py-0.5 rounded-md border border-yellow-500/10">
-                                  C: {p.carbs}g
-                                </span>
-                                <span className="text-orange-400 bg-orange-500/5 px-1.5 py-0.5 rounded-md border border-orange-500/10">
-                                  F: {p.fat}g
-                                </span>
-                              </div>
-                            </motion.button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <label className="text-xs text-white/40 mb-1 block">Meal type</label>
-                  <select
-                    className="input-glass w-full px-3 py-2 text-sm"
-                    value={form.mealType}
-                    onChange={e => setForm(f => ({ ...f, mealType: e.target.value as MealType }))}
-                  >
-                    {MEAL_ORDER.map(t => (
-                      <option key={t} value={t}>{MEAL_EMOJI[t]} {t.charAt(0).toUpperCase() + t.slice(1)}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex flex-col">
-                  <label className="text-xs text-white/40 mb-1 block">Quantity & Scaling</label>
-                  <div className="flex gap-2">
-                    <div className="flex items-center bg-white/[0.03] border border-white/10 rounded-xl px-2 py-1 flex-1">
-                      <button
-                        type="button"
-                        onClick={() => handleMultiplierChange(multiplier - (qtyUnit === 'grams' ? 10 : 0.5))}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/10 text-white/80 active:scale-95 transition-all text-xs font-bold"
-                      >
-                        -
-                      </button>
-                      <input
-                        type="number"
-                        step={qtyUnit === 'grams' ? '10' : '0.1'}
-                        min="0"
-                        className="bg-transparent text-center text-sm font-bold text-white w-full focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                        value={multiplier}
-                        onChange={e => handleMultiplierChange(parseFloat(e.target.value) || 0)}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleMultiplierChange(multiplier + (qtyUnit === 'grams' ? 10 : 0.5))}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/10 text-white/80 active:scale-95 transition-all text-xs font-bold"
-                      >
-                        +
-                      </button>
-                    </div>
-                    <select
-                      className="input-glass px-2 py-2 text-xs font-bold cursor-pointer rounded-xl border border-white/10 bg-black/40 text-white/80 hover:bg-white/[0.04]"
-                      value={qtyUnit}
-                      onChange={e => handleUnitChange(e.target.value as 'servings' | 'grams')}
-                    >
-                      <option value="servings">pieces</option>
-                      <option value="grams">grams (g)</option>
-                    </select>
-                  </div>
-                  {baseMacros && (
-                    <span className="text-[9px] text-white/30 mt-1 italic leading-none">
-                      Scaling: {qtyUnit === 'grams' ? `${(multiplier / 100).toFixed(2)}x (100g base)` : `${multiplier.toFixed(1)}x base serving`}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="grid grid-cols-4 gap-3">
-                {[
-                  { key: 'calories', label: 'Calories *', placeholder: '420', unit: 'kcal' },
-                  { key: 'protein', label: 'Protein', placeholder: '26', unit: 'g' },
-                  { key: 'carbs', label: 'Carbs', placeholder: '10', unit: 'g' },
-                  { key: 'fat', label: 'Fat', placeholder: '18', unit: 'g' },
-                ].map(({ key, label, placeholder, unit }) => (
-                  <div key={key}>
-                    <label className="text-xs text-white/40 mb-1 block">{label}</label>
-                    <div className="relative">
-                      <input
-                        type="number" min="0" step="any"
-                        className="input-glass w-full px-3 py-2 text-sm pr-8"
-                        placeholder={placeholder}
-                        value={(form as any)[key]}
-                        onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-                        required={key === 'calories'}
-                      />
-                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-white/20">{unit}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="flex gap-2 justify-end">
-                <button type="button" onClick={() => setShowForm(false)}
-                  className="btn-ghost px-4 py-2 text-sm">Cancel</button>
-                <button type="submit" className="btn-glow px-5 py-2 text-sm"
-                  style={{ background: 'linear-gradient(135deg, #f43f5e, #fb923c)' }}>
-                  Log Entry
-                </button>
-              </div>
-            </form>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Meals by type */}
       <div className="space-y-3">
@@ -814,15 +401,11 @@ export default function CalorieTracker({ today }: { today: string }) {
         })}
       </div>
 
-      {todayMeals.length === 0 && !showForm && (
+      {todayMeals.length === 0 && (
         <div className="glass-card p-12 text-center">
           <div className="text-4xl mb-3">🍽️</div>
           <div className="text-white/50 font-medium">No meals logged today.</div>
-          <button onClick={() => setShowForm(true)}
-            className="mt-4 btn-glow px-5 py-2 text-sm flex items-center gap-2 mx-auto"
-            style={{ background: 'linear-gradient(135deg, #f43f5e, #fb923c)' }}>
-            <Plus size={14} /> Log First Meal
-          </button>
+          <div className="text-white/30 text-xs mt-2">Use the AI Food Logger to track your meals naturally.</div>
         </div>
       )}
 

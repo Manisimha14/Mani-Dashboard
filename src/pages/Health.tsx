@@ -23,7 +23,6 @@ const TABS = [
   { id: 'steps',     label: 'Steps',     icon: Footprints },
   { id: 'workout',   label: 'Workout',   icon: Dumbbell },
   { id: 'sleep',     label: 'Sleep',     icon: Moon },
-  { id: 'food_log',  label: 'AI Food Log', icon: Sparkles },
   { id: 'goals',     label: 'Goals',     icon: Target },
 ] as const;
 
@@ -141,7 +140,6 @@ export default function Health() {
           {activeTab === 'steps'     && <StepsTracker today={today} />}
           {activeTab === 'workout'   && <WorkoutTracker today={today} />}
           { activeTab === 'sleep'     && <SleepTracker today={today} /> }
-          { activeTab === 'food_log'  && <FoodLogger /> }
           { activeTab === 'goals'     && <GoalsPanel /> }
         </motion.div>
       </AnimatePresence>

@@ -2,7 +2,6 @@ import React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { FoodInput } from './FoodInput';
 import { ConfirmationCard } from './ConfirmationCard';
-import { SavedMealsList } from './SavedMealsList';
 import { useFoodLogger } from '../../hooks/useFoodLogger';
 
 export function FoodLogger() {
@@ -17,12 +16,12 @@ export function FoodLogger() {
   } = useFoodLogger();
 
   return (
-    <div className="w-full min-h-full flex flex-col items-center pt-10 pb-20 px-4">
+    <div className="w-full flex flex-col items-center">
       
       {/* Header */}
-      <div className="mb-10 text-center">
-        <h2 className="text-3xl font-light text-white mb-2 tracking-tight">Log your food</h2>
-        <p className="text-zinc-500">Just type naturally. AI will handle the math.</p>
+      <div className="mb-4 text-center w-full flex items-center gap-3">
+        <h2 className="text-xs text-white/30 uppercase tracking-widest font-bold">AI Food Logger</h2>
+        <div className="h-px bg-white/10 flex-1"></div>
       </div>
 
       {/* Main Input */}
@@ -33,7 +32,7 @@ export function FoodLogger() {
       />
 
       <AnimatePresence mode="wait">
-        {parsedData ? (
+        {parsedData && (
           /* Confirmation UI */
           <motion.div
             key="confirmation"
@@ -47,20 +46,6 @@ export function FoodLogger() {
               onSave={saveMeal}
               onCancel={cancel}
               onUpdateItem={updateItem}
-            />
-          </motion.div>
-        ) : (
-          /* Quick Add & Templates */
-          <motion.div
-            key="templates"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="w-full"
-          >
-            <SavedMealsList 
-              onSelect={parseFood} 
-              disabled={isParsing} 
             />
           </motion.div>
         )}
