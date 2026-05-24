@@ -54,7 +54,7 @@ export default function Modal({
         <>
           {/* Backdrop */}
           <motion.div
-            className="fixed inset-0 bg-black/70 backdrop-blur-md z-[200]"
+            className="fixed inset-0 bg-black/70 backdrop-blur-md z-[300]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -68,7 +68,7 @@ export default function Modal({
            * area, not the centre of the whole viewport.
            */}
           <div
-            className="fixed inset-0 z-[201] flex items-center justify-center"
+            className="fixed inset-0 z-[301] flex items-center justify-center"
             // prevent click-through to backdrop when clicking the non-modal area
           >
             <motion.div

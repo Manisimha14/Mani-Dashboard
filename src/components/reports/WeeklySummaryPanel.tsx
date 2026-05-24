@@ -240,7 +240,7 @@ export default function WeeklySummaryPanel({
       case 'workouts_weekly': {
         title = 'Weekly Workouts Count';
         formula = 'COUNT(workout_entries WHERE date IN last7Days)';
-        dedupRule = 'Deduplicate walking sync entries with matching key `${date}_${startTime}_${name}_${durationMinutes}`. Synced walks proactively delete pre-existing entries before insertions.';
+        dedupRule = 'Deduplicate all sync workout entries with matching key `${date}_${name.trim().toLowerCase()}`. Synced walks proactively delete pre-existing entries before insertions.';
         calculatedVal = `${stats.workoutCount} Workouts`;
 
         const seen = new Set<string>();
@@ -249,17 +249,21 @@ export default function WeeklySummaryPanel({
           const inRange = dStr && last7Days.includes(dStr);
           if (!inRange) return;
 
-          const key = `${w.date}_${w.startTime || '08:30'}_${w.name.trim().toLowerCase()}_${w.durationMinutes}`;
+          const key = `${w.date}_${w.name.trim().toLowerCase()}`;
           const isDuplicate = seen.has(key);
           seen.add(key);
+
+          const isSyncedEntry =
+            w.name === 'Daily Activity Sync' ||
+            w.name.includes('Google Fit');
 
           ledger.push({
             id: w.id || `w-${Math.random()}`,
             timestamp: w.date || 'N/A',
-            source: w.name.includes('Google Fit') ? 'Google Fit Sensor OAuth Sync' : 'Manual Logger',
+            source: isSyncedEntry ? 'Google Fit Sensor OAuth Sync / Simulated' : 'Manual Logger',
             contribution: !isDuplicate ? `+1 Workout (${w.name})` : '+0 (Ignored)',
             status: !isDuplicate ? 'included' : 'excluded',
-            reason: isDuplicate ? 'Duplicate sync workout detected (Google Fit overlap)' : undefined,
+            reason: isDuplicate ? 'Duplicate sync workout detected (overlap)' : undefined,
             raw: w
           });
         });

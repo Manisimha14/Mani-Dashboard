@@ -59,9 +59,12 @@ export default function CalorieTracker({ today }: { today: string }) {
     )
   );
 
+  // Unified sync workout name for reliable deduplication across all sync types
+  const SYNC_WORKOUT_NAME = 'Daily Activity Sync';
+
   const startFitSync = async () => {
     if (!user) {
-      setSyncError('Sign in with Google before requesting Google Fit data.');
+      setSyncError('Sign in with Google before requesting Google Fit data. Click the button below to authenticate.');
       return;
     }
     setIsSyncingFit(true);
@@ -73,28 +76,48 @@ export default function CalorieTracker({ today }: { today: string }) {
     try {
       const data = await fetchTodayGoogleFitData();
       fitSyncResultRef.current = data;
-      // Proactively trigger mutations immediately in the background for zero-latency updates
       logStepsMut.mutate({ date: today, steps: data.steps });
 
-      const existingWalk = workouts.find(w => w.name === 'Google Fit Synced Walk');
-      if (existingWalk) {
-        deleteWorkoutMut.mutate(existingWalk.id);
+      const existingSync = workouts.find(w =>
+        w.name === SYNC_WORKOUT_NAME ||
+        w.name === 'Google Fit Synced Walk' ||
+        w.name === 'Google Fit Synced Walk (Simulated)'
+      );
+      if (existingSync) {
+        deleteWorkoutMut.mutate(existingSync.id);
       }
 
       addWorkoutMut.mutate({
         date: today,
         startTime: '08:30',
-        name: 'Google Fit Synced Walk',
+        name: SYNC_WORKOUT_NAME,
         type: 'walking',
         durationMinutes: data.activeMinutes,
         caloriesBurned: data.calories,
-        notes: 'Imported steps and movement duration from Google Fit API.'
+        notes: `Synced from Google Fit — ${data.steps.toLocaleString()} steps, ${data.activeMinutes} active minutes.`
       });
     } catch (err: any) {
       console.error('Failed to fetch Google Fit data:', err);
+      const isAuthError = err.message?.includes('401') ||
+        err.message?.toLowerCase().includes('unavailable') ||
+        err.message?.toLowerCase().includes('sign in') ||
+        err.message?.toLowerCase().includes('access');
+      const isCorsOrNetworkError =
+        err.message?.toLowerCase().includes('networkerror') ||
+        err.message?.toLowerCase().includes('failed to fetch') ||
+        err.message?.toLowerCase().includes('load failed') ||
+        err.message?.toLowerCase().includes('blocked');
+
+      let userMessage = err.message || 'Unknown Google Fit API error.';
+      if (isAuthError) {
+        userMessage = 'Google Fit access token expired. Please re-authenticate with Google to sync real data, or use Simulate Sync below.';
+      } else if (isCorsOrNetworkError) {
+        userMessage = 'Network blocked — your browser or ad blocker is preventing the Google Fit API call. Use Simulate Sync or whitelist this site.';
+      }
+
       setTimeout(() => {
         setIsSyncingFit(false);
-        setSyncError(err.message || 'Unknown Google Fit API error occurred.');
+        setSyncError(userMessage);
         play('click');
       }, 1200);
     }
@@ -107,35 +130,32 @@ export default function CalorieTracker({ today }: { today: string }) {
     fitSyncResultRef.current = null;
     play('click');
 
-    // Generate realistic, randomized fitness telemetry
-    const simSteps = Math.floor(Math.random() * (12500 - 6500 + 1)) + 6500;
-    const simCalories = Math.floor(Math.random() * (450 - 150 + 1)) + 150;
-    const simActiveMinutes = Math.floor(Math.random() * (75 - 25 + 1)) + 25;
+    const simSteps = Math.floor(Math.random() * (12000 - 5000 + 1)) + 5000;
+    const simCalories = Math.floor(Math.random() * (400 - 150 + 1)) + 150;
+    const simActiveMinutes = Math.floor(Math.random() * (60 - 20 + 1)) + 20;
 
-    const data = {
-      steps: simSteps,
-      calories: simCalories,
-      activeMinutes: simActiveMinutes
-    };
-
+    const data = { steps: simSteps, calories: simCalories, activeMinutes: simActiveMinutes };
     fitSyncResultRef.current = data;
 
-    // Trigger standard mutations immediately
     logStepsMut.mutate({ date: today, steps: data.steps });
 
-    const existingWalk = workouts.find(w => w.name === 'Google Fit Synced Walk (Simulated)');
-    if (existingWalk) {
-      deleteWorkoutMut.mutate(existingWalk.id);
+    const existingSync = workouts.find(w =>
+      w.name === SYNC_WORKOUT_NAME ||
+      w.name === 'Google Fit Synced Walk' ||
+      w.name === 'Google Fit Synced Walk (Simulated)'
+    );
+    if (existingSync) {
+      deleteWorkoutMut.mutate(existingSync.id);
     }
 
     addWorkoutMut.mutate({
       date: today,
       startTime: '08:30',
-      name: 'Google Fit Synced Walk (Simulated)',
+      name: SYNC_WORKOUT_NAME,
       type: 'walking',
       durationMinutes: data.activeMinutes,
       caloriesBurned: data.calories,
-      notes: 'Simulated steps and movement duration from Google Fit sync fallback.'
+      notes: `Simulated activity — ${data.steps.toLocaleString()} steps estimated, ${data.activeMinutes} active minutes.`
     });
   };
 
