@@ -510,7 +510,7 @@ export default function Layout() {
       </AnimatePresence>
 
       {/* Floating Bug FAB Button */}
-      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2">
+      <div className="fixed bottom-6 right-6 md:right-28 z-[210] flex flex-col gap-2">
         <button
           onClick={() => { play('click'); setReportOpen(true); }}
           className="w-12 h-12 rounded-full bg-violet-600/90 border border-violet-500/30 hover:bg-violet-600 hover:scale-105 active:scale-95 text-white flex items-center justify-center shadow-lg shadow-violet-950/40 hover:shadow-[0_0_20px_rgba(139,92,246,0.5)] transition-all duration-300 pointer-events-auto animate-pulse-subtle"
