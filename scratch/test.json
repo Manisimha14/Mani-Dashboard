@@ -1,0 +1,29 @@
+{
+  "chatQuery": "Is this meal good for weight loss?",
+  "chatHistory": [],
+  "mealData": {
+    "meal_type": "lunch",
+    "totals": {
+      "calories": 400,
+      "protein": 25,
+      "carbs": 40,
+      "fat": 12,
+      "fiber": 5
+    },
+    "items": [
+      {
+        "food_name": "Chicken breast with rice",
+        "quantity": 1,
+        "unit": "plate",
+        "calories": 400,
+        "protein": 25,
+        "carbs": 40,
+        "fat": 12,
+        "fiber": 5,
+        "estimated": true
+      }
+    ],
+    "confidence": "high"
+  },
+  "userGoal": "weight loss"
+}

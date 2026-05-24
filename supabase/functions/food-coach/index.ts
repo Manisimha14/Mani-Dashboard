@@ -14,9 +14,11 @@ serve(async (req) => {
         const { chatQuery, chatHistory, mealData, userGoal } = await req.json();
         const corsHeadersWithJson = { ...corsHeaders, 'Content-Type': 'application/json' };
 
+        const groqKey = Deno.env.get('GROQ_API_KEY');
         const geminiKey = Deno.env.get('GEMINI_API_KEY');
-        if (!geminiKey) {
-            return new Response(JSON.stringify({ error: "Gemini API key not configured" }), {
+
+        if (!groqKey && !geminiKey) {
+            return new Response(JSON.stringify({ error: "AI API keys not configured in Supabase secrets." }), {
                 status: 500, headers: corsHeadersWithJson
             });
         }
@@ -27,9 +29,7 @@ serve(async (req) => {
             });
         }
 
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
-
-        // 1. Build prompt with safety guardrails and structured context
+        // 1. Build context-aware prompt with safety guardrails
         const systemInstruction = `You are Mani's elite AI Health, Nutrition, and Fitness Coach.
 The user is currently looking at this logged meal:
 ${JSON.stringify(mealData, null, 2)}
@@ -42,46 +42,97 @@ CRITICAL COACHING INSTRUCTIONS:
 3. Keep answers concise: 3 to 4 sentences maximum.
 4. MEDICAL SAFETY LIMITATION: Under no circumstances should you diagnose clinical illnesses, prescribe medications, or recommend dangerous starvation deficits. If asked about clinical health issues or medication, politely suggest consulting a primary care physician.`;
 
-        // 2. Map conversation history to Gemini contents schema
-        const contents = [];
+        let reply = "";
+        let success = false;
+        let errorDetails = "";
 
-        // Add history
-        if (chatHistory && Array.isArray(chatHistory)) {
-            for (const msg of chatHistory) {
-                contents.push({
-                    role: msg.role === 'user' ? 'user' : 'model',
-                    parts: [{ text: msg.content }]
+        // ─── 1. PRIMARY PROVIDER: GROQ (llama-3.3-70b-versatile) ───
+        if (groqKey) {
+            try {
+                const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${groqKey}`,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        model: "llama-3.3-70b-versatile",
+                        messages: [
+                            { role: "system", content: systemInstruction },
+                            ...(chatHistory || []).map((msg: any) => ({
+                                role: msg.role === 'user' ? 'user' : 'assistant',
+                                content: msg.content
+                            })),
+                            { role: "user", content: chatQuery }
+                        ],
+                        temperature: 0.7,
+                        max_tokens: 300
+                    })
                 });
+
+                if (response.ok) {
+                    const json = await response.json();
+                    reply = json.choices[0].message.content;
+                    success = true;
+                } else {
+                    const errText = await response.text();
+                    errorDetails += `Groq Error (${response.status}): ${errText}\n`;
+                }
+            } catch (groqErr: any) {
+                errorDetails += `Groq Exception: ${groqErr.message}\n`;
             }
         }
 
-        // Append current query
-        contents.push({
-            role: 'user',
-            parts: [{ text: chatQuery }]
-        });
-
-        const response = await fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                system_instruction: {
-                    parts: [{ text: systemInstruction }]
-                },
-                contents,
-                generationConfig: {
-                    temperature: 0.7,
-                    maxOutputTokens: 300
+        // ─── 2. FALLBACK PROVIDER: GEMINI (gemini-1.5-flash) ───
+        if (!success && geminiKey) {
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
+                
+                const contents = [];
+                if (chatHistory && Array.isArray(chatHistory)) {
+                    for (const msg of chatHistory) {
+                        contents.push({
+                            role: msg.role === 'user' ? 'user' : 'model',
+                            parts: [{ text: msg.content }]
+                        });
+                    }
                 }
-            })
-        });
+                contents.push({
+                    role: 'user',
+                    parts: [{ text: chatQuery }]
+                });
 
-        if (!response.ok) {
-            throw new Error(`Gemini Chat API error: ${response.status}`);
+                const response = await fetch(url, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        system_instruction: {
+                            parts: [{ text: systemInstruction }]
+                        },
+                        contents,
+                        generationConfig: {
+                            temperature: 0.7,
+                            maxOutputTokens: 300
+                        }
+                    })
+                });
+
+                if (response.ok) {
+                    const json = await response.json();
+                    reply = json.candidates?.[0]?.content?.parts?.[0]?.text || "";
+                    success = true;
+                } else {
+                    const errText = await response.text();
+                    errorDetails += `Gemini Error (${response.status}): ${errText}\n`;
+                }
+            } catch (geminiErr: any) {
+                errorDetails += `Gemini Exception: ${geminiErr.message}\n`;
+            }
         }
 
-        const json = await response.json();
-        const reply = json.candidates?.[0]?.content?.parts?.[0]?.text || "I'm having trouble analyzing that right now.";
+        if (!success) {
+            throw new Error(`All health coaching AI systems failed.\nDetails:\n${errorDetails}`);
+        }
 
         return new Response(JSON.stringify({ reply }), { headers: corsHeadersWithJson });
 
