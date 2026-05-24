@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, BookOpen, Code2, Timer, BarChart3, FileText,
@@ -14,7 +14,16 @@ import { useFocusSessions } from '../hooks/useFocusQuery';
 import { useProfile } from '../hooks/useProfileQuery';
 import { useDailyActivity } from '../hooks/useActivityQuery';
 
-const navGroups = [
+const navGroups: Array<{
+  title: string;
+  items: Array<{
+    to: string;
+    icon: React.ComponentType<{ size?: number; className?: string }>;
+    label: string;
+    end?: boolean;
+    search?: string;
+  }>;
+}> = [
   {
     title: 'Productivity',
     items: [
@@ -38,9 +47,16 @@ const navGroups = [
     ],
   },
   {
+    title: 'Reports',
+    items: [
+      { to: '/reports?tab=weekly', icon: FileText, label: 'Weekly Reports', search: 'weekly' },
+      { to: '/reports?tab=analytics', icon: BarChart3, label: 'Analytics Reports', search: 'analytics' },
+      { to: '/reports?tab=bugs', icon: Bug, label: 'Bug Reports', search: 'bugs' },
+    ],
+  },
+  {
     title: 'Intelligence',
     items: [
-      { to: '/reports', icon: FileText, label: 'Reports' },
       { to: '/achievements', icon: Trophy, label: 'Achievements' },
     ],
   },
@@ -98,6 +114,9 @@ function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }
   const maxStreak = React.useMemo(() => {
     return Math.max(readingStreak.currentStreak, codingStreak.currentStreak, focusStreak.currentStreak);
   }, [readingStreak.currentStreak, codingStreak.currentStreak, focusStreak.currentStreak]);
+
+  const location = useLocation();
+  const currentReportTab = React.useMemo(() => new URLSearchParams(location.search).get('tab'), [location.search]);
 
   const circumference = 2 * Math.PI * 36;
   const strokeDashoffset = circumference * (1 - Math.min(prodScore, 100) / 100);
@@ -168,31 +187,36 @@ function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }
               {title}
             </div>
             <div className="space-y-1.5">
-              {items.map(({ to, icon: Icon, label, end }) => (
-                <NavLink
-                  key={to}
-                  to={to}
-                  end={end}
-                  onClick={() => { play('click'); onClose?.(); }}
-                  className="group block no-underline"
-                >
-                  {({ isActive }) => (
+              {items.map((item) => {
+                const { to, icon: Icon, label, end, search } = item;
+                const selected = search
+                  ? location.pathname === '/reports' && currentReportTab === search
+                  : location.pathname === to || (end && location.pathname === to);
+
+                return (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    end={end}
+                    onClick={() => { play('click'); onClose?.(); }}
+                    className="group block no-underline"
+                  >
                     <motion.div
                       whileHover={{ x: 6, backgroundColor: 'rgba(255,255,255,0.06)' }}
                       whileTap={{ scale: 0.96 }}
                       className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-300 focus-visible:ring-2 focus-visible:ring-violet-500 outline-none ${
-                        isActive
+                        selected
                           ? 'text-violet-400 bg-violet-600/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]'
                           : 'text-white/40 hover:text-white'
                       }`}
                       aria-label={`Navigate to ${label}`}
                     >
-                      <div className={`transition-transform duration-300 ${isActive ? 'scale-110 drop-shadow-[0_0_8px_rgba(139,92,246,0.5)]' : ''}`}>
+                      <div className={`transition-transform duration-300 ${selected ? 'scale-110 drop-shadow-[0_0_8px_rgba(139,92,246,0.5)]' : ''}`}>
                         <Icon size={18} />
                       </div>
-                      <span className={`flex-1 text-sm font-medium tracking-tight ${isActive ? 'font-bold' : ''}`}>{label}</span>
+                      <span className={`flex-1 text-sm font-medium tracking-tight ${selected ? 'font-bold' : ''}`}>{label}</span>
 
-                      {isActive && (
+                      {selected && (
                         <>
                           <motion.div
                             layoutId="nav-indicator"
@@ -203,9 +227,9 @@ function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }
                         </>
                       )}
                     </motion.div>
-                  )}
-                </NavLink>
-              ))}
+                  </NavLink>
+                );
+              })}
 
               {title === 'System' && (
                 <motion.button

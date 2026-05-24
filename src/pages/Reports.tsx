@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  CalendarRange, Clock, Eye, Download, Hourglass, 
+  CalendarRange, Clock, Eye, Download, Hourglass, FileText,
   BookOpen, Code2, BarChart3, AlertTriangle, 
   CheckCircle2, Trash2, ArrowRight, Droplets, TimerReset, HeartPulse
 } from 'lucide-react';
@@ -14,10 +14,27 @@ import { useTrackers } from '../hooks/useTrackerQuery';
 import { useSoundFX } from '../hooks/useSoundFX';
 import { useAppStore } from '../store/useAppStore';
 import { useUpdateProfile } from '../hooks/useProfileQuery';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { calculateWeeklyReport } from '../services/reports/weeklyReportCalculator';
 import { generateWeeklyReportPDF } from '../services/reports/weeklyReportPdf';
 import WeeklyReportModal from '../components/dashboard/WeeklyReportModal';
+import Modal from '../components/Modal';
+import { exportToJSON, formatDate, todayString } from '../lib/utils';
+import { useBugReports, useDeleteBugReport } from '../hooks/useBugReportsQuery';
+import type { BugReport } from '../services/bugReports.service';
+
+type ReportTab = 'weekly' | 'analytics' | 'bugs';
+type BugArtifactType = 'intelligence' | 'digest' | 'export';
+
+interface BugArtifact {
+  id: string;
+  type: BugArtifactType;
+  title: string;
+  subtitle: string;
+  summary: string;
+  createdAt: string;
+  payload: Record<string, unknown>;
+}
 
 // Helper for local-first countdown target matching Monday 00:00:00 local time
 const getNextMondayCountdown = () => {
@@ -90,13 +107,22 @@ const ConsistencyRing = ({ score }: { score: number }) => {
 export default function Reports() {
   const { play } = useSoundFX();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { deletedReports, deleteReport, userSettings } = useAppStore();
   const { mutate: updateProfile } = useUpdateProfile();
+  const { data: bugReports = [] } = useBugReports();
+  const { mutate: deleteBugReport } = useDeleteBugReport();
   const [countdown, setCountdown] = useState(() => getNextMondayCountdown());
   const [selectedWeeksAgo, setSelectedWeeksAgo] = useState<number | null>(null);
   const [pdfGeneratingWeek, setPdfGeneratingWeek] = useState<number | null>(null);
-  const [activeTab, setActiveTab] = useState<'cycles' | 'trends'>('cycles');
   const [confirmDeleteKey, setConfirmDeleteKey] = useState<string | null>(null);
+  const [selectedBugArtifact, setSelectedBugArtifact] = useState<BugArtifact | null>(null);
+  const [selectedBugReport, setSelectedBugReport] = useState<BugReport | null>(null);
+  const [dismissedBugArtifacts, setDismissedBugArtifacts] = useState<string[]>([]);
+  const activeTab = (searchParams.get('tab') as ReportTab) || 'weekly';
+  const setActiveTab = (tab: ReportTab) => {
+    setSearchParams({ tab });
+  };
 
   // Queries for data streams to support instant calculations
   const { data: book = { id: 'main-book', title: 'My Book', author: 'Author', chapters: [], startDate: '', coverColor: '#7c3aed' } } = useBook();
@@ -318,6 +344,100 @@ export default function Reports() {
   const activeWeek = uiReportAggregates.find((item) => item.weeksAgo === 0);
   const completedReportCards = uiReportAggregates.filter((item) => item.weeksAgo > 0 && hasValidatedSignal(item.stats));
 
+  const bugArtifacts = useMemo<BugArtifact[]>(() => {
+    const now = new Date();
+    const sevenDaysAgo = new Date(now);
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+
+    const openIssues = bugReports.filter((report) => ['open', 'triaged', 'in_progress'].includes(report.status));
+    const weeklyReports = bugReports.filter((report) => new Date(report.created_at) >= sevenDaysAgo);
+    const latest = bugReports[0];
+    const latestDateLabel = latest ? format(new Date(latest.created_at), 'MMMM d') : format(now, 'MMMM d');
+
+    const totalByStatus = {
+      open: bugReports.filter((report) => report.status === 'open').length,
+      triaged: bugReports.filter((report) => report.status === 'triaged').length,
+      in_progress: bugReports.filter((report) => report.status === 'in_progress').length,
+      fixed: bugReports.filter((report) => report.status === 'fixed').length,
+      closed: bugReports.filter((report) => report.status === 'closed').length,
+    };
+
+    return [
+      {
+        id: 'bug-intelligence',
+        type: 'intelligence',
+        title: `Bug Intelligence Report — ${latestDateLabel}`,
+        subtitle: latest ? `${latest.type} • ${latest.severity} • ${formatDate(latest.created_at)}` : 'No bug reports recorded yet.',
+        summary: latest
+          ? latest.title
+          : 'This report will populate once the first bug report is filed.',
+        createdAt: latest?.created_at ?? now.toISOString(),
+        payload: {
+          latest,
+          totalReports: bugReports.length,
+          openIssues: openIssues.length,
+          statusBreakdown: totalByStatus,
+          recentTitles: bugReports.slice(0, 5).map((report) => ({
+            id: report.id,
+            title: report.title,
+            type: report.type,
+            severity: report.severity,
+            status: report.status,
+            created_at: report.created_at,
+          })),
+        },
+      },
+      {
+        id: 'weekly-qa-digest',
+        type: 'digest',
+        title: 'Weekly QA Digest',
+        subtitle: `${weeklyReports.length} issue${weeklyReports.length === 1 ? '' : 's'} filed in the last 7 days`,
+        summary: weeklyReports.length
+          ? `${weeklyReports.filter((report) => report.status === 'open').length} open, ${weeklyReports.filter((report) => report.status === 'fixed').length} fixed.`
+          : 'No QA activity recorded in the current week.',
+        createdAt: now.toISOString(),
+        payload: {
+          range: {
+            start: sevenDaysAgo.toISOString(),
+            end: now.toISOString(),
+          },
+          reports: weeklyReports,
+          counts: {
+            open: weeklyReports.filter((report) => report.status === 'open').length,
+            triaged: weeklyReports.filter((report) => report.status === 'triaged').length,
+            in_progress: weeklyReports.filter((report) => report.status === 'in_progress').length,
+            fixed: weeklyReports.filter((report) => report.status === 'fixed').length,
+            closed: weeklyReports.filter((report) => report.status === 'closed').length,
+          },
+        },
+      },
+      {
+        id: 'open-issues-export',
+        type: 'export',
+        title: 'Open Issues Export',
+        subtitle: `${openIssues.length} actionable issue${openIssues.length === 1 ? '' : 's'}`,
+        summary: openIssues.length
+          ? 'Ready for export, sharing, or triage.'
+          : 'No open issues currently require export.',
+        createdAt: now.toISOString(),
+        payload: {
+          generatedAt: now.toISOString(),
+          openIssues,
+          totalOpenIssues: openIssues.length,
+        },
+      },
+    ];
+  }, [bugReports]);
+
+  const visibleBugArtifacts = bugArtifacts.filter((artifact) => !dismissedBugArtifacts.includes(artifact.id));
+  const openBugReports = bugReports.filter((report) => ['open', 'triaged', 'in_progress'].includes(report.status));
+  const bugStatusCounts = useMemo(() => ({
+    total: bugReports.length,
+    open: openBugReports.length,
+    fixed: bugReports.filter((report) => report.status === 'fixed').length,
+  }), [bugReports, openBugReports]);
+
   const smartActions = useMemo(() => {
     const stats = activeWeek?.stats;
     if (!stats) return [];
@@ -467,8 +587,9 @@ export default function Reports() {
       <div className="flex items-center justify-center md:justify-start">
         <div className="flex gap-1.5 p-1.5 rounded-2xl bg-white/[0.02] border border-white/5 backdrop-blur-md w-full max-w-2xl overflow-x-auto">
           {[
-            { id: 'cycles', label: '📅 Weekly Cycles', icon: CalendarRange },
-            { id: 'trends', label: '📈 Trends & Insights', icon: BarChart3 }
+            { id: 'weekly', label: 'Weekly Reports', icon: CalendarRange },
+            { id: 'analytics', label: 'Analytics Reports', icon: BarChart3 },
+            { id: 'bugs', label: 'Bug Reports', icon: AlertTriangle }
           ].map((tab) => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
@@ -477,7 +598,7 @@ export default function Reports() {
                 key={tab.id}
                 onClick={() => {
                   play('click');
-                  setActiveTab(tab.id as any);
+                  setActiveTab(tab.id as ReportTab);
                 }}
                 className={`flex-1 min-w-[130px] flex items-center justify-center gap-2 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition-all whitespace-nowrap ${
                   active 
@@ -502,14 +623,14 @@ export default function Reports() {
           exit={{ opacity: 0, y: -15 }}
           transition={{ duration: 0.25 }}
         >
-          {/* TAB 1: WEEKLY CYCLES */}
-          {activeTab === 'cycles' && (
+          {/* TAB 1: WEEKLY REPORTS */}
+          {activeTab === 'weekly' && (
             <div className="space-y-8">
               {/* Ongoing Report Section */}
               <div className="space-y-4">
                 <div className="flex items-center gap-2 text-white/40">
                   <Hourglass size={16} className="text-violet-400" />
-                  <h3 className="text-xs font-black uppercase tracking-widest text-white/50">Ongoing Week Cycle</h3>
+                  <h3 className="text-xs font-black uppercase tracking-widest text-white/50">Ongoing Week Report</h3>
                 </div>
 
                 {(() => {
@@ -673,7 +794,7 @@ export default function Reports() {
                           <div className="flex justify-between items-start gap-4">
                             <div className="space-y-1">
                               <div className="text-[10px] font-black text-white/30 uppercase tracking-wider">
-                                Completed Cycle
+                                Completed Report
                               </div>
                               <h4 className="text-base font-black text-white uppercase tracking-wider mt-0.5">
                                 {startDateStr} – {endDateStr}
@@ -745,8 +866,8 @@ export default function Reports() {
             </div>
           )}
 
-          {/* TAB 2: TRENDS & DIAGNOSTIC INSIGHTS */}
-          {activeTab === 'trends' && (
+          {/* TAB 2: ANALYTICS REPORTS */}
+          {activeTab === 'analytics' && (
             <div className="space-y-8">
               {/* Custom Multi-Week Comparative Vertical Charts */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -850,8 +971,255 @@ export default function Reports() {
               </div>
             </div>
           )}
+
+          {/* TAB 3: BUG REPORTS / EXPORTS */}
+          {activeTab === 'bugs' && (
+            <div className="space-y-8">
+              <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-5">
+                <div className="p-6 rounded-3xl bg-gradient-to-br from-rose-500/10 via-white/[0.02] to-transparent border border-rose-500/15">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle size={14} className="text-rose-300" />
+                    <span className="text-[10px] font-black uppercase tracking-[0.22em] text-rose-200/80">Bug Reports / Exports</span>
+                  </div>
+                  <h2 className="text-2xl font-black text-white tracking-tight mt-3">Premium issue intelligence with export-ready triage.</h2>
+                  <p className="text-sm text-white/40 font-semibold leading-relaxed mt-2 max-w-2xl">
+                    Review bug intelligence reports, weekly QA digest cards, and open-issue exports from the same trusted issue ledger.
+                  </p>
+                </div>
+                <div className="p-6 rounded-3xl bg-white/[0.02] border border-white/5 space-y-3">
+                  <div className="text-[10px] font-black uppercase tracking-[0.22em] text-white/35">Live QA Snapshot</div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-4">
+                      <div className="text-[10px] font-black uppercase tracking-[0.16em] text-white/30">Total</div>
+                      <div className="text-2xl font-black text-white mt-2">{bugStatusCounts.total}</div>
+                    </div>
+                    <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-4">
+                      <div className="text-[10px] font-black uppercase tracking-[0.16em] text-white/30">Open</div>
+                      <div className="text-2xl font-black text-rose-300 mt-2">{bugStatusCounts.open}</div>
+                    </div>
+                    <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-4">
+                      <div className="text-[10px] font-black uppercase tracking-[0.16em] text-white/30">Fixed</div>
+                      <div className="text-2xl font-black text-emerald-300 mt-2">{bugStatusCounts.fixed}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {visibleBugArtifacts.length === 0 ? (
+                <div className="p-8 rounded-3xl border border-white/5 bg-white/[0.01] text-center">
+                  <p className="text-xs text-white/40 font-semibold uppercase">No bug report exports are visible yet.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                  {visibleBugArtifacts.map((artifact) => (
+                    <div key={artifact.id} className="p-5 rounded-3xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.03] transition-all flex flex-col justify-between gap-4 relative overflow-hidden">
+                      <div className="absolute inset-0 bg-gradient-to-br from-white/[0.02] to-transparent pointer-events-none" />
+                      <div className="relative space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-[10px] font-black uppercase tracking-[0.22em] text-white/35">
+                            {artifact.type === 'intelligence' ? 'Intelligence Report' : artifact.type === 'digest' ? 'QA Digest' : 'Open Export'}
+                          </div>
+                          <div className="w-2 h-2 rounded-full bg-rose-400/80 animate-pulse" />
+                        </div>
+                        <h3 className="text-lg font-black text-white tracking-tight">{artifact.title}</h3>
+                        <p className="text-sm text-white/40 font-semibold leading-relaxed">{artifact.subtitle}</p>
+                        <div className="rounded-2xl bg-black/20 border border-white/5 p-3">
+                          <p className="text-xs text-white/55 font-medium leading-relaxed">{artifact.summary}</p>
+                        </div>
+                      </div>
+
+                      <div className="relative grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => {
+                            play('click');
+                            setSelectedBugArtifact(artifact);
+                          }}
+                          className="py-2 rounded-xl bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/20 text-violet-300 text-xs font-black uppercase tracking-wider transition-all"
+                        >
+                          View
+                        </button>
+                        <button
+                          onClick={() => {
+                            play('click');
+                            exportToJSON(artifact.payload, `${artifact.id}-${todayString()}.json`);
+                          }}
+                          className="py-2 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 text-cyan-300 text-xs font-black uppercase tracking-wider transition-all"
+                        >
+                          Download
+                        </button>
+                        <button
+                          onClick={async () => {
+                            play('click');
+                            const text = `${artifact.title}\n${artifact.subtitle}\n${artifact.summary}`;
+                            if (navigator.share) {
+                              try {
+                                await navigator.share({ title: artifact.title, text });
+                              } catch {
+                                // ignore share cancellation
+                              }
+                            } else {
+                              await navigator.clipboard.writeText(text);
+                            }
+                          }}
+                          className="py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-white/70 text-xs font-black uppercase tracking-wider transition-all"
+                        >
+                          Share
+                        </button>
+                        <button
+                          onClick={() => {
+                            play('click');
+                            setDismissedBugArtifacts((current) => [...current, artifact.id]);
+                          }}
+                          className="py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-300 text-xs font-black uppercase tracking-wider transition-all"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-white/40">
+                  <FileText size={16} className="text-violet-400" />
+                  <h3 className="text-xs font-black uppercase tracking-widest text-white/50">Recent Issue Ledger</h3>
+                </div>
+
+                {bugReports.length === 0 ? (
+                  <div className="p-8 rounded-3xl border border-white/5 bg-white/[0.01] text-center">
+                    <p className="text-xs text-white/40 font-semibold uppercase">No bug reports have been filed yet.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {bugReports.map((report) => (
+                      <div key={report.id} className="p-5 rounded-3xl bg-white/[0.02] border border-white/5 flex flex-col gap-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="text-[10px] font-black uppercase tracking-[0.2em] text-white/30">{report.type} • {report.severity}</div>
+                            <h4 className="text-base font-black text-white mt-2">{report.title}</h4>
+                            <p className="text-xs text-white/40 font-semibold mt-2 leading-relaxed">{report.description}</p>
+                          </div>
+                          <div className={`px-2 py-1 rounded-full text-[9px] font-black uppercase tracking-[0.18em] border ${
+                            report.status === 'open' ? 'bg-rose-500/10 text-rose-300 border-rose-500/20' :
+                            report.status === 'fixed' ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20' :
+                            'bg-white/5 text-white/45 border-white/10'
+                          }`}>
+                            {report.status}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            onClick={() => {
+                              play('click');
+                              setSelectedBugReport(report);
+                            }}
+                            className="py-2 rounded-xl bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/20 text-violet-300 text-xs font-black uppercase tracking-wider transition-all"
+                          >
+                            View
+                          </button>
+                          <button
+                            onClick={() => {
+                              play('click');
+                              exportToJSON(report, `bug-report-${report.id}.json`);
+                            }}
+                            className="py-2 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 text-cyan-300 text-xs font-black uppercase tracking-wider transition-all"
+                          >
+                            Download
+                          </button>
+                          <button
+                            onClick={async () => {
+                              play('click');
+                              const text = `${report.title}\n${report.type} • ${report.severity}\n${report.description}`;
+                              if (navigator.share) {
+                                try {
+                                  await navigator.share({ title: report.title, text });
+                                } catch {
+                                  // ignore share cancellation
+                                }
+                              } else {
+                                await navigator.clipboard.writeText(text);
+                              }
+                            }}
+                            className="py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-white/70 text-xs font-black uppercase tracking-wider transition-all"
+                          >
+                            Share
+                          </button>
+                          <button
+                            onClick={() => {
+                              play('click');
+                              deleteBugReport(report);
+                            }}
+                            className="py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-300 text-xs font-black uppercase tracking-wider transition-all"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </motion.div>
       </AnimatePresence>
+
+      <Modal
+        open={!!selectedBugArtifact || !!selectedBugReport}
+        onClose={() => {
+          setSelectedBugArtifact(null);
+          setSelectedBugReport(null);
+        }}
+        title={selectedBugArtifact?.title || selectedBugReport?.title || 'Bug Report'}
+        maxWidth="max-w-3xl"
+      >
+        {selectedBugArtifact ? (
+          <div className="space-y-4">
+            <p className="text-sm text-white/45 font-semibold">{selectedBugArtifact.subtitle}</p>
+            <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-4">
+              <pre className="text-[11px] text-white/60 whitespace-pre-wrap break-words font-mono">
+                {JSON.stringify(selectedBugArtifact.payload, null, 2)}
+              </pre>
+            </div>
+          </div>
+        ) : selectedBugReport ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-4">
+                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-white/30">Type</div>
+                <div className="text-white mt-2 font-bold">{selectedBugReport.type}</div>
+              </div>
+              <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-4">
+                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-white/30">Severity</div>
+                <div className="text-white mt-2 font-bold">{selectedBugReport.severity}</div>
+              </div>
+              <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-4">
+                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-white/30">Status</div>
+                <div className="text-white mt-2 font-bold">{selectedBugReport.status}</div>
+              </div>
+              <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-4">
+                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-white/30">Created</div>
+                <div className="text-white mt-2 font-bold">{formatDate(selectedBugReport.created_at)}</div>
+              </div>
+            </div>
+            <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-4">
+              <div className="text-[10px] font-black uppercase tracking-[0.2em] text-white/30">Description</div>
+              <p className="text-sm text-white/70 font-medium mt-2 leading-relaxed">{selectedBugReport.description}</p>
+            </div>
+            <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-4">
+              <div className="text-[10px] font-black uppercase tracking-[0.2em] text-white/30">Metadata</div>
+              <pre className="text-[11px] text-white/60 whitespace-pre-wrap break-words font-mono mt-2">
+                {JSON.stringify(selectedBugReport.metadata, null, 2)}
+              </pre>
+            </div>
+            {selectedBugReport.screenshot_url ? (
+              <img src={selectedBugReport.screenshot_url} alt="Bug report screenshot" className="w-full rounded-2xl border border-white/5" />
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
 
       {/* Dynamic multi-week aggregate report viewer */}
       {selectedWeeksAgo !== null && (

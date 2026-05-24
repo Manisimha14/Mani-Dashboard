@@ -228,6 +228,24 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['achievements']['Insert']>;
       };
 
+      bug_reports: {
+        Row: {
+          id: string;
+          user_id: string;
+          type: 'Bug' | 'Feature Request' | 'UX Improvement' | 'Performance Issue' | 'Wrong Data Sync' | 'Other';
+          severity: 'Minor' | 'Medium' | 'Critical';
+          title: string;
+          description: string;
+          metadata: Json;
+          screenshot_url: string | null;
+          status: 'open' | 'triaged' | 'in_progress' | 'fixed' | 'closed';
+          created_at: string;
+          resolved_at: string | null;
+        };
+        Insert: Omit<Database['public']['Tables']['bug_reports']['Row'], 'id' | 'created_at'>;
+        Update: Partial<Database['public']['Tables']['bug_reports']['Insert']>;
+      };
+
       // ─── Health Tables ────────────────────────────────────────────────────
       health_meals: {
         Row: {

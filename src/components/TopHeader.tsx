@@ -9,7 +9,8 @@ import ProfileOverlay from './ProfileOverlay';
 import NotificationCenter from './NotificationCenter';
 import { useIsMobile } from '../hooks/useIsMobile';
 
-const getPageTitle = (pathname: string) => {
+const getPageTitle = (pathname: string, search?: string) => {
+  const tab = search ? new URLSearchParams(search).get('tab') : null;
   switch (pathname) {
     case '/': return 'MANI OS';
     case '/focus': return 'Focus Hub';
@@ -19,7 +20,10 @@ const getPageTitle = (pathname: string) => {
     case '/health': return 'Health Hub';
     case '/ambient': return 'Flowscape';
     case '/analytics': return 'Aura Analytics';
-    case '/reports': return 'Weekly Review';
+    case '/reports':
+      if (tab === 'bugs') return 'Bug Reports';
+      if (tab === 'analytics') return 'Analytics Reports';
+      return 'Weekly Reports';
     case '/achievements': return 'Achievements';
     case '/settings': return 'Settings';
     default: return 'MANI OS';
@@ -89,7 +93,7 @@ function TopHeader({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
               animate={{ opacity: 1, y: 0 }}
               className="text-white font-black text-xs uppercase tracking-widest"
             >
-              {getPageTitle(location.pathname)}
+              {getPageTitle(location.pathname, location.search)}
             </motion.h1>
             {isOnline ? (
               <div className="flex items-center gap-1 mt-0.5">
