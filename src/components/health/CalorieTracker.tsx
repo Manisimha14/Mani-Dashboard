@@ -6,8 +6,7 @@ import type { MealType } from '../../types/health';
 import { parseNaturalLanguageNutrition, searchOpenFoodFacts, type OpenFoodFactsProduct } from '../../lib/nutritionParser';
 import { useSoundFX } from '../../hooks/useSoundFX';
 import { useAuth } from '../../contexts/AuthContext';
-import { fetchTodayGoogleFitData } from '../../services/googleFit.service';
-import { getSimulatedFitnessData } from '../../utils/simulatedFitness';
+import { fetchTodayGoogleFitData, getGoogleFitSyncFeedback, type GoogleFitSyncFeedback } from '../../services/googleFit.service';
 
 const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snacks', 'custom'];
 const MEAL_EMOJI: Record<MealType, string> = {
@@ -48,35 +47,30 @@ export default function CalorieTracker({ today }: { today: string }) {
 
   const [isSyncingFit, setIsSyncingFit] = React.useState(false);
   const [syncStepIndex, setSyncStepIndex] = React.useState(0);
-  const [syncError, setSyncError] = React.useState<string | null>(null);
-  const fitSyncResultRef = React.useRef<{ steps: number; calories: number; activeMinutes: number } | null>(null);
-
-  const isBlockedOrOffline = !!(
-    syncError && (
-      syncError.toLowerCase().includes('networkerror') ||
-      syncError.toLowerCase().includes('failed to fetch') ||
-      syncError.toLowerCase().includes('load failed') ||
-      syncError.toLowerCase().includes('blocked')
-    )
-  );
+  const [syncError, setSyncError] = React.useState<GoogleFitSyncFeedback | null>(null);
+  const [showTroubleshoot, setShowTroubleshoot] = React.useState(false);
 
   // Unified sync workout name for reliable deduplication across all sync types
   const SYNC_WORKOUT_NAME = 'Daily Activity Sync';
 
   const startFitSync = async () => {
     if (!user) {
-      setSyncError('Sign in with Google before requesting Google Fit data. Click the button below to authenticate.');
+      setSyncError({
+        code: 'auth',
+        message: 'Sign in with Google before requesting Google Fit data. No health data was synced.',
+        canReconnect: true,
+        canTroubleshoot: false,
+      });
       return;
     }
     setIsSyncingFit(true);
     setSyncStepIndex(0);
     setSyncError(null);
-    fitSyncResultRef.current = null;
+    setShowTroubleshoot(false);
     play('click');
 
     try {
       const data = await fetchTodayGoogleFitData();
-      fitSyncResultRef.current = data;
       logStepsMut.mutate({ date: today, steps: data.steps });
 
       const existingSync = workouts.find(w =>
@@ -99,62 +93,12 @@ export default function CalorieTracker({ today }: { today: string }) {
       });
     } catch (err: any) {
       console.error('Failed to fetch Google Fit data:', err);
-      const isAuthError = err.message?.includes('401') ||
-        err.message?.toLowerCase().includes('unavailable') ||
-        err.message?.toLowerCase().includes('sign in') ||
-        err.message?.toLowerCase().includes('access');
-      const isCorsOrNetworkError =
-        err.message?.toLowerCase().includes('networkerror') ||
-        err.message?.toLowerCase().includes('failed to fetch') ||
-        err.message?.toLowerCase().includes('load failed') ||
-        err.message?.toLowerCase().includes('blocked');
-
-      let userMessage = err.message || 'Unknown Google Fit API error.';
-      if (isAuthError) {
-        userMessage = 'Google Fit access token expired. Please re-authenticate with Google to sync real data, or use Simulate Sync below.';
-      } else if (isCorsOrNetworkError) {
-        userMessage = 'Network blocked — your browser or ad blocker is preventing the Google Fit API call. Use Simulate Sync or whitelist this site.';
-      }
-
       setTimeout(() => {
         setIsSyncingFit(false);
-        setSyncError(userMessage);
+        setSyncError(getGoogleFitSyncFeedback(err));
         play('click');
       }, 1200);
     }
-  };
-
-  const handleSimulatedSync = () => {
-    setIsSyncingFit(true);
-    setSyncStepIndex(0);
-    setSyncError(null);
-    fitSyncResultRef.current = null;
-    play('click');
-
-    // Deterministic date-seeded values — stable across multiple button presses on same day
-    const data = getSimulatedFitnessData(today);
-    fitSyncResultRef.current = data;
-
-    logStepsMut.mutate({ date: today, steps: data.steps });
-
-    const existingSync = workouts.find(w =>
-      w.name === SYNC_WORKOUT_NAME ||
-      w.name === 'Google Fit Synced Walk' ||
-      w.name === 'Google Fit Synced Walk (Simulated)'
-    );
-    if (existingSync) {
-      deleteWorkoutMut.mutate(existingSync.id);
-    }
-
-    addWorkoutMut.mutate({
-      date: today,
-      startTime: '08:30',
-      name: SYNC_WORKOUT_NAME,
-      type: 'walking',
-      durationMinutes: data.activeMinutes,
-      caloriesBurned: data.calories,
-      notes: `Simulated activity — ${data.steps.toLocaleString()} steps estimated, ${data.activeMinutes} active minutes.`
-    });
   };
 
   // Sync step sequencer animation
@@ -439,29 +383,21 @@ export default function CalorieTracker({ today }: { today: string }) {
         >
           <span className="text-sm">⚠️</span>
           <div className="flex-1 pr-6">
-            <span className="font-bold">Sync Failed: </span>
-            {isBlockedOrOffline ? (
-              <>
-                <span className="block mt-1 font-semibold text-rose-300">
-                  Your browser, ad blocker, tracking protection (like Brave Shields), or offline PWA state is blocking the connection to the Google Fit APIs. Please verify your connection, temporarily disable shields, or whitelist this site to sync.
-                </span>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <button
-                    onClick={() => {
-                      play('click');
-                      handleSimulatedSync();
-                    }}
-                    className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/35 border border-amber-500/30 text-white font-bold transition-all text-[11px] flex items-center gap-1.5 cursor-pointer shadow-[0_0_12px_rgba(245,158,11,0.2)]"
-                  >
-                    ✨ Simulate Verified Sync
-                  </button>
-                </div>
-              </>
-            ) : (
-              <span className="block mt-0.5 whitespace-pre-wrap">{syncError}</span>
-            )}
-            {(syncError.includes('401') || syncError.toLowerCase().includes('credential') || syncError.toLowerCase().includes('auth') || syncError.toLowerCase().includes('sign in')) && (
-              <div className="mt-2.5">
+            <span className="font-bold">Google Fit Sync Failed</span>
+            <span className="block mt-0.5 whitespace-pre-wrap text-rose-300">{syncError.message}</span>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => {
+                  play('click');
+                  setSyncError(null);
+                  setShowTroubleshoot(false);
+                  startFitSync();
+                }}
+                className="px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/35 border border-rose-500/30 text-white font-bold transition-all text-[11px] flex items-center gap-1.5 cursor-pointer"
+              >
+                Retry Sync
+              </button>
+              {syncError.canReconnect && (
                 <button
                   onClick={() => {
                     play('click');
@@ -469,13 +405,34 @@ export default function CalorieTracker({ today }: { today: string }) {
                   }}
                   className="px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/35 border border-rose-500/30 text-white font-bold transition-all text-[11px] flex items-center gap-1.5 cursor-pointer"
                 >
-                  🔐 Renew Google Fit Authentication
+                  Reconnect Google
                 </button>
+              )}
+              {syncError.canTroubleshoot && (
+                <button
+                  onClick={() => {
+                    play('click');
+                    setShowTroubleshoot(value => !value);
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 border border-white/15 text-white font-bold transition-all text-[11px] flex items-center gap-1.5 cursor-pointer"
+                >
+                  Troubleshoot
+                </button>
+              )}
+            </div>
+            {showTroubleshoot && (
+              <div className="mt-3 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-[11px] text-white/65 space-y-1">
+                <div>Health metrics are unavailable until a real sync succeeds.</div>
+                <div>Deploy the server-side `sync-google-fit` function and keep Google OAuth refresh credentials configured.</div>
+                <div>If this environment still surfaces CSP errors, allow `www.googleapis.com`, `oauth2.googleapis.com`, and `accounts.google.com` in `connect-src`.</div>
               </div>
             )}
           </div>
           <button
-            onClick={() => setSyncError(null)}
+            onClick={() => {
+              setSyncError(null);
+              setShowTroubleshoot(false);
+            }}
             className="text-white/30 hover:text-white/60 transition-colors p-1 absolute top-2 right-2 cursor-pointer"
           >
             <X size={12} />
@@ -503,19 +460,12 @@ export default function CalorieTracker({ today }: { today: string }) {
               )}
             </div>
             <p className="text-xs text-white/40 mt-0.5">
-              Pull real movement totals from the current Google-authenticated session. No local fake authorization state is used.
+              Pull validated movement totals through the secure server-side Google Fit sync path.
             </p>
           </div>
         </div>
 
         <div className="flex flex-wrap gap-2.5">
-          <motion.button
-            whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
-            onClick={handleSimulatedSync}
-            className="px-3 py-2 rounded-xl text-xs font-bold bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/10 transition-all flex items-center gap-1.5 cursor-pointer"
-          >
-            ✨ Simulate Sync
-          </motion.button>
           <motion.button
             whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
             onClick={startFitSync}

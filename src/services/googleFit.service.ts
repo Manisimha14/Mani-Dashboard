@@ -6,43 +6,110 @@ export interface GoogleFitData {
   activeMinutes: number;
 }
 
-async function refreshFitToken(): Promise<string | null> {
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return null;
+export type GoogleFitSyncErrorCode = 'auth' | 'csp' | 'network' | 'api' | 'unknown';
 
-    // Call Supabase Edge Function
-    const { data, error } = await supabase.functions.invoke('refresh-google-fit', {
-      headers: {
-        Authorization: `Bearer ${session.access_token}`
-      }
-    });
+export interface GoogleFitSyncFeedback {
+  code: GoogleFitSyncErrorCode;
+  message: string;
+  canReconnect: boolean;
+  canTroubleshoot: boolean;
+}
 
-    if (error || !data?.access_token) {
-      console.error('Edge function token refresh failed:', error);
-      return null;
-    }
+export class GoogleFitSyncError extends Error {
+  code: GoogleFitSyncErrorCode;
 
-    localStorage.setItem('google_fit_provider_token', data.access_token);
-    return data.access_token;
-  } catch (e) {
-    console.error('Failed to call refresh-google-fit:', e);
-    return null;
+  constructor(code: GoogleFitSyncErrorCode, message: string) {
+    super(message);
+    this.name = 'GoogleFitSyncError';
+    this.code = code;
+  }
+}
+
+function classifyGoogleFitError(message: string): GoogleFitSyncErrorCode {
+  const normalized = message.toLowerCase();
+
+  if (
+    normalized.includes('content security policy') ||
+    normalized.includes('site security policy') ||
+    normalized.includes(' csp') ||
+    normalized.startsWith('csp')
+  ) {
+    return 'csp';
+  }
+
+  if (
+    normalized.includes('unauthorized') ||
+    normalized.includes('refresh token') ||
+    normalized.includes('google identity not found') ||
+    normalized.includes('google fit access is unavailable') ||
+    normalized.includes('grant fitness scopes') ||
+    normalized.includes('sign in with google')
+  ) {
+    return 'auth';
+  }
+
+  if (
+    normalized.includes('failed to fetch') ||
+    normalized.includes('network') ||
+    normalized.includes('load failed')
+  ) {
+    return 'network';
+  }
+
+  if (normalized.includes('fit api') || normalized.includes('google fit')) {
+    return 'api';
+  }
+
+  return 'unknown';
+}
+
+export function getGoogleFitSyncFeedback(error: unknown): GoogleFitSyncFeedback {
+  const message = error instanceof Error ? error.message : 'Google Fit sync failed for an unknown reason.';
+  const code = error instanceof GoogleFitSyncError ? error.code : classifyGoogleFitError(message);
+
+  switch (code) {
+    case 'auth':
+      return {
+        code,
+        message: 'Google Fit authorization is unavailable or expired. No health data was synced.',
+        canReconnect: true,
+        canTroubleshoot: false,
+      };
+    case 'csp':
+      return {
+        code,
+        message: 'The browser blocked the Google Fit request due to site security policy (CSP). No health data was synced.',
+        canReconnect: false,
+        canTroubleshoot: true,
+      };
+    case 'network':
+      return {
+        code,
+        message: 'The sync request could not reach the server or Google Fit. No health data was synced.',
+        canReconnect: false,
+        canTroubleshoot: true,
+      };
+    case 'api':
+      return {
+        code,
+        message: 'Google Fit returned an error while syncing today\'s data. No health data was synced.',
+        canReconnect: false,
+        canTroubleshoot: true,
+      };
+    default:
+      return {
+        code,
+        message: 'Google Fit sync failed. No health data was synced.',
+        canReconnect: false,
+        canTroubleshoot: true,
+      };
   }
 }
 
 export async function fetchTodayGoogleFitData(): Promise<GoogleFitData> {
   const { data: { session } } = await supabase.auth.getSession();
-  let token = session?.provider_token ?? undefined;
-
-  if (token) {
-    localStorage.setItem('google_fit_provider_token', token);
-  } else {
-    token = localStorage.getItem('google_fit_provider_token') ?? undefined;
-  }
-
-  if (!token) {
-    throw new Error('Google Fit access is unavailable for this session. Sign in with Google again and grant fitness scopes.');
+  if (!session) {
+    throw new GoogleFitSyncError('auth', 'Google Fit access is unavailable for this session. Sign in with Google again and grant fitness scopes.');
   }
 
   const startOfToday = new Date();
@@ -50,90 +117,45 @@ export async function fetchTodayGoogleFitData(): Promise<GoogleFitData> {
   const startTimeMillis = startOfToday.getTime();
   const endTimeMillis = Date.now();
 
-  const requestBody = {
-    aggregateBy: [
-      {
-        dataTypeName: 'com.google.step_count.delta'
-      },
-      {
-        dataTypeName: 'com.google.calories.expended'
-      },
-      {
-        dataTypeName: 'com.google.active_minutes'
-      }
-    ],
-    bucketByTime: { durationMillis: 86400000 },
-    startTimeMillis,
-    endTimeMillis
-  };
-
-  const makeRequest = async (accessToken: string) => {
-    return fetch('https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(requestBody)
-    });
-  };
-
   try {
-    let response = await makeRequest(token);
+    const { data, error } = await supabase.functions.invoke('sync-google-fit', {
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: {
+        startTimeMillis,
+        endTimeMillis,
+      },
+    });
 
-    if (response.status === 401 || response.status === 403) {
-      console.warn('Google Fit token expired. Attempting secure serverless token refresh...');
-      const newToken = await refreshFitToken();
-      if (newToken) {
-        token = newToken;
-        response = await makeRequest(token);
-      }
+    if (error) {
+      throw new GoogleFitSyncError(classifyGoogleFitError(error.message), error.message);
     }
 
-    if (!response.ok) {
-      if (response.status === 401 || response.status === 403) {
-        localStorage.removeItem('google_fit_provider_token');
-      }
-      let errorText = '';
-      try {
-        const errorJson = await response.json();
-        errorText = errorJson?.error?.message || JSON.stringify(errorJson);
-      } catch {
-        errorText = await response.text();
-      }
-      throw new Error(`Fit API error ${response.status}: ${errorText}`);
+    if (data?.error) {
+      throw new GoogleFitSyncError(classifyGoogleFitError(data.error), data.error);
     }
 
-    const data = await response.json();
-    
-    let steps = 0;
-    let calories = 0;
-    let activeMinutes = 0;
-
-    if (data.bucket?.[0]?.dataset) {
-      for (const dataset of data.bucket[0].dataset) {
-        const source = dataset.dataSourceId || '';
-        const point = dataset.point?.[0];
-
-        if (!point) continue;
-
-        if (source.includes('step_count')) {
-          steps = point.value?.[0]?.intVal ?? Math.round(point.value?.[0]?.fpVal ?? 0);
-        }
-
-        if (source.includes('calories')) {
-          calories = Math.round(point.value?.[0]?.fpVal ?? point.value?.[0]?.intVal ?? 0);
-        }
-
-        if (source.includes('active_minutes')) {
-          activeMinutes = point.value?.[0]?.intVal ?? Math.round(point.value?.[0]?.fpVal ?? 0);
-        }
-      }
+    if (
+      typeof data?.steps !== 'number' ||
+      typeof data?.calories !== 'number' ||
+      typeof data?.activeMinutes !== 'number'
+    ) {
+      throw new GoogleFitSyncError('api', 'Google Fit sync returned an incomplete payload.');
     }
 
-    return { steps, calories, activeMinutes };
+    return {
+      steps: data.steps,
+      calories: data.calories,
+      activeMinutes: data.activeMinutes,
+    };
   } catch (error) {
     console.error('Google Fit API call failed:', error);
-    throw error;
+    if (error instanceof GoogleFitSyncError) {
+      throw error;
+    }
+
+    const message = error instanceof Error ? error.message : 'Google Fit sync failed for an unknown reason.';
+    throw new GoogleFitSyncError(classifyGoogleFitError(message), message);
   }
 }

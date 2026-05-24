@@ -260,7 +260,7 @@ export default function WeeklySummaryPanel({
           ledger.push({
             id: w.id || `w-${Math.random()}`,
             timestamp: w.date || 'N/A',
-            source: isSyncedEntry ? 'Google Fit Sensor OAuth Sync / Simulated' : 'Manual Logger',
+            source: isSyncedEntry ? 'Google Fit server sync' : 'Manual Logger',
             contribution: !isDuplicate ? `+1 Workout (${w.name})` : '+0 (Ignored)',
             status: !isDuplicate ? 'included' : 'excluded',
             reason: isDuplicate ? 'Duplicate sync workout detected (overlap)' : undefined,
@@ -280,7 +280,7 @@ export default function WeeklySummaryPanel({
           ledger.push({
             id: `steps-${date}`,
             timestamp: date,
-            source: 'Google Fit Steps API / Local Device Sensor',
+            source: 'Google Fit sync / manual daily entry',
             contribution: `+${steps.toLocaleString()} steps`,
             status: steps > 0 ? 'included' : 'excluded',
             reason: steps === 0 ? 'No steps telemetry logged on this date' : undefined,
@@ -328,11 +328,15 @@ export default function WeeklySummaryPanel({
           seen.add(key);
 
           const cals = w.caloriesBurned || 0;
+          const isSyncedEntry =
+            w.name === 'Daily Activity Sync' ||
+            w.name.includes('Google Fit') ||
+            w.notes?.includes('Synced from Google Fit');
 
           ledger.push({
             id: w.id || `w-${Math.random()}`,
             timestamp: w.date || 'N/A',
-            source: w.name.includes('Google Fit') ? 'Google Fit Sensor Sync' : 'Manual Workout Logger',
+            source: isSyncedEntry ? 'Google Fit server sync' : 'Manual Workout Logger',
             contribution: !isDuplicate ? `+${cals} kcal (${w.name})` : '+0 (Ignored)',
             status: !isDuplicate ? 'included' : 'excluded',
             reason: isDuplicate ? 'Duplicate sync workouts filtered out' : undefined,
