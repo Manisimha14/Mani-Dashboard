@@ -80,19 +80,19 @@ serve(async (req: Request) => {
       throw new Error('Unauthorized.');
     }
 
-    const { data: identities, error: identityError } = await supabaseClient
-      .from('identities')
-      .select('identity_data')
+    const { data: tokenRow, error: tokenError } = await supabaseClient
+      .from('google_fit_tokens')
+      .select('refresh_token')
       .eq('user_id', user.id)
-      .eq('provider', 'google');
+      .maybeSingle();
 
-    if (identityError || !identities?.length) {
-      throw new Error('Google identity not found for this account.');
+    if (tokenError) {
+      throw new Error(`Failed to load stored Google refresh token: ${tokenError.message}`);
     }
 
-    const providerRefreshToken = identities[0].identity_data?.provider_refresh_token;
+    const providerRefreshToken = tokenRow?.refresh_token;
     if (!providerRefreshToken) {
-      throw new Error('Google refresh token not found. Sign in with Google again to reconnect Fit sync.');
+      throw new Error('Google refresh token not stored for this account. Sign out, sign in with Google again, and complete the reconnect flow.');
     }
 
     const clientId = Deno.env.get('GOOGLE_CLIENT_ID');

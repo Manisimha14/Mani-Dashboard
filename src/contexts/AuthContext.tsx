@@ -24,6 +24,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
+    const persistGoogleRefreshToken = async (session: Session) => {
+      if (!session.provider_refresh_token) return;
+
+      const { error } = await supabase.functions.invoke('store-google-fit-token', {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: {
+          refreshToken: session.provider_refresh_token,
+        },
+      });
+
+      if (error) {
+        console.error('Failed to persist Google refresh token for Fit sync:', error);
+      }
+    };
+
     // Detect OAuth error params in the URL (e.g. ?error=server_error&error_description=Database+error)
     const params = new URLSearchParams(window.location.search);
     const urlError = params.get('error');
@@ -45,6 +62,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setLoading(false);
+      if (data.session?.provider_refresh_token) {
+        void persistGoogleRefreshToken(data.session);
+      }
     });
 
     // Listen for auth state changes
@@ -56,6 +76,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (newSession) {
         setAuthError(null); // clear error once successfully signed in
+        if (newSession.provider_refresh_token) {
+          void persistGoogleRefreshToken(newSession);
+        }
       }
       if (event === 'SIGNED_OUT') {
         // Only clear stores and local storage if we actually had a previous authenticated user session.
