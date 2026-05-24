@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, Edit2, Info, AlertTriangle, Save, X } from 'lucide-react';
-import { ParsedMealData, FoodItem } from '../../hooks/useFoodLogger';
+import type { ParsedMealData, FoodItem } from '../../hooks/useFoodLogger';
 
 type ConfirmationCardProps = {
   data: ParsedMealData;

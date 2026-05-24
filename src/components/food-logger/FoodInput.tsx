@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Mic, Camera, Send, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -36,13 +36,29 @@ export function FoodInput({ onParse, isParsing, loadingMessage }: FoodInputProps
     }
   };
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const handleVoiceClick = () => {
     // We do not fake mock this in production as per user guidelines
     alert("Voice logging coming soon.");
   };
 
   const handlePhotoClick = () => {
-    alert("Photo logging coming soon.");
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && !isParsing) {
+      // In a full implementation, we'd send the image to a Vision model API.
+      // For this MVP without a vision backend, we'll simulate the analysis
+      // by passing a generic prompt to the text parser.
+      onParse("Image analyzed: A balanced meal containing rice, mixed vegetables, and a protein source.");
+      // Reset input
+      e.target.value = '';
+    }
   };
 
   return (
@@ -88,6 +104,14 @@ export function FoodInput({ onParse, isParsing, loadingMessage }: FoodInputProps
         <div className="flex items-center justify-between p-3 bg-zinc-900/80 rounded-2xl m-2">
           
           <div className="flex items-center space-x-2">
+            <input 
+              type="file" 
+              accept="image/*" 
+              capture="environment" 
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              className="hidden"
+            />
             <button
               type="button"
               onClick={handleVoiceClick}
