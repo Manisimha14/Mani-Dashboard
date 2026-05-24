@@ -114,6 +114,43 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     chrome.storage.local.set({ blockerActive: message.active });
     sendResponse({ success: true });
   }
+
+  if (message.action === 'logLeetCode') {
+    const mockProblem = {
+      title: 'Manual Solve via Companion',
+      slug: 'manual-solve-via-companion-' + Math.random().toString(36).substring(2, 7),
+      difficulty: ['Easy', 'Medium', 'Hard'][Math.floor(Math.random() * 3)],
+      timeSpent: 25
+    };
+    
+    enqueueSyncEvent('leetcode_problem_solved', mockProblem)
+      .then(() => {
+        chrome.storage.local.get(['codingStreak'], (res) => {
+          const currentStreak = res.codingStreak ?? 8;
+          const newStreak = currentStreak + 1;
+          chrome.storage.local.set({ codingStreak: newStreak }, () => {
+            sendResponse({ success: true, newStreak });
+          });
+        });
+      })
+      .catch((err) => {
+        console.error('Failed to log manual LeetCode solve:', err);
+        sendResponse({ success: false });
+      });
+    return true;
+  }
+
+  if (message.action === 'syncTelemetry') {
+    triggerQueueProcessing()
+      .then(() => {
+        sendResponse({ success: true });
+      })
+      .catch((err) => {
+        console.error('Failed to trigger manual sync:', err);
+        sendResponse({ success: false });
+      });
+    return true;
+  }
 });
 
 // Distraction Interceptor Shield
