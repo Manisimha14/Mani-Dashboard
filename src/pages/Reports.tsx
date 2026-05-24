@@ -135,24 +135,35 @@ export default function Reports() {
 
   // Format week cycles
   const getWeekCycleInfo = (weeksAgo: number) => {
+    const now = new Date();
+    const currentDay = now.getDay();
+    // Monday is index 1. Sunday is 0.
+    const daysToMonday = currentDay === 0 ? 6 : currentDay - 1;
+
+    // Start of the current week (Monday)
+    const startOfCurrentWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysToMonday);
+
+    // Offset to the target week
+    const startOfTargetWeek = new Date(startOfCurrentWeek);
+    startOfTargetWeek.setDate(startOfTargetWeek.getDate() - weeksAgo * 7);
+
     const last7Days: string[] = [];
-    const baseOffset = weeksAgo * 7;
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i - baseOffset);
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(startOfTargetWeek);
+      d.setDate(d.getDate() + i);
       last7Days.push(format(d, 'yyyy-MM-dd'));
     }
-    
+
     const prev7Days: string[] = [];
-    for (let i = 13; i >= 7; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i - baseOffset);
-      prev7Days.push(format(d, 'yyyy-MM-dd'));
+    for (let i = 1; i <= 7; i++) {
+      const d = new Date(startOfTargetWeek);
+      d.setDate(d.getDate() - i);
+      prev7Days.unshift(format(d, 'yyyy-MM-dd'));
     }
 
     const startDateStr = format(new Date(last7Days[0] + 'T00:00:00'), 'MMM d');
     const endDateStr = format(new Date(last7Days[6] + 'T00:00:00'), 'MMM d');
-    
+
     return { last7Days, prev7Days, startDateStr, endDateStr };
   };
 

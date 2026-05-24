@@ -1,4 +1,7 @@
-// background.js - Upgraded Premium Companion Service Worker
+// background.js - Companion Service Worker Wrapper
+
+// Import modular subcomponents securely
+importScripts('auth.js', 'queue.js', 'sync.js', 'events.js');
 
 let timerSeconds = 1500; // 25 mins
 let timerRunning = false;
@@ -7,32 +10,24 @@ let timerInterval = null;
 // Time-on-site analytics variables
 let activeTabId = null;
 let activeDomain = '';
-let activeDomainStartTime = Date.now();
 
 // Initial installation parameters
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.local.get([
-    'distractionBlocklist', 'focusStreak', 'codingStreak', 'readingStreak', 
-    'timeCoding', 'timeLearning', 'blockedAttemptsCount'
+    'distractionBlocklist', 'blockerActive', 'blockedAttemptsCount'
   ], (res) => {
     chrome.storage.local.set({
-      focusStreak: res.focusStreak ?? 12,
-      codingStreak: res.codingStreak ?? 8,
-      readingStreak: res.readingStreak ?? 5,
       timerSeconds: 1500,
       timerRunning: false,
-      blockerActive: true,
+      blockerActive: res.blockerActive ?? true,
       distractionBlocklist: res.distractionBlocklist ?? [
         'youtube.com', 'twitter.com', 'x.com', 'reddit.com', 
         'facebook.com', 'instagram.com', 'tiktok.com', 'netflix.com'
       ],
-      timeCoding: res.timeCoding ?? 0,
-      timeLearning: res.timeLearning ?? 0,
-      blockedAttemptsCount: res.blockedAttemptsCount ?? 0,
-      syncBuffer: []
+      blockedAttemptsCount: res.blockedAttemptsCount ?? 0
     });
   });
-  console.log('Antigravity Life OS companion background service worker fully primed.');
+  console.log('🛡️ Antigravity Sandbox Companion background worker successfully initialized.');
 });
 
 // Listener for focus & active tab shifts to track Web Time-on-Site
@@ -47,31 +42,6 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
 });
 
-// Periodically increment active domain time every 60 seconds
-setInterval(() => {
-  if (!activeTabId) return;
-  chrome.tabs.get(activeTabId, (tab) => {
-    if (chrome.runtime.lastError || !tab || !tab.url) return;
-    
-    const url = new URL(tab.url);
-    const domain = url.hostname.toLowerCase();
-    
-    chrome.storage.local.get(['timeCoding', 'timeLearning'], (res) => {
-      const codeMin = res.timeCoding ?? 0;
-      const learnMin = res.timeLearning ?? 0;
-      
-      // Coding related sites
-      if (domain.includes('leetcode.com') || domain.includes('github.com') || domain.includes('stackoverflow.com')) {
-        chrome.storage.local.set({ timeCoding: codeMin + 1 });
-      }
-      // Learning/notes related sites
-      else if (domain.includes('wikipedia.org') || domain.includes('medium.com') || domain.includes('readme.io') || domain.includes('localhost:5173')) {
-        chrome.storage.local.set({ timeLearning: learnMin + 1 });
-      }
-    });
-  });
-}, 60000);
-
 function updateActiveTabTime() {
   if (!activeTabId) return;
   chrome.tabs.get(activeTabId, (tab) => {
@@ -79,7 +49,6 @@ function updateActiveTabTime() {
     try {
       const url = new URL(tab.url);
       activeDomain = url.hostname.toLowerCase();
-      activeDomainStartTime = Date.now();
       checkDistractionBlocker();
     } catch (e) {
       // Ignored for non-standard chrome:// or extension pages
@@ -87,17 +56,15 @@ function updateActiveTabTime() {
   });
 }
 
-// Listener for popup & page messages
+// Listener for popup and control commands
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'toggleTimer') {
     if (timerRunning) {
-      // Pause
       timerRunning = false;
       clearInterval(timerInterval);
       chrome.storage.local.set({ timerRunning: false, timerSeconds });
       sendResponse({ running: false });
     } else {
-      // Start
       timerRunning = true;
       chrome.storage.local.set({ timerRunning: true });
       timerInterval = setInterval(() => {
@@ -107,26 +74,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           chrome.runtime.sendMessage({ action: 'timerTick', secondsLeft: timerSeconds });
           checkDistractionBlocker();
         } else {
-          // Timer finished
+          // Pomodoro Block completed!
           timerRunning = false;
           clearInterval(timerInterval);
           timerSeconds = 1500;
           
-          chrome.storage.local.get(['focusStreak'], (res) => {
-            const newStreak = (res.focusStreak ?? 12) + 1;
-            chrome.storage.local.set({ focusStreak: newStreak, timerRunning: false, timerSeconds: 1500 });
-            chrome.runtime.sendMessage({ action: 'timerComplete', newStreak });
-            
-            // Native Rich Chrome Desktop Notification
-            chrome.notifications.create('focus-complete', {
-              type: 'basic',
-              iconUrl: 'icon.png',
-              title: '🌳 Focus Block Complete!',
-              message: 'Your Pomodoro is done! A tree has been planted in your Antigravity dashboard.',
-              priority: 2
-            });
+          chrome.storage.local.set({ timerRunning: false, timerSeconds: 1500 });
+          chrome.runtime.sendMessage({ action: 'timerComplete' });
+          
+          // Native Rich Chrome Desktop Notification
+          chrome.notifications.create('focus-complete', {
+            type: 'basic',
+            iconUrl: 'icon.png',
+            title: '🌳 Focus Block Complete!',
+            message: 'Your Pomodoro is done! Synchronizing session securely to your life ledger...',
+            priority: 2
+          });
 
-            syncWithLocalDashboard('focus', { duration: 25 });
+          // Enqueue focus completion event directly in outbox
+          enqueueSyncEvent('focus_session_completed', {
+            duration: 25,
+            taskName: 'Focus Block via Companion',
+            growthTheme: 'tree',
+            ambience: 'none'
           });
         }
       }, 1000);
@@ -135,61 +105,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // Keep message channel open
   }
 
-  if (message.action === 'getTelemetry') {
-    chrome.storage.local.get([
-      'focusStreak', 'codingStreak', 'readingStreak', 
-      'timeCoding', 'timeLearning', 'blockedAttemptsCount'
-    ], (res) => {
-      sendResponse(res);
-    });
-    return true;
-  }
-
-  if (message.action === 'logLeetCode') {
-    chrome.storage.local.get(['codingStreak'], (res) => {
-      const newStreak = (res.codingStreak ?? 8) + 1;
-      chrome.storage.local.set({ codingStreak: newStreak });
-      syncWithLocalDashboard('leetcode', { solved: 1 });
-      
-      chrome.notifications.create('leetcode-solved', {
-        type: 'basic',
-        iconUrl: 'icon.png',
-        title: '💻 LeetCode Solved!',
-        message: 'Your streak has been updated successfully in your accountability dashboard.',
-        priority: 1
-      });
-
-      sendResponse({ success: true, newStreak });
-    });
-    return true;
-  }
-
-  if (message.action === 'syncTelemetry') {
-    chrome.storage.local.get(['syncBuffer'], (res) => {
-      const buffer = res.syncBuffer ?? [];
-      if (buffer.length > 0) {
-        // Broadcast the entire batch to all open dashboard tabs
-        chrome.tabs.query({ url: 'http://localhost:5173/*' }, (tabs) => {
-          if (tabs && tabs.length > 0) {
-            tabs.forEach(tab => {
-              chrome.tabs.sendMessage(tab.id, { action: 'syncBatch', batch: buffer });
-            });
-            chrome.storage.local.set({ syncBuffer: [] }, () => {
-              sendResponse({ success: true, count: buffer.length });
-            });
-          } else {
-            sendResponse({ success: false, reason: 'Dashboard offline / not open' });
-          }
-        });
-      } else {
-        sendResponse({ success: true, count: 0 });
-      }
-    });
-    return true;
-  }
-
   if (message.action === 'blocklistUpdated') {
-    // Immediate block check on active page when list changes
     checkDistractionBlocker();
     sendResponse({ success: true });
   }
@@ -200,7 +116,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
-// Distraction Interceptor Blocker
+// Distraction Interceptor Shield
 function checkDistractionBlocker() {
   chrome.storage.local.get(['blockerActive', 'timerRunning', 'distractionBlocklist', 'blockedAttemptsCount'], (res) => {
     if (res.blockerActive && res.timerRunning) {
@@ -216,7 +132,6 @@ function checkDistractionBlocker() {
               const currentAttempts = res.blockedAttemptsCount ?? 0;
               chrome.storage.local.set({ blockedAttemptsCount: currentAttempts + 1 });
 
-              // Create notification intercept feedback
               chrome.notifications.create('distraction-blocked', {
                 type: 'basic',
                 iconUrl: 'icon.png',
@@ -236,31 +151,5 @@ function checkDistractionBlocker() {
         }
       });
     }
-  });
-}
-
-// Broadcast helper to send messages to any open dashboard tabs
-function broadcastToDashboard(action, payload) {
-  chrome.tabs.query({ url: 'http://localhost:5173/*' }, (tabs) => {
-    if (tabs && tabs.length > 0) {
-      tabs.forEach(tab => {
-        chrome.tabs.sendMessage(tab.id, { action, payload });
-      });
-    }
-  });
-}
-
-// Sync helper posting to the dashboard API
-function syncWithLocalDashboard(type, payload) {
-  const syncEvent = { type, payload, timestamp: new Date().toISOString() };
-  
-  // 1. Broadcast real-time event to open dashboard tabs
-  broadcastToDashboard('syncEvent', syncEvent);
-
-  // 2. Also keep a fallback buffer
-  chrome.storage.local.get(['syncBuffer'], (res) => {
-    const buf = res.syncBuffer ?? [];
-    buf.push({ type, payload, time: Date.now() });
-    chrome.storage.local.set({ syncBuffer: buf });
   });
 }

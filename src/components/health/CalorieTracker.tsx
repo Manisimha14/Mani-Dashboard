@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Flame, Plus, Trash2, Star, ChevronDown, ChevronUp, Edit2, Check, X } from 'lucide-react';
-import { useMeals, useHealthGoals, useAddMeal, useDeleteMeal, useToggleMealFavorite, useAddGoal, useUpdateGoal, useLogSteps, useAddWorkout } from '../../hooks/useHealthQuery';
+import { useMeals, useHealthGoals, useAddMeal, useDeleteMeal, useToggleMealFavorite, useAddGoal, useUpdateGoal, useLogSteps, useAddWorkout, useWorkouts, useDeleteWorkout } from '../../hooks/useHealthQuery';
 import type { MealType } from '../../types/health';
 import { parseNaturalLanguageNutrition, searchOpenFoodFacts, type OpenFoodFactsProduct } from '../../lib/nutritionParser';
 import { useSoundFX } from '../../hooks/useSoundFX';
@@ -42,6 +42,8 @@ export default function CalorieTracker({ today }: { today: string }) {
   const { play } = useSoundFX();
   const logStepsMut = useLogSteps();
   const addWorkoutMut = useAddWorkout();
+  const deleteWorkoutMut = useDeleteWorkout();
+  const { data: workouts = [] } = useWorkouts(today);
 
   const [isSyncingFit, setIsSyncingFit] = React.useState(false);
   const [syncStepIndex, setSyncStepIndex] = React.useState(0);
@@ -73,6 +75,12 @@ export default function CalorieTracker({ today }: { today: string }) {
       fitSyncResultRef.current = data;
       // Proactively trigger mutations immediately in the background for zero-latency updates
       logStepsMut.mutate({ date: today, steps: data.steps });
+
+      const existingWalk = workouts.find(w => w.name === 'Google Fit Synced Walk');
+      if (existingWalk) {
+        deleteWorkoutMut.mutate(existingWalk.id);
+      }
+
       addWorkoutMut.mutate({
         date: today,
         startTime: '08:30',
@@ -114,6 +122,12 @@ export default function CalorieTracker({ today }: { today: string }) {
 
     // Trigger standard mutations immediately
     logStepsMut.mutate({ date: today, steps: data.steps });
+
+    const existingWalk = workouts.find(w => w.name === 'Google Fit Synced Walk (Simulated)');
+    if (existingWalk) {
+      deleteWorkoutMut.mutate(existingWalk.id);
+    }
+
     addWorkoutMut.mutate({
       date: today,
       startTime: '08:30',

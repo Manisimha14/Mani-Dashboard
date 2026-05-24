@@ -110,6 +110,12 @@ export default function WorkoutTracker({ today }: { today: string }) {
       fitSyncResultRef.current = data;
       // Proactively trigger mutations immediately in the background for zero-latency updates
       logStepsMut.mutate({ date: today, steps: data.steps });
+
+      const existingWalk = todayWorkouts.find(w => w.name === 'Google Fit Synced Walk');
+      if (existingWalk) {
+        deleteWorkoutMut.mutate(existingWalk.id);
+      }
+
       addWorkoutMut.mutate({
         date: today,
         startTime: '08:30',
@@ -151,6 +157,12 @@ export default function WorkoutTracker({ today }: { today: string }) {
 
     // Trigger standard mutations immediately
     logStepsMut.mutate({ date: today, steps: data.steps });
+
+    const existingWalk = todayWorkouts.find(w => w.name === 'Google Fit Synced Walk (Simulated)');
+    if (existingWalk) {
+      deleteWorkoutMut.mutate(existingWalk.id);
+    }
+
     addWorkoutMut.mutate({
       date: today,
       startTime: '08:30',

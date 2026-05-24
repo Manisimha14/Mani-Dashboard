@@ -1,18 +1,16 @@
-// dashboard-content.js - Content script injected into the Antigravity Dashboard to bridge communication
-console.log('🛡️ Antigravity Dashboard Extension Bridge active and listening...');
+// dashboard-content.js - Sandboxed Companion Same-Origin Handshake Bridge
+console.log('🛡️ Antigravity Secure Handshake Bridge listening for initialization events...');
 
-// 1. Relay messages from the React page to the extension background page
-window.addEventListener('antigravity-dashboard-request', (event) => {
-  if (event.detail) {
-    chrome.runtime.sendMessage(event.detail, (response) => {
-      // Send response back to React page
-      window.postMessage({ type: 'antigravity-telemetry-data', data: response }, '*');
+window.addEventListener('antigravity-extension-init', (event) => {
+  // Extract custom event token payload safely
+  const token = event.detail?.token;
+  
+  if (token && token.startsWith('ext_sync_v1_')) {
+    chrome.runtime.sendMessage({ action: 'storeScopedToken', token }, (response) => {
+      if (response && response.success) {
+        console.log('✅ Sandbox companion token securely registered inside service worker context.');
+      }
     });
   }
 });
 
-// 2. Relay messages from the extension background page to the React page
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  window.postMessage({ type: 'antigravity-extension-message', message }, '*');
-  sendResponse({ success: true, relayed: true });
-});

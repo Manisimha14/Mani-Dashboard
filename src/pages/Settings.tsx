@@ -18,6 +18,7 @@ import { getAppVersion } from '../lib/appVersion';
 import { useSoundFX } from '../hooks/useSoundFX';
 import { useReminderEngine } from '../hooks/useReminderEngine';
 import type { ISODateString } from '../types/reminder';
+import ExtensionSettings from '../components/dashboard/ExtensionSettings';
 
 type SettingsTab = 'general' | 'appearance' | 'controls' | 'notifications' | 'privacy' | 'labs';
 
@@ -490,6 +491,12 @@ export default function Settings() {
                     </div>
                   )}
                 </Section>
+
+                {user && (
+                  <div className="glass-card p-6 border-white/[0.03] relative overflow-hidden group">
+                    <ExtensionSettings />
+                  </div>
+                )}
 
                 <Section title="Data Crypt" icon={<Shield size={16} />} description="Your data is stored locally. We never track or export your metrics.">
                   <div className="space-y-4 mb-6">

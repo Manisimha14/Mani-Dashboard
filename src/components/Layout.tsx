@@ -2,7 +2,7 @@ import React, { Suspense, lazy, useState, useCallback } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, LayoutDashboard, Timer, Heart, Target, Menu, Plus, Sparkles } from 'lucide-react';
+import { X, LayoutDashboard, Timer, Heart, Target, Menu, Plus, Sparkles, Bug } from 'lucide-react';
 import Sidebar from './Sidebar';
 import TopHeader from './TopHeader';
 import InteractiveGrid from './InteractiveGrid';
@@ -30,6 +30,7 @@ const ShortcutsHelp = lazy(() => import('./ShortcutsHelp'));
 const QuickLauncherModal = lazy(() => import('./QuickLauncherModal'));
 const CompanionTerminal = lazy(() => import('./analytics/CompanionTerminal'));
 const Confetti = lazy(() => import('react-confetti'));
+const BugReportModal = lazy(() => import('./BugReportModal'));
 
 function MobileTabButton({ to, icon: Icon, label, isActive, onClick }: {
   to: string;
@@ -71,6 +72,7 @@ export default function Layout() {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   
   const { requestPermission } = useReminderEngine();
   const weather = useWeather();
@@ -204,6 +206,19 @@ export default function Layout() {
   const handleCloseRem = useCallback(() => setRemModalOpen(false), []);
   const handleCloseShortcuts = useCallback(() => setShortcutsOpen(false), []);
   const handleCloseTerminal = useCallback(() => setTerminalOpen(false), []);
+  const handleCloseReport = useCallback(() => setReportOpen(false), []);
+
+  React.useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // Toggle report modal on Ctrl + Shift + B
+      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        setReportOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   const dailyActivity = useAppStore(s => s.dailyActivity);
   const userSettings = useAppStore(s => s.userSettings);
@@ -485,6 +500,21 @@ export default function Layout() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Floating Bug FAB Button */}
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2">
+        <button
+          onClick={() => { play('click'); setReportOpen(true); }}
+          className="w-12 h-12 rounded-full bg-violet-600/90 border border-violet-500/30 hover:bg-violet-600 hover:scale-105 active:scale-95 text-white flex items-center justify-center shadow-lg shadow-violet-950/40 hover:shadow-[0_0_20px_rgba(139,92,246,0.5)] transition-all duration-300 pointer-events-auto animate-pulse-subtle"
+          title="Report Issue (Ctrl+Shift+B)"
+        >
+          <Bug size={18} />
+        </button>
+      </div>
+
+      <Suspense fallback={null}>
+        {reportOpen && <BugReportModal isOpen={reportOpen} onClose={handleCloseReport} />}
+      </Suspense>
 
       {/* Global Grain Texture - The 'Award Winning' secret sauce */}
       <div className="fixed inset-0 pointer-events-none z-[999] opacity-[0.08] mix-blend-overlay bg-noise" />

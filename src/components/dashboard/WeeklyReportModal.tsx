@@ -52,25 +52,45 @@ export default function WeeklyReportModal({
   const [generating, setGenerating] = useState(true);
   const [stats, setStats] = useState<WeeklyReportStats | null>(null);
 
-  // Timezone-safe 7-day sequences
+  // Aligned Monday-to-Sunday fixed calendar weeks
   const last7Days = useMemo(() => {
+    const now = new Date();
+    const currentDay = now.getDay();
+    const daysToMonday = currentDay === 0 ? 6 : currentDay - 1;
+
+    // Start of the current week (Monday)
+    const startOfCurrentWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysToMonday);
+
+    // Offset to the target week
+    const startOfTargetWeek = new Date(startOfCurrentWeek);
+    startOfTargetWeek.setDate(startOfTargetWeek.getDate() - (weeksAgo || 0) * 7);
+
     const list: string[] = [];
-    const baseOffset = (weeksAgo || 0) * 7;
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i - baseOffset);
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(startOfTargetWeek);
+      d.setDate(d.getDate() + i);
       list.push(format(d, 'yyyy-MM-dd'));
     }
     return list;
   }, [weeksAgo]);
 
   const prev7Days = useMemo(() => {
+    const now = new Date();
+    const currentDay = now.getDay();
+    const daysToMonday = currentDay === 0 ? 6 : currentDay - 1;
+
+    // Start of the current week (Monday)
+    const startOfCurrentWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysToMonday);
+
+    // Offset to the target week
+    const startOfTargetWeek = new Date(startOfCurrentWeek);
+    startOfTargetWeek.setDate(startOfTargetWeek.getDate() - (weeksAgo || 0) * 7);
+
     const list: string[] = [];
-    const baseOffset = (weeksAgo || 0) * 7;
-    for (let i = 13; i >= 7; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i - baseOffset);
-      list.push(format(d, 'yyyy-MM-dd'));
+    for (let i = 1; i <= 7; i++) {
+      const d = new Date(startOfTargetWeek);
+      d.setDate(d.getDate() - i);
+      list.unshift(format(d, 'yyyy-MM-dd'));
     }
     return list;
   }, [weeksAgo]);
@@ -225,6 +245,15 @@ export default function WeeklyReportModal({
                       waterGoalMl={resolvedGoals.waterGoalMl} 
                       sleepHours={resolvedGoals.sleepGoalHours} 
                       focusGoalMin={resolvedGoals.focusGoalMin} 
+                      focusSessions={focusSessions}
+                      problems={problems}
+                      waterEntries={waterEntries}
+                      sleepEntries={sleepEntries}
+                      workoutEntries={workoutEntries}
+                      bookChapters={bookChapters}
+                      stepsData={stepsData}
+                      meals={meals}
+                      last7Days={last7Days}
                     />
                   </div>
                 )}
@@ -240,6 +269,15 @@ export default function WeeklyReportModal({
                     <TrendInsightsPanel 
                       stats={stats} 
                       cycleDates={last7Days} 
+                      focusSessions={focusSessions}
+                      problems={problems}
+                      waterEntries={waterEntries}
+                      sleepEntries={sleepEntries}
+                      workoutEntries={workoutEntries}
+                      bookChapters={bookChapters}
+                      stepsData={stepsData}
+                      meals={meals}
+                      waterGoalMl={resolvedGoals.waterGoalMl}
                     />
                   </div>
                 )}

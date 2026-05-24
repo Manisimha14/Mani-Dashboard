@@ -6,6 +6,32 @@ import type { WaterEntry, SleepEntry, WorkoutEntry, HealthGoal, MealEntry } from
 import type { IndexedReportData, WeeklyReportStats } from '../../types/report';
 
 /**
+ * Calculates the Pearson correlation coefficient (r) between two datasets.
+ * Requires at least 4 overlapping data points to yield a statistically valid result.
+ */
+function calculatePearsonCorrelation(x: number[], y: number[]): number {
+  const n = x.length;
+  if (n < 4) return 0;
+
+  let sumX = 0, sumY = 0, sumXY = 0;
+  let sumX2 = 0, sumY2 = 0;
+
+  for (let i = 0; i < n; i++) {
+    sumX += x[i];
+    sumY += y[i];
+    sumXY += x[i] * y[i];
+    sumX2 += x[i] * x[i];
+    sumY2 += y[i] * y[i];
+  }
+
+  const num = n * sumXY - sumX * sumY;
+  const den = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
+
+  if (den === 0) return 0;
+  return num / den;
+}
+
+/**
  * Calculates complete weekly analytics and aggregates from raw data streams.
  */
 export function calculateWeeklyReport(params: {
@@ -23,11 +49,11 @@ export function calculateWeeklyReport(params: {
   trackers: Tracker[];
 }): WeeklyReportStats {
   const {
-    focusSessions,
-    problems,
+    focusSessions: rawFocusSessions,
+    problems: rawProblems,
     waterEntries,
     sleepEntries,
-    workoutEntries,
+    workoutEntries: rawWorkoutEntries,
     bookChapters,
     stepsData,
     healthGoals,
@@ -36,6 +62,38 @@ export function calculateWeeklyReport(params: {
     meals,
     trackers
   } = params;
+
+  // 1. Deduplicate LeetCode Problems (completed + active only once)
+  const seenProblems = new Set<string>();
+  const problems = rawProblems.filter(p => {
+    const slug = p.link?.trim().toLowerCase() || '';
+    const key = slug.includes('/problems/') 
+      ? slug.split('/problems/')[1]?.split('/')[0] || p.name.trim().toLowerCase()
+      : p.name.trim().toLowerCase();
+    const uniqueKey = `${p.completed ? 'completed' : 'todo'}_${key}`;
+    if (seenProblems.has(uniqueKey)) return false;
+    seenProblems.add(uniqueKey);
+    return true;
+  });
+
+  // 2. Deduplicate Focus Sessions (by start time and duration to prevent sync overlaps)
+  const seenSessions = new Set<string>();
+  const focusSessions = rawFocusSessions.filter(s => {
+    if (!s.startTime) return false;
+    const key = `${s.startTime}_${s.duration}`;
+    if (seenSessions.has(key)) return false;
+    seenSessions.add(key);
+    return true;
+  });
+
+  // 3. Deduplicate Workouts (by date, start_time, name, and duration to eliminate Fit sync repeats)
+  const seenWorkouts = new Set<string>();
+  const workoutEntries = rawWorkoutEntries.filter(w => {
+    const key = `${w.date}_${w.startTime || '08:30'}_${w.name.trim().toLowerCase()}_${w.durationMinutes}`;
+    if (seenWorkouts.has(key)) return false;
+    seenWorkouts.add(key);
+    return true;
+  });
 
   // Health and Calorie aggregates
   let totalCaloriesTaken = 0;
@@ -390,37 +448,38 @@ export function calculateWeeklyReport(params: {
   });
 
   const sleepFocusData = dailyData.filter(d => d.sleepMin > 0 && d.focusMin > 0);
-  if (sleepFocusData.length >= 3) {
-    const avgSleepOver7 = sleepFocusData.filter(d => d.sleepMin >= sleepGoalMin);
-    const avgSleepUnder7 = sleepFocusData.filter(d => d.sleepMin < sleepGoalMin);
-    if (avgSleepOver7.length > 0 && avgSleepUnder7.length > 0) {
-      const overFocus = avgSleepOver7.reduce((a, d) => a + d.focusMin, 0) / avgSleepOver7.length;
-      const underFocus = avgSleepUnder7.reduce((a, d) => a + d.focusMin, 0) / avgSleepUnder7.length;
-      if (overFocus > underFocus) {
-        const diff = Math.round(((overFocus - underFocus) / (underFocus || 1)) * 100);
-        correlationInsights.push(`Focus duration was ${diff}% higher on days matching your sleep goal.`);
-      } else {
-        correlationInsights.push("Focus sessions remained consistent regardless of sleep duration variation.");
-      }
+  if (sleepFocusData.length >= 4) {
+    const sleeps = sleepFocusData.map(d => d.sleepMin);
+    const focuses = sleepFocusData.map(d => d.focusMin);
+    const rVal = calculatePearsonCorrelation(sleeps, focuses);
+
+    if (rVal > 0.35) {
+      correlationInsights.push(`Positive focus correlation (r = ${rVal.toFixed(2)}): Focus durations increased on days following higher rest.`);
+    } else if (rVal < -0.35) {
+      correlationInsights.push(`Negative focus correlation (r = ${rVal.toFixed(2)}): Focus time declined with longer sleep, indicating possible sleep inertia.`);
     } else {
-      correlationInsights.push("Consistent sleep habits helped maintain stable focus durations.");
+      correlationInsights.push("No strong statistical correlation was observed between sleep duration and focus blocks.");
     }
   } else {
-    correlationInsights.push("Log sleep regularly to compute correlation trends with focus blocks.");
+    correlationInsights.push("Log sleep and focus sessions regularly (min 4 days) to generate sleep-to-focus correlation statistics.");
   }
 
+  // Active workout correlation with problems solved or focus duration
   const activeDays = dailyData.filter(d => d.dayWorkout);
   const restingDays = dailyData.filter(d => !d.dayWorkout);
-  if (activeDays.length > 0 && restingDays.length > 0) {
+  if (activeDays.length >= 2 && restingDays.length >= 2) {
     const avgActiveCoding = activeDays.reduce((a, d) => a + d.problemsSolved, 0) / activeDays.length;
     const avgRestingCoding = restingDays.reduce((a, d) => a + d.problemsSolved, 0) / restingDays.length;
-    if (avgActiveCoding > avgRestingCoding) {
-      correlationInsights.push("Problem-solving activity increased on active workout days.");
+    if (avgActiveCoding > avgRestingCoding + 0.2) {
+      const pctIncrease = Math.round(((avgActiveCoding - avgRestingCoding) / (avgRestingCoding || 1)) * 100);
+      correlationInsights.push(`Fitness Boost: Coding solves were ${pctIncrease}% higher on active workout days.`);
+    } else if (avgActiveCoding < avgRestingCoding - 0.2) {
+      correlationInsights.push("Coding problem solving remained high on rest days, optimal for mental recovery.");
     } else {
-      correlationInsights.push("Coding problem solving remained steady on active and resting days.");
+      correlationInsights.push("Coding solves remained balanced across both active and rest days.");
     }
   } else {
-    correlationInsights.push("Record fitness sessions to see how physical activity impacts focus output.");
+    correlationInsights.push("Record fitness sessions to evaluate how physical activity impacts cognitive focus output.");
   }
 
   // 9. Structured Apple/Notion-Grade Wins, Concerns, and Action Plans

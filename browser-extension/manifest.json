@@ -14,7 +14,8 @@
   ],
   "host_permissions": [
     "https://leetcode.com/*",
-    "http://localhost:5173/*"
+    "http://localhost:5173/*",
+    "https://frqrkkphddvxnsouhkfr.supabase.co/*"
   ],
   "action": {
     "default_popup": "popup.html",
