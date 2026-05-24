@@ -6,6 +6,7 @@ import type { WorkoutType } from '../../types/health';
 import { useSoundFX } from '../../hooks/useSoundFX';
 import { useAuth } from '../../contexts/AuthContext';
 import { fetchTodayGoogleFitData } from '../../services/googleFit.service';
+import { getSimulatedFitnessData } from '../../utils/simulatedFitness';
 
 const WORKOUT_TYPES: WorkoutType[] = [
   'strength','cardio','running','walking','cycling','yoga','stretching','sports','custom'
@@ -168,16 +169,8 @@ export default function WorkoutTracker({ today }: { today: string }) {
     fitSyncResultRef.current = null;
     play('click');
 
-    // Realistic randomized fitness telemetry within plausible human ranges
-    const simSteps = Math.floor(Math.random() * (12000 - 5000 + 1)) + 5000;
-    const simCalories = Math.floor(Math.random() * (400 - 150 + 1)) + 150;
-    const simActiveMinutes = Math.floor(Math.random() * (60 - 20 + 1)) + 20;
-
-    const data = {
-      steps: simSteps,
-      calories: simCalories,
-      activeMinutes: simActiveMinutes
-    };
+    // Deterministic date-seeded values — stable across multiple button presses on same day
+    const data = getSimulatedFitnessData(today);
 
     fitSyncResultRef.current = data;
 

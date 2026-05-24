@@ -3,9 +3,6 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 
-// SIDEBAR_W keeps the modal visually centred in the main content area
-const SIDEBAR_W = 240;
-
 interface ModalProps {
   open: boolean;
   onClose: () => void;
@@ -63,16 +60,14 @@ export default function Modal({
           />
 
           {/*
-           * Centering container: covers viewport but adds left padding equal
-           * to the sidebar so the modal lands in the centre of the content
-           * area, not the centre of the whole viewport.
+           * Centering container — uses py-4 so content never touches viewport edges,
+           * and overflow-y-auto so tall modals scroll rather than get clipped.
            */}
           <div
-            className="fixed inset-0 z-[301] flex items-center justify-center"
-            // prevent click-through to backdrop when clicking the non-modal area
+            className="fixed inset-0 z-[301] flex items-start justify-center overflow-y-auto py-4 px-4"
           >
             <motion.div
-              className={`w-full ${maxWidth} mx-4`}
+              className={`w-full ${maxWidth} my-auto`}
               initial={{ opacity: 0, scale: 0.92, y: 24 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.92, y: 16 }}
@@ -85,7 +80,7 @@ export default function Modal({
                 aria-modal="true"
                 aria-label={title ?? 'Dialog'}
                 tabIndex={-1}
-                className="glass-card p-6 relative overflow-hidden"
+                className="glass-card relative"
                 style={{
                   background: 'rgba(10,11,22,0.97)',
                   border: '1px solid rgba(139,92,246,0.18)',
@@ -93,24 +88,31 @@ export default function Modal({
                 }}
               >
                 {/* top accent line */}
-                <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-violet-500/60 to-transparent" />
+                <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-violet-500/60 to-transparent rounded-t-2xl" />
 
-                {(title || showClose) && (
-                  <div className="flex items-center justify-between mb-5">
-                    {title && <h3 className="font-semibold text-white text-base">{title}</h3>}
-                    {showClose && (
-                      <button
-                        onClick={onClose}
-                        aria-label="Close dialog"
-                        className="ml-auto text-white/30 hover:text-white/80 transition-colors p-1 rounded-lg hover:bg-white/5"
-                      >
-                        <X size={16} />
-                      </button>
-                    )}
-                  </div>
-                )}
+                {/* Sticky header with title + close — always visible */}
+                <div className="sticky top-0 z-10 flex items-center justify-between px-6 pt-6 pb-4"
+                  style={{ background: 'rgba(10,11,22,0.97)' }}
+                >
+                  {title
+                    ? <h3 className="font-semibold text-white text-base">{title}</h3>
+                    : <span />
+                  }
+                  {showClose && (
+                    <button
+                      onClick={onClose}
+                      aria-label="Close dialog"
+                      className="ml-auto text-white/40 hover:text-white transition-colors p-1.5 rounded-xl hover:bg-white/10 border border-transparent hover:border-white/10 flex-shrink-0"
+                    >
+                      <X size={18} />
+                    </button>
+                  )}
+                </div>
 
-                {children}
+                {/* Scrollable content area */}
+                <div className="px-6 pb-6">
+                  {children}
+                </div>
               </div>
             </motion.div>
           </div>

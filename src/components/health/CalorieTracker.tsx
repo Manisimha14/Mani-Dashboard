@@ -7,6 +7,7 @@ import { parseNaturalLanguageNutrition, searchOpenFoodFacts, type OpenFoodFactsP
 import { useSoundFX } from '../../hooks/useSoundFX';
 import { useAuth } from '../../contexts/AuthContext';
 import { fetchTodayGoogleFitData } from '../../services/googleFit.service';
+import { getSimulatedFitnessData } from '../../utils/simulatedFitness';
 
 const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snacks', 'custom'];
 const MEAL_EMOJI: Record<MealType, string> = {
@@ -130,11 +131,8 @@ export default function CalorieTracker({ today }: { today: string }) {
     fitSyncResultRef.current = null;
     play('click');
 
-    const simSteps = Math.floor(Math.random() * (12000 - 5000 + 1)) + 5000;
-    const simCalories = Math.floor(Math.random() * (400 - 150 + 1)) + 150;
-    const simActiveMinutes = Math.floor(Math.random() * (60 - 20 + 1)) + 20;
-
-    const data = { steps: simSteps, calories: simCalories, activeMinutes: simActiveMinutes };
+    // Deterministic date-seeded values — stable across multiple button presses on same day
+    const data = getSimulatedFitnessData(today);
     fitSyncResultRef.current = data;
 
     logStepsMut.mutate({ date: today, steps: data.steps });
