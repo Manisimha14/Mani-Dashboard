@@ -5,6 +5,7 @@ import { useBook, useUpdateChapter, useSetBookMeta } from '../hooks/useBookQuery
 import { useProfile } from '../hooks/useProfileQuery';
 import { BookOpen, Check, Calendar, ChevronDown, ChevronUp, Edit3, X, Flame } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useSearchParams } from 'react-router-dom';
 import { formatDate, todayString } from '../lib/utils';
 import Confetti from 'react-confetti';
 import BookReaderModal from '../components/BookReaderModal';
@@ -26,8 +27,16 @@ export default function Reading() {
   const [bookAuthor, setBookAuthor] = useState(book.author);
   const [expandedChapter, setExpandedChapter] = useState<number | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
-  const [showReader, setShowReader] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [showReader, setShowReader] = useState(searchParams.get('reader') === 'true');
   const [windowSize, setWindowSize] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    if (searchParams.get('reader') === 'true') {
+      setShowReader(true);
+      setSearchParams(new URLSearchParams()); // Clear so it doesn't auto-open on refresh
+    }
+  }, [searchParams, setSearchParams]);
 
   // Sync window size for confetti
   useEffect(() => {

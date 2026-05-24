@@ -101,7 +101,7 @@ export interface StreakData {
   currentStreak: number;
   longestStreak: number;
   lastActivityDate?: string;
-  history: Record<string, boolean>; // date -> has activity
+  history: Record<string, boolean | 'rest'>; // date -> has activity or rest
 }
 
 // ─── Analytics Types ─────────────────────────────────────────────────────────

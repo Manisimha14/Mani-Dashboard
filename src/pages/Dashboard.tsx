@@ -22,6 +22,7 @@ import {
 import { formatDuration, todayString, getProductivityScore } from '../lib/utils';
 import { format, parseISO } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import TiltCard from '../components/TiltCard';
 import Skeleton, { StatCardSkeleton, InsightSkeleton } from '../components/Skeleton';
 import MissionControl from '../components/MissionControl';
@@ -709,11 +710,22 @@ export default function Dashboard() {
       {/* Quick Actions */}
       <motion.div variants={item} className="glass-card p-5">
         <div className="text-xs text-white/40 uppercase tracking-widest mb-4">Quick Actions</div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <QuickAction icon={<Timer size={18} />} label="Start Focus" desc="Forest Mode" color="violet" onClick={() => navigate('/focus')} />
-          <QuickAction icon={<BookOpen size={18} />} label="Log Chapter" desc={nextChapter ? `Next: Ch ${nextChapter.number}` : "Reading Tracker"} color="purple" onClick={() => navigate('/reading')} />
+          <QuickAction icon={<BookOpen size={18} />} label="Continue Reading" desc={nextChapter ? `Next: Ch ${nextChapter.number}` : "Reading Tracker"} color="purple" onClick={() => navigate('/reading?reader=true')} />
           <QuickAction icon={<Code2 size={18} />} label="Add Problem" desc="LeetCode Log" color="cyan" onClick={() => navigate('/leetcode')} />
           <QuickAction icon={<BarChart3 size={18} />} label="Analytics" desc="View Insights" color="emerald" onClick={() => navigate('/analytics')} />
+          <QuickAction 
+            icon={<Moon size={18} />} 
+            label="Rest Day" 
+            desc="Freeze Streaks" 
+            color="indigo" 
+            onClick={() => { 
+              play('success'); 
+              useAppStore.getState().logRestDay(); 
+              toast.success('Rest day logged. Streaks preserved!'); 
+            }} 
+          />
           <QuickAction 
             icon={<Bug size={18} />} 
             label="Report Bug" 

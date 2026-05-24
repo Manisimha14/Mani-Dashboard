@@ -76,6 +76,7 @@ interface AppStore {
 
   // Activity
   logActivity: (type: 'reading' | 'coding' | 'focus', value: number) => void;
+  logRestDay: () => void;
 
   // XP Gamification
   addXp: (amount: number, source: string, description: string) => void;
@@ -627,6 +628,33 @@ export const useAppStore = create<AppStore>()(
             ];
           }
           return { dailyActivity: updatedList };
+        });
+      },
+
+      logRestDay: () => {
+        set(state => {
+          const today = todayString();
+          let readingStreak = state.readingStreak;
+          let codingStreak = state.codingStreak;
+          let focusStreak = state.focusStreak;
+
+          if (!readingStreak.history[today]) {
+            const newHistory = { ...readingStreak.history, [today]: 'rest' as const };
+            const { current, longest } = calculateStreak(newHistory);
+            readingStreak = { ...readingStreak, currentStreak: current, longestStreak: Math.max(longest, readingStreak.longestStreak), history: newHistory, lastActivityDate: today };
+          }
+          if (!codingStreak.history[today]) {
+            const newHistory = { ...codingStreak.history, [today]: 'rest' as const };
+            const { current, longest } = calculateStreak(newHistory);
+            codingStreak = { ...codingStreak, currentStreak: current, longestStreak: Math.max(longest, codingStreak.longestStreak), history: newHistory, lastActivityDate: today };
+          }
+          if (!focusStreak.history[today]) {
+            const newHistory = { ...focusStreak.history, [today]: 'rest' as const };
+            const { current, longest } = calculateStreak(newHistory);
+            focusStreak = { ...focusStreak, currentStreak: current, longestStreak: Math.max(longest, focusStreak.longestStreak), history: newHistory, lastActivityDate: today };
+          }
+
+          return { readingStreak, codingStreak, focusStreak };
         });
       },
 

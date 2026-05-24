@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Heart, Droplets, Flame, Dumbbell, Moon, Target,
-  TrendingUp, Plus, Activity, Zap, Footprints
+  TrendingUp, Plus, Activity, Zap, Footprints, Sparkles
 } from 'lucide-react';
 import { todayString } from '../lib/utils';
 import { useTodayHealthData, useHealthGoals } from '../hooks/useHealthQuery';
@@ -14,6 +14,7 @@ import StepsTracker from '../components/health/StepsTracker';
 import WorkoutTracker from '../components/health/WorkoutTracker';
 import SleepTracker from '../components/health/SleepTracker';
 import GoalsPanel from '../components/health/GoalsPanel';
+import { FoodLogger } from '../components/food-logger/FoodLogger';
 
 const TABS = [
   { id: 'overview',  label: 'Overview',  icon: Activity },
@@ -22,6 +23,7 @@ const TABS = [
   { id: 'steps',     label: 'Steps',     icon: Footprints },
   { id: 'workout',   label: 'Workout',   icon: Dumbbell },
   { id: 'sleep',     label: 'Sleep',     icon: Moon },
+  { id: 'food_log',  label: 'AI Food Log', icon: Sparkles },
   { id: 'goals',     label: 'Goals',     icon: Target },
 ] as const;
 
@@ -138,8 +140,9 @@ export default function Health() {
           {activeTab === 'water'     && <WaterTracker today={today} />}
           {activeTab === 'steps'     && <StepsTracker today={today} />}
           {activeTab === 'workout'   && <WorkoutTracker today={today} />}
-          {activeTab === 'sleep'     && <SleepTracker today={today} />}
-          {activeTab === 'goals'     && <GoalsPanel />}
+          { activeTab === 'sleep'     && <SleepTracker today={today} /> }
+          { activeTab === 'food_log'  && <FoodLogger /> }
+          { activeTab === 'goals'     && <GoalsPanel /> }
         </motion.div>
       </AnimatePresence>
     </div>

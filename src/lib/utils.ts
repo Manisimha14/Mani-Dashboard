@@ -27,7 +27,7 @@ export function todayString(): string {
   return format(new Date(), 'yyyy-MM-dd');
 }
 
-export function calculateStreak(history: Record<string, boolean>): { current: number; longest: number } {
+export function calculateStreak(history: Record<string, boolean | 'rest'>): { current: number; longest: number } {
   const today = new Date();
   let current = 0;
   let longest = 0;
@@ -47,7 +47,9 @@ export function calculateStreak(history: Record<string, boolean>): { current: nu
     d.setDate(d.getDate() - i);
     const key = format(d, 'yyyy-MM-dd');
     if (history[key]) {
-      current++;
+      if (history[key] !== 'rest') {
+        current++;
+      }
     } else {
       break;
     }
@@ -57,14 +59,16 @@ export function calculateStreak(history: Record<string, boolean>): { current: nu
   const sorted = Object.keys(history).filter(k => history[k]).sort();
   for (let i = 0; i < sorted.length; i++) {
     if (i === 0) {
-      tempLongest = 1;
+      tempLongest = history[sorted[i]] === 'rest' ? 0 : 1;
     } else {
       const prev = parseISO(sorted[i - 1]);
       const curr = parseISO(sorted[i]);
       if (differenceInDays(curr, prev) === 1) {
-        tempLongest++;
+        if (history[sorted[i]] !== 'rest') {
+          tempLongest++;
+        }
       } else {
-        tempLongest = 1;
+        tempLongest = history[sorted[i]] === 'rest' ? 0 : 1;
       }
     }
     longest = Math.max(longest, tempLongest);
@@ -73,7 +77,7 @@ export function calculateStreak(history: Record<string, boolean>): { current: nu
   return { current, longest };
 }
 
-export function updateStreakData(streak: { currentStreak: number; longestStreak: number; history: Record<string, boolean> }): { currentStreak: number; longestStreak: number; lastActivityDate: string; history: Record<string, boolean> } {
+export function updateStreakData(streak: { currentStreak: number; longestStreak: number; history: Record<string, boolean | 'rest'> }): { currentStreak: number; longestStreak: number; lastActivityDate: string; history: Record<string, boolean | 'rest'> } {
   const history = { ...streak.history, [todayString()]: true };
   const { current, longest } = calculateStreak(history);
   return { 
