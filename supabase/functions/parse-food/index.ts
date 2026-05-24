@@ -17,7 +17,7 @@ serve(async (req) => {
     }
 
     try {
-        const { input, image } = await req.json();
+        const { input, image, mealTypeHint } = await req.json();
         const hasImage = !!(image && image.data && image.mimeType);
         
         if (!hasImage && (!input || typeof input !== 'string')) {
@@ -32,7 +32,10 @@ serve(async (req) => {
             { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
         );
 
-        const normalizedInput = input ? normalizeInput(input) : "";
+        let normalizedInput = input ? normalizeInput(input) : "";
+        if (mealTypeHint && typeof mealTypeHint === 'string') {
+            normalizedInput += `\n(Local time hint: current meal context is ${mealTypeHint})`;
+        }
         const inputHash = hasImage ? `image-${Date.now()}-${Math.random().toString(36).substring(2, 9)}` : await generateInputHash(normalizedInput);
 
         // 1. Cache Lookup (only for pure text logs)

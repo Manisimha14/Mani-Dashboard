@@ -1,12 +1,13 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Mic, Camera, Send, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 
 type FoodInputProps = {
-  onParse: (input: string, image?: { data: string; mimeType: string }) => void;
+  onParse: (input: string, image?: { data: string; mimeType: string }, previewUrl?: string, rawBlob?: Blob) => void;
   isParsing: boolean;
   loadingMessage: string;
+  onStateChange?: (state: 'idle' | 'compressing' | 'uploading' | 'analyzing' | 'refining' | 'done' | 'error') => void;
 };
 
 const placeholderExamples = [
@@ -16,12 +17,13 @@ const placeholderExamples = [
   "poha and chai..."
 ];
 
-export function FoodInput({ onParse, isParsing, loadingMessage }: FoodInputProps) {
+export function FoodInput({ onParse, isParsing, loadingMessage, onStateChange }: FoodInputProps) {
   const [input, setInput] = useState('');
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Rotate placeholders every 3 seconds if empty
-  React.useEffect(() => {
+  useEffect(() => {
     if (input) return;
     const interval = setInterval(() => {
       setPlaceholderIndex((current) => (current + 1) % placeholderExamples.length);
@@ -29,18 +31,38 @@ export function FoodInput({ onParse, isParsing, loadingMessage }: FoodInputProps
     return () => clearInterval(interval);
   }, [input]);
 
+  // Premium Clipboard Paste Listener (World Class Desktop UX)
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      
+      for (const item of items) {
+        if (item.type.indexOf("image") === 0) {
+          const file = item.getAsFile();
+          if (file) {
+            toast.success("Image pasted from clipboard!");
+            processFile(file);
+            break;
+          }
+        }
+      }
+    };
+
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, [isParsing]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (input.trim() && !isParsing) {
+      if (onStateChange) onStateChange('analyzing');
       onParse(input);
       setInput(''); // clear after sending
     }
   };
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   const handleVoiceClick = () => {
-    // We do not fake mock this in production as per user guidelines
     alert("Voice logging coming soon.");
   };
 
@@ -50,29 +72,97 @@ export function FoodInput({ onParse, isParsing, loadingMessage }: FoodInputProps
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && !isParsing) {
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        const base64String = event.target?.result as string;
-        if (base64String) {
-          const match = base64String.match(/^data:(image\/[a-zA-Z+.-]+);base64,(.+)$/);
-          if (match) {
-            const mimeType = match[1];
-            const data = match[2];
-            onParse("", { data, mimeType });
-          } else {
-            toast.error("Invalid image format.");
-          }
+  // Secure validation and high performance Web Worker compression
+  const processFile = (file: File) => {
+    // 1. Validation Checks (Security & Payloads)
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error("Unsupported file format. Please upload JPEG, PNG, or WebP.");
+      return;
+    }
+
+    const MAX_SIZE = 15 * 1024 * 1024; // 15MB max input size
+    if (file.size > MAX_SIZE) {
+      toast.error("File is too large. Maximum size is 15MB.");
+      return;
+    }
+
+    if (isParsing) return;
+
+    // 2. Set Optimistic State & Create Memory-Safe Object URL Preview
+    const previewUrl = URL.createObjectURL(file);
+    if (onStateChange) onStateChange('compressing');
+
+    // 3. Spin up Web Worker for off-thread adaptive compression
+    try {
+      const worker = new Worker(
+        new URL('../../workers/imageCompression.worker.ts', import.meta.url),
+        { type: 'module' }
+      );
+
+      worker.postMessage({
+        file,
+        maxDimension: 768, // Optimal visual resolution for nutrition parsing models
+        quality: 0.72
+      });
+
+      worker.onmessage = (e: MessageEvent) => {
+        const { success, blob, error } = e.data;
+        worker.terminate(); // terminate worker immediately to reclaim memory
+
+        if (success && blob) {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const base64String = reader.result as string;
+            const match = base64String.match(/^data:(image\/jpeg);base64,(.+)$/);
+            if (match) {
+              const mimeType = match[1];
+              const data = match[2];
+              if (onStateChange) onStateChange('uploading');
+              onParse("", { data, mimeType }, previewUrl, blob);
+            } else {
+              toast.error("Failed to parse optimized image data.");
+              if (onStateChange) onStateChange('error');
+              URL.revokeObjectURL(previewUrl);
+            }
+          };
+          reader.readAsDataURL(blob);
+        } else {
+          toast.error(error || "Image optimization failed.");
+          if (onStateChange) onStateChange('error');
+          URL.revokeObjectURL(previewUrl);
         }
       };
-      reader.onerror = () => {
-        toast.error("Failed to read image file.");
+
+      worker.onerror = (err) => {
+        console.error("Worker crash:", err);
+        toast.error("Optimizing thread crashed. Using fallback...");
+        worker.terminate();
+        if (onStateChange) onStateChange('error');
+        URL.revokeObjectURL(previewUrl);
+      };
+
+    } catch (workerErr) {
+      console.error("Failed to spawn worker, fallback to direct reading:", workerErr);
+      // Graceful fallback to raw reading in case of worker constraints
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64String = reader.result as string;
+        const match = base64String.match(/^data:(image\/[a-zA-Z+.-]+);base64,(.+)$/);
+        if (match) {
+          if (onStateChange) onStateChange('uploading');
+          onParse("", { data: match[2], mimeType: match[1] }, previewUrl, file);
+        }
       };
       reader.readAsDataURL(file);
-      // Reset input
-      e.target.value = '';
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processFile(file);
+      e.target.value = ''; // Reset file input
     }
   };
 
@@ -121,7 +211,7 @@ export function FoodInput({ onParse, isParsing, loadingMessage }: FoodInputProps
           <div className="flex items-center space-x-2">
             <input 
               type="file" 
-              accept="image/*" 
+              accept="image/jpeg,image/png,image/webp" 
               capture="environment" 
               ref={fileInputRef}
               onChange={handleFileChange}
@@ -139,7 +229,7 @@ export function FoodInput({ onParse, isParsing, loadingMessage }: FoodInputProps
               type="button"
               onClick={handlePhotoClick}
               className="p-2 rounded-xl text-zinc-400 hover:text-cyan-400 hover:bg-zinc-800 transition-colors"
-              title="Coming Soon"
+              title="Upload Food Capture"
             >
               <Camera size={20} />
             </button>
@@ -147,17 +237,17 @@ export function FoodInput({ onParse, isParsing, loadingMessage }: FoodInputProps
 
           <div className="flex items-center space-x-3">
              <AnimatePresence mode="popLayout">
-               {isParsing && (
-                 <motion.div 
-                   initial={{ opacity: 0, x: 20 }}
-                   animate={{ opacity: 1, x: 0 }}
-                   exit={{ opacity: 0, x: -20 }}
-                   className="flex items-center space-x-2 text-cyan-400 text-sm font-medium"
-                 >
-                   <Sparkles className="animate-spin-slow w-4 h-4" />
-                   <span>{loadingMessage}</span>
-                 </motion.div>
-               )}
+                {isParsing && (
+                  <motion.div 
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    className="flex items-center space-x-2 text-cyan-400 text-sm font-medium"
+                  >
+                    <Sparkles className="animate-spin-slow w-4 h-4" />
+                    <span>{loadingMessage}</span>
+                  </motion.div>
+                )}
              </AnimatePresence>
 
              <button
