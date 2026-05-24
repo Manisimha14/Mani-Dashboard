@@ -54,7 +54,7 @@ export default function SpaceClock() {
         <div className="flex flex-col justify-center items-center lg:items-start lg:border-r lg:border-white/5 lg:pr-6 min-h-[120px]">
           <div className="flex items-center gap-2 mb-2">
             <Clock size={12} className="text-violet-400" />
-            <span className="text-[9px] font-black uppercase text-white/30 tracking-widest">System Temporal Node</span>
+            <span className="text-[9px] font-black uppercase text-white/30 tracking-widest">Current Time</span>
           </div>
           <div className="text-4xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-violet-200 tracking-tighter font-mono filter drop-shadow-[0_0_15px_rgba(139,92,246,0.2)]">
             {timeString}

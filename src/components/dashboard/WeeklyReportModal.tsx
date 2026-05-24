@@ -1,16 +1,8 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Briefcase, TrendingUp, ShieldAlert, Sparkles, Download, ChevronRight } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Download, ShieldCheck } from 'lucide-react';
 import { format } from 'date-fns';
 import Modal from '../Modal';
-
-// Presentation Panels imports
-import WeeklySummaryPanel from '../reports/WeeklySummaryPanel';
-import TrendInsightsPanel from '../reports/TrendInsightsPanel';
-import HighlightsPanel from '../reports/HighlightsPanel';
-import RecommendationsPanel from '../reports/RecommendationsPanel';
-
-// Services & Utilities imports
+import WeeklyIntelligenceReport from '../reports/WeeklyIntelligenceReport';
 import { calculateWeeklyReport } from '../../services/reports/weeklyReportCalculator';
 import { generateWeeklyReportPDF } from '../../services/reports/weeklyReportPdf';
 import type { FocusSession, LeetCodeProblem, Tracker } from '../../types';
@@ -25,7 +17,7 @@ interface WeeklyReportModalProps {
   waterEntries: WaterEntry[];
   sleepEntries: SleepEntry[];
   workoutEntries: WorkoutEntry[];
-  bookChapters: any[];
+  bookChapters: Array<{ id?: string | number; number?: number; title?: string; completed?: boolean; dateCompleted?: string }>;
   stepsData: Record<string, number>;
   healthGoals: HealthGoal[];
   meals: MealEntry[];
@@ -46,97 +38,70 @@ export default function WeeklyReportModal({
   healthGoals,
   meals,
   trackers,
-  weeksAgo = 0
+  weeksAgo = 0,
 }: WeeklyReportModalProps) {
-  const [step, setStep] = useState(0);
-  const [generating, setGenerating] = useState(true);
-  const [stats, setStats] = useState<WeeklyReportStats | null>(null);
+  const [report, setReport] = useState<WeeklyReportStats | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
-  // Aligned Monday-to-Sunday fixed calendar weeks
   const last7Days = useMemo(() => {
     const now = new Date();
     const currentDay = now.getDay();
     const daysToMonday = currentDay === 0 ? 6 : currentDay - 1;
-
-    // Start of the current week (Monday)
     const startOfCurrentWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysToMonday);
-
-    // Offset to the target week
     const startOfTargetWeek = new Date(startOfCurrentWeek);
-    startOfTargetWeek.setDate(startOfTargetWeek.getDate() - (weeksAgo || 0) * 7);
+    startOfTargetWeek.setDate(startOfTargetWeek.getDate() - weeksAgo * 7);
 
-    const list: string[] = [];
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(startOfTargetWeek);
-      d.setDate(d.getDate() + i);
-      list.push(format(d, 'yyyy-MM-dd'));
+    const dates: string[] = [];
+    for (let index = 0; index < 7; index += 1) {
+      const value = new Date(startOfTargetWeek);
+      value.setDate(value.getDate() + index);
+      dates.push(format(value, 'yyyy-MM-dd'));
     }
-    return list;
+    return dates;
   }, [weeksAgo]);
 
   const prev7Days = useMemo(() => {
-    const now = new Date();
-    const currentDay = now.getDay();
-    const daysToMonday = currentDay === 0 ? 6 : currentDay - 1;
-
-    // Start of the current week (Monday)
-    const startOfCurrentWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysToMonday);
-
-    // Offset to the target week
-    const startOfTargetWeek = new Date(startOfCurrentWeek);
-    startOfTargetWeek.setDate(startOfTargetWeek.getDate() - (weeksAgo || 0) * 7);
-
-    const list: string[] = [];
-    for (let i = 1; i <= 7; i++) {
-      const d = new Date(startOfTargetWeek);
-      d.setDate(d.getDate() - i);
-      list.unshift(format(d, 'yyyy-MM-dd'));
+    const start = new Date(`${last7Days[0]}T00:00:00`);
+    const dates: string[] = [];
+    for (let index = 7; index >= 1; index -= 1) {
+      const value = new Date(start);
+      value.setDate(value.getDate() - index);
+      dates.push(format(value, 'yyyy-MM-dd'));
     }
-    return list;
-  }, [weeksAgo]);
+    return dates;
+  }, [last7Days]);
 
-  // Goals fallback parameters
-  const resolvedGoals = useMemo(() => {
-    const waterGoalMl = healthGoals.find(g => g.type === 'water')?.targetValue ?? 3000;
-    const sleepGoalHours = healthGoals.find(g => g.type === 'sleep_hours')?.targetValue ?? 7.5;
-    const focusGoalMin = 300;
-    return { waterGoalMl, sleepGoalHours, focusGoalMin };
-  }, [healthGoals]);
-
-  // Async task loader to perform actual analytical work on the thread safely without lag spikes
   useEffect(() => {
-    if (open) {
-      setGenerating(true);
-      setStep(0);
-      
-      const taskTimer = setTimeout(() => {
-        try {
-          const result = calculateWeeklyReport({
-            focusSessions,
-            problems,
-            waterEntries,
-            sleepEntries,
-            workoutEntries,
-            bookChapters,
-            stepsData,
-            healthGoals,
-            last7Days,
-            prev7Days,
-            meals,
-            trackers
-          });
-          setStats(result);
-        } catch (err) {
-          console.error('Failed to calculate report metrics:', err);
-        } finally {
-          setGenerating(false);
-        }
-      }, 50); // Yield thread briefly to let loader animation mount
-
-      return () => clearTimeout(taskTimer);
-    } else {
-      setStats(null);
+    if (!open) {
+      setReport(null);
+      return;
     }
+
+    setGenerating(true);
+    const timer = setTimeout(() => {
+      try {
+        const value = calculateWeeklyReport({
+          focusSessions,
+          problems,
+          waterEntries,
+          sleepEntries,
+          workoutEntries,
+          bookChapters,
+          stepsData,
+          healthGoals,
+          last7Days,
+          prev7Days,
+          meals,
+          trackers,
+        });
+        setReport(value);
+      } finally {
+        setGenerating(false);
+      }
+    }, 25);
+
+    return () => clearTimeout(timer);
   }, [
     open,
     focusSessions,
@@ -147,207 +112,55 @@ export default function WeeklyReportModal({
     bookChapters,
     stepsData,
     healthGoals,
+    last7Days,
+    prev7Days,
     meals,
     trackers,
-    last7Days,
-    prev7Days
   ]);
 
-  // Keyboard navigation for step tab indices
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === 'ArrowRight') {
-      setStep(s => Math.min(s + 1, 3));
-      e.preventDefault();
-    } else if (e.key === 'ArrowLeft') {
-      setStep(s => Math.max(s - 1, 0));
-      e.preventDefault();
+  const handleExport = async () => {
+    if (!report) return;
+    setExporting(true);
+    try {
+      await generateWeeklyReportPDF(report);
+    } finally {
+      setExporting(false);
     }
   };
-
-  const handlePrint = () => {
-    if (stats) {
-      generateWeeklyReportPDF(stats, last7Days);
-    }
-  };
-
-  const stepsList = [
-    { title: 'Weekly Summary', icon: Briefcase },
-    { title: 'Trend Insights', icon: TrendingUp },
-    { title: 'Highlights & Concerns', icon: ShieldAlert },
-    { title: 'Recommendations', icon: Sparkles }
-  ];
 
   return (
-    <Modal open={open} onClose={onClose} maxWidth="max-w-2xl" title="Weekly Summary Report">
-      <div onKeyDown={handleKeyDown} className="outline-none">
-        
-        {/* Loading Spinner Micro-interaction */}
-        <AnimatePresence mode="wait">
-          {generating || !stats ? (
-            <motion.div 
-              key="loader"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="py-20 flex flex-col items-center justify-center space-y-4"
-            >
-              <div className="w-10 h-10 rounded-full border-2 border-violet-500/20 border-t-violet-500 animate-spin" />
-              <div className="flex flex-col items-center text-center space-y-1">
-                <span className="text-xs font-black text-white uppercase tracking-widest">Preparing Report</span>
-                <span className="text-[10px] text-white/30 font-bold uppercase tracking-wider">Analyzing your weekly data...</span>
-              </div>
-            </motion.div>
-          ) : (
-            <motion.div
-              key="content"
-              initial={{ opacity: 0, y: 5 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="space-y-6"
-            >
-              {/* Tab Progress Headers (Aria compliant tablist) */}
-              <div className="flex justify-between border-b border-white/5 pb-4" role="tablist" aria-label="Weekly summary sections">
-                {stepsList.map((s, idx) => {
-                  const Icon = s.icon;
-                  const isActive = idx === step;
-                  return (
-                    <button
-                      key={s.title}
-                      role="tab"
-                      id={`tab-${idx}`}
-                      aria-selected={isActive}
-                      aria-controls={`panel-${idx}`}
-                      onClick={() => setStep(idx)}
-                      className={`flex items-center gap-2 text-xs font-black uppercase tracking-wider pb-2 border-b-2 transition-all ${
-                        isActive 
-                          ? 'border-violet-500 text-white'
-                          : 'border-transparent text-white/40 hover:text-white/70'
-                      }`}
-                    >
-                      <Icon size={14} />
-                      <span className="hidden md:inline">{s.title}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Steps Tabpanel Containers */}
-              <div className="space-y-6">
-                {step === 0 && (
-                  <div 
-                    role="tabpanel" 
-                    id="panel-0" 
-                    aria-labelledby="tab-0"
-                    tabIndex={0}
-                    className="outline-none focus-visible:ring-1 focus-visible:ring-violet-500 rounded-xl"
-                  >
-                    <WeeklySummaryPanel 
-                      stats={stats} 
-                      waterGoalMl={resolvedGoals.waterGoalMl} 
-                      sleepHours={resolvedGoals.sleepGoalHours} 
-                      focusGoalMin={resolvedGoals.focusGoalMin} 
-                      focusSessions={focusSessions}
-                      problems={problems}
-                      waterEntries={waterEntries}
-                      sleepEntries={sleepEntries}
-                      workoutEntries={workoutEntries}
-                      bookChapters={bookChapters}
-                      stepsData={stepsData}
-                      meals={meals}
-                      last7Days={last7Days}
-                    />
-                  </div>
-                )}
-
-                {step === 1 && (
-                  <div 
-                    role="tabpanel" 
-                    id="panel-1" 
-                    aria-labelledby="tab-1"
-                    tabIndex={0}
-                    className="outline-none focus-visible:ring-1 focus-visible:ring-violet-500 rounded-xl"
-                  >
-                    <TrendInsightsPanel 
-                      stats={stats} 
-                      cycleDates={last7Days} 
-                      focusSessions={focusSessions}
-                      problems={problems}
-                      waterEntries={waterEntries}
-                      sleepEntries={sleepEntries}
-                      workoutEntries={workoutEntries}
-                      bookChapters={bookChapters}
-                      stepsData={stepsData}
-                      meals={meals}
-                      waterGoalMl={resolvedGoals.waterGoalMl}
-                    />
-                  </div>
-                )}
-
-                {step === 2 && (
-                  <div 
-                    role="tabpanel" 
-                    id="panel-2" 
-                    aria-labelledby="tab-2"
-                    tabIndex={0}
-                    className="outline-none focus-visible:ring-1 focus-visible:ring-violet-500 rounded-xl"
-                  >
-                    <HighlightsPanel stats={stats} />
-                  </div>
-                )}
-
-                {step === 3 && (
-                  <div 
-                    role="tabpanel" 
-                    id="panel-3" 
-                    aria-labelledby="tab-3"
-                    tabIndex={0}
-                    className="outline-none focus-visible:ring-1 focus-visible:ring-violet-500 rounded-xl"
-                  >
-                    <RecommendationsPanel stats={stats} />
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Modal Navigation Buttons */}
-        <div className="border-t border-white/5 pt-4 mt-6 flex justify-between items-center">
-          <button
-            onClick={handlePrint}
-            aria-label="Download clean vector PDF report"
-            disabled={generating || !stats}
-            className="btn-ghost px-4 py-2 text-xs font-black uppercase tracking-wider flex items-center gap-1.5 text-violet-400 disabled:opacity-30 disabled:pointer-events-none"
-          >
-            <Download size={14} /> Download PDF
-          </button>
-          
-          <div className="flex gap-2">
-            {step > 0 && !generating && (
-              <button
-                onClick={() => setStep(s => s - 1)}
-                className="btn-ghost px-4 py-2 text-xs font-black uppercase tracking-wider"
-              >
-                Back
-              </button>
-            )}
-            {step < 3 && !generating ? (
-              <button
-                onClick={() => setStep(s => s + 1)}
-                className="btn-glow px-5 py-2 text-xs font-black uppercase tracking-wider flex items-center gap-1"
-              >
-                Next <ChevronRight size={14} />
-              </button>
-            ) : !generating ? (
-              <button
-                onClick={onClose}
-                className="btn-glow px-6 py-2 text-xs font-black uppercase tracking-wider"
-              >
-                Dismiss
-              </button>
-            ) : null}
+    <Modal open={open} onClose={onClose} maxWidth="max-w-[92vw]" title="Weekly Intelligence Report">
+      <div className="space-y-5">
+        <div className="flex items-center justify-between gap-4 border-b border-white/5 pb-4">
+          <div>
+            <div className="text-[10px] font-black uppercase tracking-[0.25em] text-cyan-400 flex items-center gap-2">
+              <ShieldCheck size={12} />
+              Trusted Weekly Intelligence
+            </div>
+            <div className="text-sm text-white/40 mt-1">
+              Premium report built from canonical Mani OS metrics only.
+            </div>
           </div>
+          <button
+            onClick={handleExport}
+            disabled={!report || generating || exporting}
+            className="btn-glow px-4 py-2 text-xs font-black uppercase tracking-wider flex items-center gap-2 disabled:opacity-40"
+          >
+            <Download size={14} />
+            {exporting ? 'Exporting...' : 'Download PDF'}
+          </button>
         </div>
 
+        {generating || !report ? (
+          <div className="py-20 flex flex-col items-center justify-center gap-4">
+            <div className="w-10 h-10 rounded-full border-2 border-t-transparent border-cyan-400 animate-spin" />
+            <div className="text-xs font-black uppercase tracking-[0.25em] text-white/40">Building your weekly intelligence report</div>
+          </div>
+        ) : (
+          <div className="max-h-[80vh] overflow-y-auto pr-2 space-y-6">
+            <WeeklyIntelligenceReport report={report} />
+          </div>
+        )}
       </div>
     </Modal>
   );

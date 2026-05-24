@@ -13,12 +13,13 @@ const getPageTitle = (pathname: string) => {
   switch (pathname) {
     case '/': return 'MANI OS';
     case '/focus': return 'Focus Hub';
-    case '/reading': return 'Learning Hub';
+    case '/reading': return 'Reading';
     case '/leetcode': return 'Coding Forge';
-    case '/trackers': return 'Trackers';
+    case '/trackers': return 'Tasks & Trackers';
     case '/health': return 'Health Hub';
     case '/ambient': return 'Flowscape';
     case '/analytics': return 'Aura Analytics';
+    case '/reports': return 'Weekly Review';
     case '/achievements': return 'Achievements';
     case '/settings': return 'Settings';
     default: return 'MANI OS';

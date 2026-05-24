@@ -1,9 +1,9 @@
 import React from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, BookOpen, Code2, Timer, BarChart3, FileText,
-  Trophy, Settings, Zap, ChevronRight, Flame, Target, Sparkles, Heart, Music, X, Bug
+  Trophy, Settings, Flame, Target, Sparkles, Heart, X, Bug
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { todayString, getProductivityScore } from '../lib/utils';
@@ -14,18 +14,42 @@ import { useFocusSessions } from '../hooks/useFocusQuery';
 import { useProfile } from '../hooks/useProfileQuery';
 import { useDailyActivity } from '../hooks/useActivityQuery';
 
-const navItems = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
-  { to: '/focus', icon: Timer, label: 'Focus' },
-  { to: '/reading', icon: BookOpen, label: 'Learning' },
-  { to: '/leetcode', icon: Code2, label: 'Coding' },
-  { to: '/trackers', icon: Target, label: 'Trackers' },
-  { to: '/health', icon: Heart, label: 'Health' },
-  { to: '/ambient', icon: Music, label: 'Flowscape' },
-  { to: '/analytics', icon: BarChart3, label: 'Analytics' },
-  { to: '/reports', icon: FileText, label: 'Reports' },
-  { to: '/achievements', icon: Trophy, label: 'Achievements' },
-  { to: '/settings', icon: Settings, label: 'Settings' },
+const navGroups = [
+  {
+    title: 'Productivity',
+    items: [
+      { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
+      { to: '/focus', icon: Timer, label: 'Focus' },
+      { to: '/analytics', icon: BarChart3, label: 'Analytics' },
+      { to: '/trackers', icon: Target, label: 'Tasks & Trackers' },
+    ],
+  },
+  {
+    title: 'Learning',
+    items: [
+      { to: '/leetcode', icon: Code2, label: 'Coding' },
+      { to: '/reading', icon: BookOpen, label: 'Reading' },
+    ],
+  },
+  {
+    title: 'Health',
+    items: [
+      { to: '/health', icon: Heart, label: 'Health' },
+    ],
+  },
+  {
+    title: 'Intelligence',
+    items: [
+      { to: '/reports', icon: FileText, label: 'Reports' },
+      { to: '/achievements', icon: Trophy, label: 'Achievements' },
+    ],
+  },
+  {
+    title: 'System',
+    items: [
+      { to: '/settings', icon: Settings, label: 'Settings' },
+    ],
+  },
 ];
 
 function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }) {
@@ -38,7 +62,6 @@ function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }
   const readingStreak = profile?.readingStreak ?? { currentStreak: 0, longestStreak: 0, history: {} };
   const codingStreak = profile?.codingStreak ?? { currentStreak: 0, longestStreak: 0, history: {} };
   const focusStreak = profile?.focusStreak ?? { currentStreak: 0, longestStreak: 0, history: {} };
-  const location = useLocation();
   const { play } = useSoundFX();
   const today = todayString();
 
@@ -138,64 +161,74 @@ function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }
         )}
       </AnimatePresence>
 
-      <nav className="flex-1 px-3 space-y-1.5">
-        {navItems.map(({ to, icon: Icon, label, end }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={end}
-            onClick={() => { play('click'); onClose?.(); }}
-            className="group block no-underline"
-          >
-            {({ isActive }) => (
-              <motion.div
-                whileHover={{ x: 6, backgroundColor: 'rgba(255,255,255,0.06)' }}
-                whileTap={{ scale: 0.96 }}
-                className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-300 focus-visible:ring-2 focus-visible:ring-violet-500 outline-none ${
-                  isActive 
-                    ? 'text-violet-400 bg-violet-600/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]' 
-                    : 'text-white/40 hover:text-white'
-                }`}
-                aria-label={`Navigate to ${label}`}
-              >
-                <div className={`transition-transform duration-300 ${isActive ? 'scale-110 drop-shadow-[0_0_8px_rgba(139,92,246,0.5)]' : ''}`}>
-                  <Icon size={18} />
-                </div>
-                <span className={`flex-1 text-sm font-medium tracking-tight ${isActive ? 'font-bold' : ''}`}>{label}</span>
-                
-                {isActive && (
-                  <>
+      <nav className="flex-1 px-3 py-4 space-y-4 overflow-y-auto">
+        {navGroups.map(({ title, items }) => (
+          <div key={title}>
+            <div className="px-3 pb-2 text-[10px] font-black uppercase tracking-[0.24em] text-white/18">
+              {title}
+            </div>
+            <div className="space-y-1.5">
+              {items.map(({ to, icon: Icon, label, end }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={end}
+                  onClick={() => { play('click'); onClose?.(); }}
+                  className="group block no-underline"
+                >
+                  {({ isActive }) => (
                     <motion.div
-                      layoutId="nav-indicator"
-                      className="w-1 h-5 rounded-full bg-violet-400 shadow-[0_0_15px_rgba(139,92,246,0.8)]"
-                      initial={false}
-                    />
-                    <div className="absolute left-0 w-1 h-5 bg-violet-500 blur-sm opacity-60" />
-                  </>
-                )}
-              </motion.div>
-            )}
-          </NavLink>
-        ))}
+                      whileHover={{ x: 6, backgroundColor: 'rgba(255,255,255,0.06)' }}
+                      whileTap={{ scale: 0.96 }}
+                      className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-300 focus-visible:ring-2 focus-visible:ring-violet-500 outline-none ${
+                        isActive
+                          ? 'text-violet-400 bg-violet-600/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]'
+                          : 'text-white/40 hover:text-white'
+                      }`}
+                      aria-label={`Navigate to ${label}`}
+                    >
+                      <div className={`transition-transform duration-300 ${isActive ? 'scale-110 drop-shadow-[0_0_8px_rgba(139,92,246,0.5)]' : ''}`}>
+                        <Icon size={18} />
+                      </div>
+                      <span className={`flex-1 text-sm font-medium tracking-tight ${isActive ? 'font-bold' : ''}`}>{label}</span>
 
-        {/* Premium Bug Report Sidebar Row */}
-        <motion.button
-          whileHover={{ x: 6, backgroundColor: 'rgba(244,63,94,0.06)' }}
-          whileTap={{ scale: 0.96 }}
-          onClick={() => {
-            play('click');
-            window.dispatchEvent(new CustomEvent('toggle-bug-report'));
-            onClose?.();
-          }}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-300 outline-none text-rose-400 hover:text-rose-300 bg-rose-500/5 border border-rose-500/10 hover:border-rose-500/25 font-medium text-left mt-3"
-          aria-label="Report Issue"
-        >
-          <div className="transition-transform duration-300 hover:scale-110">
-            <Bug size={18} />
+                      {isActive && (
+                        <>
+                          <motion.div
+                            layoutId="nav-indicator"
+                            className="w-1 h-5 rounded-full bg-violet-400 shadow-[0_0_15px_rgba(139,92,246,0.8)]"
+                            initial={false}
+                          />
+                          <div className="absolute left-0 w-1 h-5 bg-violet-500 blur-sm opacity-60" />
+                        </>
+                      )}
+                    </motion.div>
+                  )}
+                </NavLink>
+              ))}
+
+              {title === 'System' && (
+                <motion.button
+                  whileHover={{ x: 6, backgroundColor: 'rgba(244,63,94,0.06)' }}
+                  whileTap={{ scale: 0.96 }}
+                  onClick={() => {
+                    play('click');
+                    window.dispatchEvent(new CustomEvent('toggle-bug-report'));
+                    onClose?.();
+                  }}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-300 outline-none text-rose-400 hover:text-rose-300 bg-rose-500/5 border border-rose-500/10 hover:border-rose-500/25 font-medium text-left"
+                  aria-label="Feedback"
+                >
+                  <div className="transition-transform duration-300 hover:scale-110">
+                    <Bug size={18} />
+                  </div>
+                  <span className="flex-1 text-sm font-semibold tracking-tight">Feedback</span>
+                  <kbd className="hidden sm:inline-block text-[8px] font-mono opacity-50 px-1 py-0.5 bg-black/40 border border-rose-500/20 rounded text-rose-300/80">Ctrl+Shift+B</kbd>
+                </motion.button>
+              )}
+            </div>
           </div>
-          <span className="flex-1 text-sm font-semibold tracking-tight">Report Issue</span>
-          <kbd className="hidden sm:inline-block text-[8px] font-mono opacity-50 px-1 py-0.5 bg-black/40 border border-rose-500/20 rounded text-rose-300/80">Ctrl+Shift+B</kbd>
-        </motion.button>
+        ))}
       </nav>
 
       {/* Live Productivity Momentum - World Class Upgrade */}

@@ -83,12 +83,17 @@ export interface Achievement {
   title: string;
   description: string;
   icon: string;
-  category: 'reading' | 'coding' | 'focus' | 'streak' | 'general';
+  category: 'reading' | 'coding' | 'focus' | 'streak' | 'general' | 'health' | 'learning';
   unlockedAt?: string;
   unlocked: boolean;
   progress?: number;
   target?: number;
   rarity: 'common' | 'rare' | 'epic' | 'legendary';
+  tier?: 'bronze' | 'silver' | 'gold' | 'platinum' | 'legend';
+  xpReward?: number;
+  xpCategory?: 'focus' | 'health' | 'coding' | 'learning' | 'meta';
+  secret?: boolean;
+  boss?: boolean;
 }
 
 // ─── Streak Types ────────────────────────────────────────────────────────────

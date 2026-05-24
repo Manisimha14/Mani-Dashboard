@@ -2,10 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   CalendarRange, Clock, Eye, Download, Hourglass, 
-  Sparkles, BookOpen, Code2, Flame, TrendingUp, 
-  Activity, Award, Zap, BarChart3, AlertTriangle, 
-  Droplet, Bed, Footprints, Dumbbell, TrendingDown, Info,
-  CheckCircle2, Trash2
+  BookOpen, Code2, BarChart3, AlertTriangle, 
+  CheckCircle2, Trash2, ArrowRight, Droplets, TimerReset, HeartPulse
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useBook } from '../hooks/useBookQuery';
@@ -16,7 +14,7 @@ import { useTrackers } from '../hooks/useTrackerQuery';
 import { useSoundFX } from '../hooks/useSoundFX';
 import { useAppStore } from '../store/useAppStore';
 import { useUpdateProfile } from '../hooks/useProfileQuery';
-import { normalizeToLocalDateString } from '../utils/dateNormalization';
+import { useNavigate } from 'react-router-dom';
 import { calculateWeeklyReport } from '../services/reports/weeklyReportCalculator';
 import { generateWeeklyReportPDF } from '../services/reports/weeklyReportPdf';
 import WeeklyReportModal from '../components/dashboard/WeeklyReportModal';
@@ -91,6 +89,7 @@ const ConsistencyRing = ({ score }: { score: number }) => {
 
 export default function Reports() {
   const { play } = useSoundFX();
+  const navigate = useNavigate();
   const { deletedReports, deleteReport, userSettings } = useAppStore();
   const { mutate: updateProfile } = useUpdateProfile();
   const [countdown, setCountdown] = useState(() => getNextMondayCountdown());
@@ -216,6 +215,18 @@ export default function Reports() {
     });
   }, [uiReportWeeks, focusSessions, problems, waterEntries, sleepEntries, workoutEntries, book, stepsData, healthGoals, meals, trackers]);
 
+  const hasValidatedSignal = (stats: ReturnType<typeof calculateWeeklyReport>) => (
+    stats.focusMinutes > 0 ||
+    stats.problemsSolved > 0 ||
+    stats.chaptersRead > 0 ||
+    stats.totalWaterIntakeMl > 0 ||
+    stats.totalCaloriesTaken > 0 ||
+    stats.totalCaloriesBurnt > 0 ||
+    stats.workoutCount > 0 ||
+    stats.stepsAverage > 0 ||
+    Number(stats.sleepAverageH) > 0
+  );
+
   // Compile list of past weeks for analytics charts (always rolling 6 weeks, unfiltered by deletedReports)
   const analyticsWeeks = useMemo(() => {
     return Array.from({ length: 6 }).map((_, idx) => {
@@ -261,7 +272,7 @@ export default function Reports() {
     play('click');
     setPdfGeneratingWeek(weeksAgo);
     
-    setTimeout(() => {
+    setTimeout(async () => {
       try {
         const result = calculateWeeklyReport({
           focusSessions,
@@ -277,7 +288,7 @@ export default function Reports() {
           meals,
           trackers
         });
-        generateWeeklyReportPDF(result, last7Days);
+        await generateWeeklyReportPDF(result);
       } catch (err) {
         console.error('Failed to generate offline PDF report:', err);
       } finally {
@@ -304,6 +315,43 @@ export default function Reports() {
     return [...weeklyAggregates].reverse();
   }, [weeklyAggregates]);
 
+  const activeWeek = uiReportAggregates.find((item) => item.weeksAgo === 0);
+  const completedReportCards = uiReportAggregates.filter((item) => item.weeksAgo > 0 && hasValidatedSignal(item.stats));
+
+  const smartActions = useMemo(() => {
+    const stats = activeWeek?.stats;
+    if (!stats) return [];
+
+    return [
+      stats.focusMinutes === 0
+        ? { id: 'focus', label: 'Resume focus session', detail: 'No completed focus block logged yet this week.', icon: TimerReset, onClick: () => navigate('/focus') }
+        : null,
+      stats.chaptersRead === 0
+        ? { id: 'reading', label: 'Continue book', detail: 'Reading progress is still at zero for this cycle.', icon: BookOpen, onClick: () => navigate('/reading') }
+        : null,
+      stats.problemsSolved === 0
+        ? { id: 'coding', label: 'Log coding progress', detail: 'No validated coding solves recorded this week.', icon: Code2, onClick: () => navigate('/leetcode') }
+        : null,
+      stats.waterDaysHit < 3
+        ? { id: 'hydration', label: 'Improve hydration', detail: `Target hit on ${stats.waterDaysHit}/7 days so far.`, icon: Droplets, onClick: () => navigate('/health') }
+        : null,
+      {
+        id: 'report',
+        label: 'Review weekly intelligence',
+        detail: 'Open the current cycle with traceable metrics and deltas.',
+        icon: BarChart3,
+        onClick: () => setSelectedWeeksAgo(0),
+      },
+      {
+        id: 'health',
+        label: 'Check recovery signals',
+        detail: `Sleep avg ${stats.sleepAverageH}h. Validate recovery before pushing output.`,
+        icon: HeartPulse,
+        onClick: () => navigate('/health'),
+      },
+    ].filter(Boolean).slice(0, 4) as Array<{ id: string; label: string; detail: string; icon: typeof BarChart3; onClick: () => void }>;
+  }, [activeWeek, navigate]);
+
   return (
     <motion.div 
       initial={{ opacity: 0 }}
@@ -314,12 +362,55 @@ export default function Reports() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-black text-violet-400 uppercase tracking-[0.25em]">Executive Analytics Engine</span>
+            <span className="text-[10px] font-black text-violet-400 uppercase tracking-[0.25em]">Weekly Review</span>
             <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-ping" />
           </div>
-          <h1 className="text-3xl font-black text-white tracking-tight uppercase mt-1">Management Cockpit</h1>
+          <h1 className="text-3xl font-black text-white tracking-tight uppercase mt-1">Trustworthy Weekly Intelligence</h1>
           <p className="text-sm text-white/40 font-semibold mt-1">
-            Browse rolling cycles, measure biological and productivity metrics, and download vector PDF analyses.
+            Every visible number is derived from canonical logs. Empty weeks are withheld instead of dressed up.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-5">
+        <div className="p-5 rounded-3xl bg-white/[0.02] border border-white/5">
+          <div className="flex items-center gap-2 mb-4">
+            <ArrowRight size={14} className="text-violet-400" />
+            <span className="text-[10px] font-black text-violet-300 uppercase tracking-[0.22em]">Smart Action Strip</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {smartActions.map((action) => {
+              const Icon = action.icon;
+              return (
+                <button
+                  key={action.id}
+                  onClick={() => {
+                    play('click');
+                    action.onClick();
+                  }}
+                  className="text-left p-4 rounded-2xl bg-gradient-to-br from-white/[0.04] to-white/[0.01] border border-white/6 hover:border-violet-500/30 hover:bg-violet-500/[0.05] transition-all group"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-white">
+                        <Icon size={14} className="text-violet-400" />
+                        <span className="text-sm font-black tracking-tight">{action.label}</span>
+                      </div>
+                      <p className="text-xs text-white/40 font-semibold leading-relaxed">{action.detail}</p>
+                    </div>
+                    <ArrowRight size={14} className="text-white/25 group-hover:text-violet-300 transition-colors shrink-0 mt-0.5" />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="p-5 rounded-3xl bg-gradient-to-br from-violet-950/20 via-indigo-950/10 to-transparent border border-violet-500/15">
+          <div className="text-[10px] font-black text-violet-300 uppercase tracking-[0.22em]">Scoring Logic</div>
+          <h2 className="text-lg font-black text-white mt-2">Weekly performance score is target-based, not decorative.</h2>
+          <p className="text-xs text-white/45 font-semibold leading-relaxed mt-2">
+            The score is derived from focus quality, coding volume, sleep, hydration, steps, and workouts against weekly targets. Missing data stays missing and reduces certainty.
           </p>
         </div>
       </div>
@@ -337,7 +428,7 @@ export default function Reports() {
           </div>
           <h2 className="text-xl font-black text-white uppercase tracking-wider">Cycle Synchronization</h2>
           <p className="text-xs text-white/45 font-semibold leading-relaxed">
-            Mani OS aggregates daily task metrics, study intervals, and health targets every Monday morning. Maintain focus and track biometrics to preserve week stats streaks.
+            Mani OS rebuilds each weekly report from validated activity logs every Monday morning. No simulated values, no stale cached snapshots.
           </p>
           
           <div className="space-y-1 pt-1.5">
@@ -510,13 +601,13 @@ export default function Reports() {
                   <h3 className="text-xs font-black uppercase tracking-widest text-white/50">Completed Weekly Reports</h3>
                 </div>
 
-                {uiReportAggregates.filter(w => w.weeksAgo > 0).length === 0 ? (
+                {completedReportCards.length === 0 ? (
                   <div className="p-8 rounded-3xl border border-white/5 bg-white/[0.01] text-center max-w-xl">
-                    <p className="text-xs text-white/40 font-semibold uppercase">No completed reports found.</p>
+                    <p className="text-xs text-white/40 font-semibold uppercase">No completed weeks with validated activity yet.</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                    {uiReportAggregates.filter(w => w.weeksAgo > 0).map(({ weeksAgo, startDateStr, endDateStr, last7Days, prev7Days, weekKey, stats }) => {
+                    {completedReportCards.map(({ weeksAgo, startDateStr, endDateStr, last7Days, prev7Days, weekKey, stats }) => {
                       return (
                         <div 
                           key={weeksAgo}
@@ -783,4 +874,3 @@ export default function Reports() {
     </motion.div>
   );
 }
-

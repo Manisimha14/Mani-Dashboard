@@ -19,6 +19,90 @@ export interface CustomTrackerWeeklySummary {
   totalLogged: number;
   sumValue?: number;
   avgValue?: number;
+  streakDays: number;
+  milestoneText: string;
+}
+
+export interface ReportMetricCard {
+  id: string;
+  label: string;
+  value: string;
+  subtitle: string;
+  targetLabel: string;
+  deltaPct: number;
+  deltaLabel: string;
+  direction: 'up' | 'down' | 'flat';
+  progressPct?: number;
+  source: string;
+}
+
+export interface DailyReportPoint {
+  date: string;
+  shortLabel: string;
+  fullLabel: string;
+  focusMinutes: number;
+  focusSessions: number;
+  codingSolved: number;
+  codingNames: string[];
+  hydrationMl: number;
+  sleepMinutes: number;
+  steps: number;
+  caloriesIn: number;
+  caloriesOut: number;
+  readingChapters: number;
+  workoutCount: number;
+  workoutMinutes: number;
+  workoutNames: string[];
+}
+
+export interface WeeklyComparisonRow {
+  id: string;
+  label: string;
+  currentValue: string;
+  previousValue: string;
+  deltaPct: number;
+  direction: 'up' | 'down' | 'flat';
+  source: string;
+}
+
+export interface ValidatedInsight {
+  id: string;
+  title: string;
+  body: string;
+  confidence: 'high' | 'medium';
+  source: string;
+}
+
+export interface RadarMetric {
+  label: string;
+  value: number;
+}
+
+export interface CodingTopicWeakness {
+  topic: string;
+  outstandingCount: number;
+}
+
+export interface CodingRevisitItem {
+  name: string;
+  difficulty: string;
+  topic: string;
+  date: string;
+}
+
+export interface WeeklyCodingAnalytics {
+  acceptanceStreakDays: number;
+  hardestSolvedProblem: string | null;
+  averageSolveTimeMinutes: number | null;
+  topicWeaknessMap: CodingTopicWeakness[];
+  revisitFailureList: CodingRevisitItem[];
+  spacedRepetitionQueue: CodingRevisitItem[];
+}
+
+export interface MetricSource {
+  id: string;
+  label: string;
+  source: string;
 }
 
 export interface WeeklyReportStats {
@@ -59,12 +143,31 @@ export interface WeeklyReportStats {
   sleepChartData: number[];
   readingChartData: number[];
   sleepDaysWithData: number;
-  
-  // Health extensions
   totalCaloriesTaken: number;
   totalCaloriesBurnt: number;
   totalWaterIntakeMl: number;
-  
-  // Custom Trackers
   trackerSummaries: CustomTrackerWeeklySummary[];
+
+  cycleStart: string;
+  cycleEnd: string;
+  previousCycleStart: string;
+  previousCycleEnd: string;
+  weeklyPerformanceScore: number;
+  statusLabel: string;
+  statusTone: 'emerald' | 'amber' | 'rose' | 'violet';
+  heroMetrics: ReportMetricCard[];
+  dailyBreakdown: DailyReportPoint[];
+  comparisonRows: WeeklyComparisonRow[];
+  validatedInsights: ValidatedInsight[];
+  insightsFallback: string | null;
+  weeklyNarrative: string;
+  longestFocusStreakDays: number;
+  bestCodingStreakDays: number;
+  strongestDayLabel: string;
+  strongestDayReason: string;
+  biggestImprovement: string;
+  customTrackerCards: CustomTrackerWeeklySummary[];
+  radarMetrics: RadarMetric[];
+  codingAnalytics: WeeklyCodingAnalytics;
+  metricSources: MetricSource[];
 }
