@@ -3,7 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, BookOpen, Code2, Timer, BarChart3, FileText,
-  Trophy, Settings, Zap, ChevronRight, Flame, Target, Sparkles, Heart, Music, X
+  Trophy, Settings, Zap, ChevronRight, Flame, Target, Sparkles, Heart, Music, X, Bug
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { todayString, getProductivityScore } from '../lib/utils';
@@ -177,6 +177,25 @@ function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }
             )}
           </NavLink>
         ))}
+
+        {/* Premium Bug Report Sidebar Row */}
+        <motion.button
+          whileHover={{ x: 6, backgroundColor: 'rgba(244,63,94,0.06)' }}
+          whileTap={{ scale: 0.96 }}
+          onClick={() => {
+            play('click');
+            window.dispatchEvent(new CustomEvent('toggle-bug-report'));
+            onClose?.();
+          }}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-300 outline-none text-rose-400 hover:text-rose-300 bg-rose-500/5 border border-rose-500/10 hover:border-rose-500/25 font-medium text-left mt-3"
+          aria-label="Report Issue"
+        >
+          <div className="transition-transform duration-300 hover:scale-110">
+            <Bug size={18} />
+          </div>
+          <span className="flex-1 text-sm font-semibold tracking-tight">Report Issue</span>
+          <kbd className="hidden sm:inline-block text-[8px] font-mono opacity-50 px-1 py-0.5 bg-black/40 border border-rose-500/20 rounded text-rose-300/80">Ctrl+Shift+B</kbd>
+        </motion.button>
       </nav>
 
       {/* Live Productivity Momentum - World Class Upgrade */}

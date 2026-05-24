@@ -810,7 +810,6 @@ export default function Settings() {
                          )}
                        </div>
                      </div>
-
                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
                        <button
                          onClick={() => {
@@ -886,6 +885,17 @@ export default function Settings() {
                        >
                          <span>🔥 Test Streak Fallback</span>
                          <span className="text-[10px] font-black text-rose-400">STREAK RISK</span>
+                       </button>
+
+                       <button
+                         onClick={() => {
+                           soundEngine.success();
+                           window.dispatchEvent(new CustomEvent('toggle-bug-report'));
+                         }}
+                         className="flex items-center justify-between p-3.5 rounded-2xl bg-rose-500/5 border border-rose-500/10 hover:bg-rose-500/10 active:scale-98 transition-all text-left text-xs font-bold text-rose-400"
+                       >
+                         <span>🪲 Launch Bug Reporter</span>
+                         <span className="text-[10px] font-black text-rose-400/80">FILE TICKET</span>
                        </button>
                      </div>
                    </div>

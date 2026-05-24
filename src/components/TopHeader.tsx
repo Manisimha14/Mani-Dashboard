@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppStore } from '../store/useAppStore';
-import { Search, Bell, Settings as SettingsIcon, User, Command, Menu, WifiOff } from 'lucide-react';
+import { Search, Bell, Settings as SettingsIcon, User, Command, Menu, WifiOff, Bug } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useSoundFX } from '../hooks/useSoundFX';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
@@ -105,6 +105,15 @@ function TopHeader({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
 
           {/* Right: Search, Bell & Profile */}
           <div className="flex items-center gap-1">
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={() => { play('click'); window.dispatchEvent(new CustomEvent('toggle-bug-report')); }}
+              className="p-2 rounded-xl text-white/40 hover:text-rose-400 transition-all focus-visible:ring-2 focus-visible:ring-rose-500 outline-none"
+              aria-label="Report Bug"
+            >
+              <Bug size={18} strokeWidth={2} />
+            </motion.button>
             <motion.button
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
@@ -216,6 +225,11 @@ function TopHeader({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
           </motion.button>
 
           <div className="flex items-center gap-2">
+            <HeaderButton 
+              icon={Bug} 
+              onClick={() => { play('click'); window.dispatchEvent(new CustomEvent('toggle-bug-report')); }} 
+              ariaLabel="Report Bug / Feedback"
+            />
             <HeaderButton 
               icon={Bell} 
               onClick={() => { play('click'); setShowNotifications(true); }}

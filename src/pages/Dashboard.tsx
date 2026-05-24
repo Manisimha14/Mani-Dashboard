@@ -17,7 +17,7 @@ import { useSoundFX } from '../hooks/useSoundFX';
 import {
   BookOpen, Code2, Timer, Flame, Trophy, TrendingUp,
   Target, Zap, ChevronRight, Star, CheckCircle2, Clock, Sparkles, BarChart3,
-  Heart, Droplets, Dumbbell, Moon, Plus, Info, CalendarRange, Eye, Download, X
+  Heart, Droplets, Dumbbell, Moon, Plus, Info, CalendarRange, Eye, Download, X, Bug
 } from 'lucide-react';
 import { formatDuration, todayString, getProductivityScore } from '../lib/utils';
 import { format, parseISO } from 'date-fns';
@@ -709,11 +709,18 @@ export default function Dashboard() {
       {/* Quick Actions */}
       <motion.div variants={item} className="glass-card p-5">
         <div className="text-xs text-white/40 uppercase tracking-widest mb-4">Quick Actions</div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <QuickAction icon={<Timer size={18} />} label="Start Focus" desc="Forest Mode" color="violet" onClick={() => navigate('/focus')} />
           <QuickAction icon={<BookOpen size={18} />} label="Log Chapter" desc={nextChapter ? `Next: Ch ${nextChapter.number}` : "Reading Tracker"} color="purple" onClick={() => navigate('/reading')} />
           <QuickAction icon={<Code2 size={18} />} label="Add Problem" desc="LeetCode Log" color="cyan" onClick={() => navigate('/leetcode')} />
           <QuickAction icon={<BarChart3 size={18} />} label="Analytics" desc="View Insights" color="emerald" onClick={() => navigate('/analytics')} />
+          <QuickAction 
+            icon={<Bug size={18} />} 
+            label="Report Bug" 
+            desc="Submit Feedback" 
+            color="rose" 
+            onClick={() => { play('click'); window.dispatchEvent(new CustomEvent('toggle-bug-report')); }} 
+          />
         </div>
       </motion.div>
 
@@ -948,8 +955,15 @@ const QuickAction = React.memo(function QuickAction({ icon, label, desc, color, 
     purple: 'from-purple-600/20 to-purple-800/5 border-purple-500/20 hover:border-purple-500/40',
     cyan: 'from-cyan-600/20 to-cyan-800/5 border-cyan-500/20 hover:border-cyan-500/40',
     emerald: 'from-emerald-600/20 to-emerald-800/5 border-emerald-500/20 hover:border-emerald-500/40',
+    rose: 'from-rose-600/20 to-rose-800/5 border-rose-500/20 hover:border-rose-500/40',
   };
-  const textColors: Record<string, string> = { violet: 'text-violet-400', purple: 'text-purple-400', cyan: 'text-cyan-400', emerald: 'text-emerald-400' };
+  const textColors: Record<string, string> = { 
+    violet: 'text-violet-400', 
+    purple: 'text-purple-400', 
+    cyan: 'text-cyan-400', 
+    emerald: 'text-emerald-400',
+    rose: 'text-rose-400'
+  };
   return (
     <button
       onClick={onClick}

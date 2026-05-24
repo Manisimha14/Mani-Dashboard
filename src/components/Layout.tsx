@@ -220,6 +220,14 @@ export default function Layout() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
+  React.useEffect(() => {
+    const handleToggle = () => {
+      setReportOpen(prev => !prev);
+    };
+    window.addEventListener('toggle-bug-report', handleToggle);
+    return () => window.removeEventListener('toggle-bug-report', handleToggle);
+  }, []);
+
   const dailyActivity = useAppStore(s => s.dailyActivity);
   const userSettings = useAppStore(s => s.userSettings);
 
