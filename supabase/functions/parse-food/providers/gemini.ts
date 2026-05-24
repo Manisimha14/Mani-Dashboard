@@ -3,7 +3,11 @@ import { PARSE_SYSTEM_PROMPT } from "../prompts.ts";
 const GEMINI_TIMEOUT_MS = 3000;
 const MODEL = "gemini-1.5-flash";
 
-export async function parseWithGemini(input: string, apiKey: string): Promise<{ data?: any; latency: number; error?: string }> {
+export async function parseWithGemini(
+    input: string, 
+    apiKey: string, 
+    image?: { data: string; mimeType: string }
+): Promise<{ data?: any; latency: number; error?: string }> {
     const startTime = Date.now();
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
@@ -11,6 +15,19 @@ export async function parseWithGemini(input: string, apiKey: string): Promise<{ 
     try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${apiKey}`;
         
+        const parts: any[] = [
+            { text: input || "Identify the food in this image and estimate the nutritional content." }
+        ];
+
+        if (image) {
+            parts.push({
+                inlineData: {
+                    mimeType: image.mimeType,
+                    data: image.data
+                }
+            });
+        }
+
         const response = await fetch(url, {
             method: "POST",
             headers: {
@@ -21,7 +38,7 @@ export async function parseWithGemini(input: string, apiKey: string): Promise<{ 
                     parts: [{ text: PARSE_SYSTEM_PROMPT }]
                 },
                 contents: [
-                    { parts: [{ text: input }] }
+                    { parts }
                 ],
                 generationConfig: {
                     responseMimeType: "application/json",

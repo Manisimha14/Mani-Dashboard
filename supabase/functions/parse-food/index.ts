@@ -17,9 +17,10 @@ serve(async (req) => {
     }
 
     try {
-        const { input } = await req.json();
+        const { input, image } = await req.json();
+        const hasImage = !!(image && image.data && image.mimeType);
         
-        if (!input || typeof input !== 'string') {
+        if (!hasImage && (!input || typeof input !== 'string')) {
             return new Response(JSON.stringify({ error: "Missing or invalid input" }), {
                 status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
             });
@@ -31,16 +32,18 @@ serve(async (req) => {
             { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
         );
 
-        const normalizedInput = normalizeInput(input);
-        const inputHash = await generateInputHash(normalizedInput);
+        const normalizedInput = input ? normalizeInput(input) : "";
+        const inputHash = hasImage ? `image-${Date.now()}-${Math.random().toString(36).substring(2, 9)}` : await generateInputHash(normalizedInput);
 
-        // 1. Cache Lookup
-        const cached = await getCachedParseResult(supabaseClient, inputHash);
-        if (cached) {
-            return new Response(JSON.stringify({
-                data: cached,
-                meta: { provider: 'cache', latency_ms: 0, raw_input_hash: inputHash }
-            }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        // 1. Cache Lookup (only for pure text logs)
+        if (!hasImage) {
+            const cached = await getCachedParseResult(supabaseClient, inputHash);
+            if (cached) {
+                return new Response(JSON.stringify({
+                    data: cached,
+                    meta: { provider: 'cache', latency_ms: 0, raw_input_hash: inputHash }
+                }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            }
         }
 
         // Rate limiting check could go here using Supabase Redis / Upstash (omitted for brevity)
@@ -54,21 +57,32 @@ serve(async (req) => {
             });
         }
 
-        // 2. Primary Parser: Groq
         let provider = 'groq';
-        let parseResult = await parseWithGroq(normalizedInput, groqKey);
-        let validationResult = parseResult.data ? validateNutrition(parseResult.data) : { success: false, error: parseResult.error };
+        let parseResult;
+        let validationResult;
 
-        // 3. Fallback: Gemini (if Groq fails, timeouts, produces invalid JSON, or has LOW confidence)
-        if (
-            !validationResult.success || 
-            (validationResult.data && validationResult.data.confidence === 'low')
-        ) {
+        if (hasImage) {
+            // 2. Multimodal Parser: Gemini
             provider = 'gemini';
-            console.log(`Groq failed or low confidence. Falling back to Gemini. Reason: ${validationResult.error || 'low confidence'}`);
-            
-            parseResult = await parseWithGemini(normalizedInput, geminiKey);
+            parseResult = await parseWithGemini(normalizedInput, geminiKey, image);
             validationResult = parseResult.data ? validateNutrition(parseResult.data) : { success: false, error: parseResult.error };
+        } else {
+            // 2. Primary Parser for Text: Groq
+            provider = 'groq';
+            parseResult = await parseWithGroq(normalizedInput, groqKey);
+            validationResult = parseResult.data ? validateNutrition(parseResult.data) : { success: false, error: parseResult.error };
+
+            // 3. Fallback: Gemini (if Groq fails, timeouts, produces invalid JSON, or has LOW confidence)
+            if (
+                !validationResult.success || 
+                (validationResult.data && validationResult.data.confidence === 'low')
+            ) {
+                provider = 'gemini';
+                console.log(`Groq failed or low confidence. Falling back to Gemini. Reason: ${validationResult.error || 'low confidence'}`);
+                
+                parseResult = await parseWithGemini(normalizedInput, geminiKey);
+                validationResult = parseResult.data ? validateNutrition(parseResult.data) : { success: false, error: parseResult.error };
+            }
         }
 
         if (!validationResult.success || !validationResult.data) {

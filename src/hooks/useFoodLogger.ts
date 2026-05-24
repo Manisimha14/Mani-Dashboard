@@ -46,12 +46,12 @@ export function useFoodLogger() {
   
   const addMealMutation = useAddMeal();
 
-  const parseFood = async (input: string) => {
-    if (!input.trim()) return;
+  const parseFood = async (input: string, image?: { data: string; mimeType: string }) => {
+    if (!input.trim() && !image) return;
     
     setIsParsing(true);
-    setLoadingStateMessage('Analyzing your meal...');
-    setRawInput(input);
+    setLoadingStateMessage(image ? 'Analyzing image...' : 'Analyzing your meal...');
+    setRawInput(input || '[Scanned Image]');
     setParsedData(null);
     setMetaData(null);
 
@@ -62,7 +62,7 @@ export function useFoodLogger() {
 
     try {
       const { data, error } = await supabase.functions.invoke('parse-food', {
-        body: { input }
+        body: { input, image }
       });
 
       if (error) throw error;

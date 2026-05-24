@@ -1,9 +1,10 @@
 import React, { useState, useRef } from 'react';
 import { Mic, Camera, Send, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'react-hot-toast';
 
 type FoodInputProps = {
-  onParse: (input: string) => void;
+  onParse: (input: string, image?: { data: string; mimeType: string }) => void;
   isParsing: boolean;
   loadingMessage: string;
 };
@@ -52,10 +53,24 @@ export function FoodInput({ onParse, isParsing, loadingMessage }: FoodInputProps
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && !isParsing) {
-      // In a full implementation, we'd send the image to a Vision model API.
-      // For this MVP without a vision backend, we'll simulate the analysis
-      // by passing a generic prompt to the text parser.
-      onParse("Image analyzed: A balanced meal containing rice, mixed vegetables, and a protein source.");
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const base64String = event.target?.result as string;
+        if (base64String) {
+          const match = base64String.match(/^data:(image\/[a-zA-Z+.-]+);base64,(.+)$/);
+          if (match) {
+            const mimeType = match[1];
+            const data = match[2];
+            onParse("", { data, mimeType });
+          } else {
+            toast.error("Invalid image format.");
+          }
+        }
+      };
+      reader.onerror = () => {
+        toast.error("Failed to read image file.");
+      };
+      reader.readAsDataURL(file);
       // Reset input
       e.target.value = '';
     }
