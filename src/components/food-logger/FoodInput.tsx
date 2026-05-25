@@ -44,35 +44,63 @@ export function FoodInput({ onParse, isParsing, loadingMessage, onStateChange }:
   const [input, setInput] = useState('');
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [filteredSuggestions, setFilteredSuggestions] = useState<string[]>([]);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Helper to extract last delimiter-separated phrase
   const getLastQueryPart = (text: string) => {
-    if (!text) return '';
-    const parts = text.split(/[+,]|\band\b/);
+    if (!text.trim()) return '';
+
+    const separators = /(?:,|\+|\sand\s)/i;
+    const parts = text.split(separators);
+
     return parts[parts.length - 1].trim();
   };
 
-  // Filter autocomplete suggestions based on the last typed part
+  // Filter and smart rank autocomplete suggestions based on the last typed part
   useEffect(() => {
     const lastPart = getLastQueryPart(input);
-    if (lastPart.length >= 2) {
-      const matches = autocompleteSuggestions.filter(item => 
-        item.toLowerCase().includes(lastPart.toLowerCase()) && 
-        item.toLowerCase() !== lastPart.toLowerCase()
-      );
-      setFilteredSuggestions(matches);
-    } else {
+
+    if (lastPart.length < 2) {
       setFilteredSuggestions([]);
+      return;
     }
+
+    const query = lastPart.toLowerCase();
+
+    const ranked = autocompleteSuggestions
+      .map(item => {
+        const lower = item.toLowerCase();
+
+        let score = 0;
+
+        if (lower.startsWith(query)) score += 100;
+        else if (lower.includes(query)) score += 50;
+
+        const words = lower.split(' ');
+        if (words.some(word => word.startsWith(query))) score += 30;
+
+        return { item, score };
+      })
+      .filter(x => x.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 6)
+      .map(x => x.item);
+
+    setFilteredSuggestions(ranked);
+    setSelectedSuggestionIndex(-1);
   }, [input]);
 
   const handleSelectSuggestion = (suggestion: string) => {
-    const delimiterPattern = /([+,]|\band\b)/;
-    const parts = input.split(delimiterPattern);
-    parts[parts.length - 1] = ` ${suggestion} `;
-    setInput(parts.join('').replace(/\s+/g, ' ').trim());
+    const separators = /(?:,|\+|\sand\s)/i;
+    const parts = input.split(separators);
+
+    parts[parts.length - 1] = suggestion;
+
+    const rebuilt = parts.join(' + ');
+
+    setInput(rebuilt + ' ');
     setFilteredSuggestions([]);
+    setSelectedSuggestionIndex(-1);
   };
 
   // Rotate placeholders every 3 seconds if empty
@@ -252,6 +280,30 @@ export function FoodInput({ onParse, isParsing, loadingMessage, onStateChange }:
           className="w-full bg-transparent border-none resize-none outline-none text-lg text-zinc-100 placeholder-transparent p-5 min-h-[120px]"
           placeholder="What did you eat today?"
           onKeyDown={(e) => {
+            if (filteredSuggestions.length > 0) {
+              if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setSelectedSuggestionIndex(prev =>
+                  prev < filteredSuggestions.length - 1 ? prev + 1 : 0
+                );
+                return;
+              }
+
+              if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setSelectedSuggestionIndex(prev =>
+                  prev > 0 ? prev - 1 : filteredSuggestions.length - 1
+                );
+                return;
+              }
+
+              if (e.key === 'Enter' && selectedSuggestionIndex >= 0) {
+                e.preventDefault();
+                handleSelectSuggestion(filteredSuggestions[selectedSuggestionIndex]);
+                return;
+              }
+            }
+
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
               handleSubmit(e);
@@ -266,16 +318,20 @@ export function FoodInput({ onParse, isParsing, loadingMessage, onStateChange }:
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="mx-4 mb-2 bg-zinc-950/90 backdrop-blur-xl border border-zinc-800 rounded-2xl overflow-hidden max-h-48 overflow-y-auto z-20 shadow-xl"
+              className="mx-4 mb-2 bg-zinc-950 border border-zinc-800 rounded-2xl shadow-xl z-50 overflow-hidden max-h-48 overflow-y-auto"
             >
-              {filteredSuggestions.map((suggestion, idx) => (
+              {filteredSuggestions.map((suggestion, index) => (
                 <button
-                  key={idx}
+                  key={suggestion}
                   type="button"
                   onClick={() => handleSelectSuggestion(suggestion)}
-                  className="w-full text-left px-4 py-2.5 text-xs text-zinc-300 hover:text-white hover:bg-cyan-500/10 hover:border-l-2 hover:border-cyan-400 transition-all border-l-2 border-transparent flex items-center space-x-2"
+                  className={`w-full text-left px-4 py-3 transition text-xs flex items-center space-x-2 border-l-2 ${
+                    index === selectedSuggestionIndex
+                      ? 'bg-cyan-600/20 text-cyan-300 border-l-2 border-cyan-400'
+                      : 'text-zinc-200 hover:bg-zinc-800 border-l-2 border-transparent'
+                  }`}
                 >
-                  <Sparkles size={12} className="text-cyan-400" />
+                  <Sparkles size={12} className={index === selectedSuggestionIndex ? 'text-cyan-300' : 'text-zinc-500'} />
                   <span>{suggestion}</span>
                 </button>
               ))}
