@@ -266,6 +266,19 @@ export function useFoodLogger() {
 
       toast.success('Meal saved successfully!');
       
+      // Learn from the confirmed meal log to fuel personalized future autocomplete recommendations
+      try {
+        const foods = parsedData.items.map(item => item.food_name);
+        const existingLogs = JSON.parse(localStorage.getItem("meal-history") || "[]");
+        existingLogs.unshift({
+          timestamp: Date.now(),
+          foods: foods.map(name => ({ name }))
+        });
+        localStorage.setItem("meal-history", JSON.stringify(existingLogs.slice(0, 500)));
+      } catch (historyErr) {
+        console.warn("Failed to update meal history suggestions:", historyErr);
+      }
+      
       // Cleanup preview URLs and states
       cleanupPreview();
       setParsedData(null);

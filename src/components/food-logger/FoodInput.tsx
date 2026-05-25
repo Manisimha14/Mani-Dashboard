@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Mic, Camera, Send, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
+import { getSuggestions, type MealLog } from '../../lib/suggestionEngine';
 
 type FoodInputProps = {
   onParse: (input: string, image?: { data: string; mimeType: string }, previewUrl?: string, rawBlob?: Blob) => void;
@@ -17,35 +18,25 @@ const placeholderExamples = [
   "poha and chai..."
 ];
 
-const autocompleteSuggestions = [
-  "2 Chapatis",
-  "Paneer Biryani",
-  "Egg Noodles",
-  "Dal Tadka",
-  "White Rice",
-  "3 Boiled Eggs",
-  "Poha and Chai",
-  "Idli and Sambar",
-  "Masala Dosa",
-  "Oatmeal with Almonds",
-  "Chicken Salad",
-  "Greek Yogurt",
-  "Butter Popcorn",
-  "Whey Protein Shake",
-  "Avocado Toast",
-  "Samosa",
-  "Upma",
-  "Rotis",
-  "Curd Rice",
-  "Bhindi Masala"
-];
-
 export function FoodInput({ onParse, isParsing, loadingMessage, onStateChange }: FoodInputProps) {
   const [input, setInput] = useState('');
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [filteredSuggestions, setFilteredSuggestions] = useState<string[]>([]);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
+  const [mealHistory, setMealHistory] = useState<MealLog[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load user meal history on mount
+  useEffect(() => {
+    const saved = localStorage.getItem("meal-history");
+    if (saved) {
+      try {
+        setMealHistory(JSON.parse(saved));
+      } catch (err) {
+        console.error("Error loading meal history:", err);
+      }
+    }
+  }, []);
 
   const getLastQueryPart = (text: string) => {
     if (!text.trim()) return '';
@@ -56,39 +47,34 @@ export function FoodInput({ onParse, isParsing, loadingMessage, onStateChange }:
     return parts[parts.length - 1].trim();
   };
 
-  // Filter and smart rank autocomplete suggestions based on the last typed part
+  // Filter and smart rank autocomplete suggestions based on the last typed part with debounce
   useEffect(() => {
     const lastPart = getLastQueryPart(input);
 
-    if (lastPart.length < 2) {
+    const isReadyForSuggestions = 
+      lastPart.length >= 2 || 
+      input.trim().endsWith('+') || 
+      input.trim().endsWith(',') || 
+      input.trim().toLowerCase().endsWith('and');
+
+    if (!isReadyForSuggestions) {
       setFilteredSuggestions([]);
       return;
     }
 
-    const query = lastPart.toLowerCase();
+    const timer = setTimeout(() => {
+      const suggestions = getSuggestions(
+        input,
+        lastPart,
+        mealHistory,
+        new Date().getHours()
+      );
+      setFilteredSuggestions(suggestions);
+      setSelectedSuggestionIndex(-1);
+    }, 150); // 150ms debounce
 
-    const ranked = autocompleteSuggestions
-      .map(item => {
-        const lower = item.toLowerCase();
-
-        let score = 0;
-
-        if (lower.startsWith(query)) score += 100;
-        else if (lower.includes(query)) score += 50;
-
-        const words = lower.split(' ');
-        if (words.some(word => word.startsWith(query))) score += 30;
-
-        return { item, score };
-      })
-      .filter(x => x.score > 0)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 6)
-      .map(x => x.item);
-
-    setFilteredSuggestions(ranked);
-    setSelectedSuggestionIndex(-1);
-  }, [input]);
+    return () => clearTimeout(timer);
+  }, [input, mealHistory]);
 
   const handleSelectSuggestion = (suggestion: string) => {
     const separators = /(?:,|\+|\sand\s)/i;
