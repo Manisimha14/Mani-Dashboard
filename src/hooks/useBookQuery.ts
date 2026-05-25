@@ -21,13 +21,13 @@ export function useBook() {
       if (!user) {
         return book;
       }
-      const books = await BookSvc.fetchUserBooks(user.id);
+      const books = await BookSvc.fetchMyBooks();
       if (books.length > 0) {
         return books[0];
       }
       // Seed a default book in the database if the user has none
       const defaultBook = { ...book, id: '' };
-      return BookSvc.upsertBook(user.id, defaultBook);
+      return BookSvc.createBook(defaultBook);
     },
   });
 }
@@ -119,7 +119,7 @@ export function useUpdateChapter(): UseMutationResult<
         }
       }
 
-      return BookSvc.upsertBook(user.id, updatedBook);
+      return BookSvc.updateBook(updatedBook);
     },
     onSuccess: (data) => {
       qc.setQueryData(bookKeys.all(user?.id ?? 'local'), data);
@@ -151,7 +151,7 @@ export function useSetBookMeta(): UseMutationResult<
       });
 
       const updatedBook = { ...currentBook, ...meta };
-      return BookSvc.upsertBook(user.id, updatedBook);
+      return BookSvc.updateBook(updatedBook);
     },
     onSuccess: (data) => {
       qc.setQueryData(bookKeys.all(user?.id ?? 'local'), data);
