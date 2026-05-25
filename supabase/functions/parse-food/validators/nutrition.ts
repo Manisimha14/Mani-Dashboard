@@ -3,19 +3,19 @@ import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 export const FoodItemSchema = z.object({
   food_name: z.string().min(1),
   quantity: z.number().positive(),
-  unit: z.string().min(1),
+  unit: z.enum(["g", "ml", "piece", "cup", "tbsp", "tsp", "packet", "serving"]),
   calories: z.number().min(0).max(4000), // Reject crazy values per item
   protein: z.number().min(0).max(300),
   carbs: z.number().min(0).max(600),
   fat: z.number().min(0).max(200),
   fiber: z.number().min(0).max(100),
-  estimated: z.boolean().default(true)
+  estimated: z.boolean()
 }).strict();
 
 export const NutritionSchema = z.object({
   meal_type: z.enum(["breakfast", "lunch", "dinner", "snack"]).default("snack"),
   confidence: z.enum(["high", "medium", "low"]),
-  confidence_reason: z.string().optional(),
+  confidence_reason: z.string().nullable().optional(),
   items: z.array(FoodItemSchema).min(1),
   totals: z.object({
     calories: z.number().min(0).max(8000), // Max total meal sanity check
@@ -45,7 +45,8 @@ export function validateNutrition(data: unknown): { success: boolean; data?: Val
     try {
         const parsed = NutritionSchema.parse(data);
         return { success: true, data: parsed };
-    } catch (e: any) {
-        return { success: false, error: e.message };
+    } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        return { success: false, error: message };
     }
 }
