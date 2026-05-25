@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
 import { useAddMeal, useHealthGoals } from './useHealthQuery';
@@ -40,6 +40,11 @@ export type ParseResultMeta = {
 
 export type LoggerState = 'idle' | 'compressing' | 'uploading' | 'analyzing' | 'refining' | 'done' | 'error';
 
+/**
+ * Production-grade hook managing AI nutrition logger workflow.
+ * Implements AbortController HTTP cancellations, sequence tracking,
+ * typesafe exceptions, precision floating limits, and non-blocking background repositories.
+ */
 export function useFoodLogger() {
   const [loggerState, setLoggerState] = useState<LoggerState>('idle');
   const [loadingStateMessage, setLoadingStateMessage] = useState('');
@@ -47,17 +52,44 @@ export function useFoodLogger() {
   const [metaData, setMetaData] = useState<ParseResultMeta | null>(null);
   const [rawInput, setRawInput] = useState('');
   
-  // Memory-safe temporary preview URL state
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   
   const addMealMutation = useAddMeal();
   const { data: goals } = useHealthGoals();
 
+  // 1. Production Refs for sequence and cancellation safety
+  const activeRequestRef = useRef(0);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const timerRef = useRef<number | null>(null);
+  const previewRef = useRef<string | null>(null);
+
+  // Sync state preview to ref for safe blob revocations
+  useEffect(() => {
+    previewRef.current = imagePreviewUrl;
+  }, [imagePreviewUrl]);
+
+  // Clean timers and abort active requests on unmount
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
   const cleanupPreview = () => {
-    if (imagePreviewUrl && imagePreviewUrl.startsWith('blob:')) {
-      URL.revokeObjectURL(imagePreviewUrl);
+    if (previewRef.current && previewRef.current.startsWith('blob:')) {
+      try {
+        URL.revokeObjectURL(previewRef.current);
+      } catch (err) {
+        console.warn("Failed to revoke blob preview URL:", err);
+      }
     }
+    previewRef.current = null;
     setImagePreviewUrl(null);
   };
 
@@ -68,25 +100,34 @@ export function useFoodLogger() {
     rawBlob?: Blob
   ) => {
     if (!input.trim() && !image) return;
+
+    // A. Abort any previous active parsing request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
+    // B. Sequence increment
+    const requestId = ++activeRequestRef.current;
     
     setParsedData(null);
     setMetaData(null);
     setRawInput(input || '[Scanned Image]');
+    setUploadedImageUrl(null); // Clean stale contamination from previous capture sessions
 
-    // 1. Memory-safe preview allocation
     if (previewUrl) {
       cleanupPreview();
       setImagePreviewUrl(previewUrl);
     }
 
-    // 2. Upload to Supabase Storage (Graceful fallback if bucket isn't deployed)
     let imageUrl = null;
     if (rawBlob) {
       setLoggerState('uploading');
       setLoadingStateMessage('Storing image securely...');
       try {
         const { data: userData } = await supabase.auth.getUser();
-        if (userData.user) {
+        if (userData.user && requestId === activeRequestRef.current) {
           const fileName = `${userData.user.id}/${Date.now()}.jpg`;
           const { error: uploadError } = await supabase
             .storage
@@ -100,18 +141,22 @@ export function useFoodLogger() {
 
           const { data: { publicUrl } } = supabase.storage.from('food-images').getPublicUrl(fileName);
           imageUrl = publicUrl;
-          setUploadedImageUrl(publicUrl);
+          
+          if (requestId === activeRequestRef.current) {
+            setUploadedImageUrl(publicUrl);
+          }
         }
       } catch (storageErr) {
         console.warn("Storage upload failed or bucket 'food-images' doesn't exist yet:", storageErr);
       }
     }
 
-    // 3. Begin AI Analysis
+    if (requestId !== activeRequestRef.current) return;
+
     setLoggerState('analyzing');
     setLoadingStateMessage(image ? 'AI identifying food...' : 'Analyzing your meal...');
 
-    // Time-based auto meal pre-selection hint (Timezone-agnostic, calculated client-side)
+    // Calculate timezone-agnostic meal pre-selection hint
     const hour = new Date().getHours();
     let mealTypeHint = 'snack';
     if (hour >= 5 && hour < 11) mealTypeHint = 'breakfast';
@@ -119,20 +164,26 @@ export function useFoodLogger() {
     else if (hour >= 16 && hour < 19) mealTypeHint = 'snack';
     else if (hour >= 19 && hour < 23) mealTypeHint = 'dinner';
 
-    // Simulate refinement step after 1.5s
-    const timer = setTimeout(() => {
-      setLoggerState('refining');
-      setLoadingStateMessage('Calculating calorie ranges...');
-    }, 1500);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    
+    // Simulate refinement step asynchronously
+    timerRef.current = setTimeout(() => {
+      if (requestId === activeRequestRef.current) {
+        setLoggerState('refining');
+        setLoadingStateMessage('Calculating calorie ranges...');
+      }
+    }, 1500) as any;
 
     try {
       const { data, error } = await supabase.functions.invoke('parse-food', {
-        body: { input, image, mealTypeHint }
+        body: { input, image, mealTypeHint },
+        signal: abortController.signal
       });
 
+      if (requestId !== activeRequestRef.current) return;
       if (error) throw error;
       
-      if (data.data) {
+      if (data?.data) {
         setParsedData(data.data);
         setMetaData(data.meta);
         setLoggerState('done');
@@ -141,20 +192,30 @@ export function useFoodLogger() {
            toast('Estimated with medium assumptions. Please review values.', { icon: '⚠️' });
         }
       } else {
-        throw new Error(data.error || 'Unknown parsing error');
+        throw new Error(data?.error || 'Unknown parsing error');
       }
 
     } catch (err: any) {
-      console.error('Error parsing food:', err);
-      setLoggerState('error');
-      setLoadingStateMessage('Parsing failed. Try describing manually.');
-      toast.error('Food parsing temporarily unavailable. Try again in a moment.');
-      cleanupPreview();
+      if (err?.name === 'AbortError') {
+        console.log("Supabase parsing invoke cancelled by user abort.");
+        return;
+      }
+      if (requestId === activeRequestRef.current) {
+        console.error('Error parsing food:', err);
+        setLoggerState('error');
+        setLoadingStateMessage('Parsing failed. Try describing manually.');
+        toast.error('Food parsing temporarily unavailable. Try again in a moment.');
+        cleanupPreview();
+      }
     } finally {
-      clearTimeout(timer);
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
     }
   };
 
+  // Safe arithmetic rounding to prevent floating decimal precision drift (e.g. 14.3333333 kcal)
   const updateItem = (index: number, updatedItem: FoodItem) => {
     if (!parsedData) return;
     
@@ -168,11 +229,11 @@ export function useFoodLogger() {
       const ratio = newQuantity / oldQuantity;
       adjustedItem = {
         ...updatedItem,
-        calories: oldItem.calories * ratio,
-        protein: oldItem.protein * ratio,
-        carbs: oldItem.carbs * ratio,
-        fat: oldItem.fat * ratio,
-        fiber: oldItem.fiber * ratio,
+        calories: Math.round(oldItem.calories * ratio * 10) / 10,
+        protein: Math.round(oldItem.protein * ratio * 10) / 10,
+        carbs: Math.round(oldItem.carbs * ratio * 10) / 10,
+        fat: Math.round(oldItem.fat * ratio * 10) / 10,
+        fiber: Math.round(oldItem.fiber * ratio * 10) / 10,
       };
     }
 
@@ -180,11 +241,11 @@ export function useFoodLogger() {
     newItems[index] = adjustedItem;
     
     const newTotals = newItems.reduce((acc, item) => ({
-      calories: acc.calories + item.calories,
-      protein: acc.protein + item.protein,
-      carbs: acc.carbs + item.carbs,
-      fat: acc.fat + item.fat,
-      fiber: acc.fiber + item.fiber,
+      calories: Math.round((acc.calories + item.calories) * 10) / 10,
+      protein: Math.round((acc.protein + item.protein) * 10) / 10,
+      carbs: Math.round((acc.carbs + item.carbs) * 10) / 10,
+      fat: Math.round((acc.fat + item.fat) * 10) / 10,
+      fiber: Math.round((acc.fiber + item.fiber) * 10) / 10,
     }), { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 });
 
     setParsedData({
@@ -201,7 +262,7 @@ export function useFoodLogger() {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) throw new Error("Not authenticated");
 
-      // 1. Resilient save: Fallback gracefully to primary tables if logging tables are absent
+      // 1. Save to raw analytics tables (Resilient try/catch)
       try {
         const { data: logData, error: logError } = await supabase
           .from('meal_logs')
@@ -246,7 +307,7 @@ export function useFoodLogger() {
 
         if (itemsError) throw itemsError;
       } catch (dbError) {
-        console.warn("Advanced analytics tables not deployed. Logging directly to primary metrics tables.", dbError);
+        console.warn("Advanced analytics logging bypassed or tables absent:", dbError);
       }
 
       // 2. Save to primary health_meals dashboard table
@@ -267,27 +328,24 @@ export function useFoodLogger() {
 
       toast.success('Meal saved successfully!');
       
-      // Learn asynchronously from the confirmed meal to precompute co-occurrence graph in IndexedDB
-      try {
-        const foods = parsedData.items.map(item => item.food_name);
-        await mealRepository.saveMeal(foods);
-      } catch (historyErr) {
-        console.warn("Failed to update meal suggestions:", historyErr);
-      }
+      // 3. Fire-and-forget IndexedDB update (Bypasses UI thread block completely)
+      const foods = parsedData.items.map(item => item.food_name);
+      mealRepository.saveMeal(foods).catch(historyErr => {
+        console.warn("Background auto-completion indexing bypassed:", historyErr);
+      });
       
-      // Cleanup preview URLs and states
       cleanupPreview();
       setParsedData(null);
       setRawInput('');
       setUploadedImageUrl(null);
       setLoggerState('idle');
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
       console.error('Error saving meal:', err);
-      toast.error('Failed to save meal.');
+      toast.error(`Failed to save meal: ${errorMsg}`);
     }
   };
 
-  // Dedicated AI Coach conversation thread calling the 'food-coach' function
   const askAICoach = async (
     chatQuery: string, 
     chatHistory: { role: 'user' | 'assistant'; content: string }[]
@@ -304,7 +362,7 @@ export function useFoodLogger() {
       });
 
       if (error) throw error;
-      return data.reply || "I couldn't generate advice right now.";
+      return data?.reply || "I couldn't generate advice right now.";
     } catch (err) {
       console.error("Coaching endpoint error:", err);
       return "I'm having trouble connecting to the coach database. Please verify that the 'food-coach' Edge Function is successfully deployed.";
@@ -312,6 +370,9 @@ export function useFoodLogger() {
   };
 
   const cancel = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
     cleanupPreview();
     setParsedData(null);
     setRawInput('');
