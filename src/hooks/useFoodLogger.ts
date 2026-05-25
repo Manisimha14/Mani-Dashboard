@@ -166,13 +166,22 @@ export function useFoodLogger() {
 
     if (timerRef.current) clearTimeout(timerRef.current);
     
-    // Simulate refinement step asynchronously
-    timerRef.current = setTimeout(() => {
-      if (requestId === activeRequestRef.current) {
-        setLoggerState('refining');
-        setLoadingStateMessage('Calculating calorie ranges...');
+    // Sequence micro-animations to represent realistic steps
+    let microStep = 0;
+    const microSteps = image 
+      ? ['AI scanning photo capture...', 'Identifying fresh ingredients...', 'Estimating portions and amounts...', 'Calibrating macro values...']
+      : ['Analyzing meal composition...', 'Structuring ingredient entries...', 'Checking co-occurrences...', 'Calculating calorie ranges...'];
+    
+    const runMicroStates = () => {
+      if (requestId === activeRequestRef.current && microStep < microSteps.length) {
+        setLoadingStateMessage(microSteps[microStep]);
+        if (microStep === 1) setLoggerState('analyzing');
+        if (microStep === 3) setLoggerState('refining');
+        microStep++;
+        timerRef.current = setTimeout(runMicroStates, 1200) as any;
       }
-    }, 1500) as any;
+    };
+    runMicroStates();
 
     try {
       const { data, error } = await supabase.functions.invoke('parse-food', {

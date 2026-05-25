@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Mic, Camera, Send, Sparkles } from 'lucide-react';
+import { Mic, Camera, Send, Sparkles, Clock, Plus, Flame } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { useAutocomplete } from '../../hooks/useAutocomplete';
+import { mealRepository } from '../../lib/mealRepository';
 
 type FoodInputProps = {
   onParse: (input: string, image?: { data: string; mimeType: string }, previewUrl?: string, rawBlob?: Blob) => void;
@@ -19,9 +20,42 @@ const placeholderExamples = [
 ];
 
 export function FoodInput({ onParse, isParsing, loadingMessage, onStateChange }: FoodInputProps) {
-   const [input, setInput] = useState('');
+  const [input, setInput] = useState('');
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
+  const [isFocused, setIsFocused] = useState(false);
+  const [recentMeals, setRecentMeals] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-grow textarea functionality
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(Math.max(textareaRef.current.scrollHeight, 80), 240)}px`;
+    }
+  }, [input]);
+
+  // Load recent meals for quick add chips
+  useEffect(() => {
+    async function loadRecent() {
+      try {
+        const logs = await mealRepository.getMealLogs();
+        const uniqueMeals = new Set<string>();
+        logs.forEach(log => {
+          if (log.foods && log.foods.length > 0) {
+            const mealStr = log.foods.map(f => f.name).join(' + ');
+            if (mealStr.trim().length > 0) {
+              uniqueMeals.add(mealStr);
+            }
+          }
+        });
+        setRecentMeals(Array.from(uniqueMeals).slice(0, 3));
+      } catch (err) {
+        console.warn("Failed to load recents for quick chips:", err);
+      }
+    }
+    loadRecent();
+  }, [isParsing]);
 
   // Rotate placeholders every 3 seconds if empty
   useEffect(() => {
@@ -32,7 +66,7 @@ export function FoodInput({ onParse, isParsing, loadingMessage, onStateChange }:
     return () => clearInterval(interval);
   }, [input]);
 
-  // Premium Clipboard Paste Listener (World Class Desktop UX)
+  // Premium Clipboard Paste Listener
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
       const items = e.clipboardData?.items;
@@ -80,16 +114,14 @@ export function FoodInput({ onParse, isParsing, loadingMessage, onStateChange }:
     }
   };
 
-  // Secure validation and high performance Web Worker compression
   const processFile = (file: File) => {
-    // 1. Validation Checks (Security & Payloads)
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
     if (!allowedTypes.includes(file.type)) {
       toast.error("Unsupported file format. Please upload JPEG, PNG, or WebP.");
       return;
     }
 
-    const MAX_SIZE = 15 * 1024 * 1024; // 15MB max input size
+    const MAX_SIZE = 15 * 1024 * 1024;
     if (file.size > MAX_SIZE) {
       toast.error("File is too large. Maximum size is 15MB.");
       return;
@@ -97,11 +129,9 @@ export function FoodInput({ onParse, isParsing, loadingMessage, onStateChange }:
 
     if (isParsing) return;
 
-    // 2. Set Optimistic State & Create Memory-Safe Object URL Preview
     const previewUrl = URL.createObjectURL(file);
     if (onStateChange) onStateChange('compressing');
 
-    // 3. Spin up Web Worker for off-thread adaptive compression
     try {
       const worker = new Worker(
         new URL('../../workers/imageCompression.worker.ts', import.meta.url),
@@ -110,13 +140,13 @@ export function FoodInput({ onParse, isParsing, loadingMessage, onStateChange }:
 
       worker.postMessage({
         file,
-        maxDimension: 768, // Optimal visual resolution for nutrition parsing models
+        maxDimension: 768,
         quality: 0.72
       });
 
       worker.onmessage = (e: MessageEvent) => {
         const { success, blob, error } = e.data;
-        worker.terminate(); // terminate worker immediately to reclaim memory
+        worker.terminate();
 
         if (success && blob) {
           const reader = new FileReader();
@@ -152,7 +182,6 @@ export function FoodInput({ onParse, isParsing, loadingMessage, onStateChange }:
 
     } catch (workerErr) {
       console.error("Failed to spawn worker, fallback to direct reading:", workerErr);
-      // Graceful fallback to raw reading in case of worker constraints
       const reader = new FileReader();
       reader.onload = () => {
         const base64String = reader.result as string;
@@ -170,9 +199,11 @@ export function FoodInput({ onParse, isParsing, loadingMessage, onStateChange }:
     const file = e.target.files?.[0];
     if (file) {
       processFile(file);
-      e.target.value = ''; // Reset file input
+      e.target.value = '';
     }
   };
+
+  const hasInput = input.trim().length > 0;
 
   return (
     <div className="relative w-full max-w-2xl mx-auto rounded-3xl bg-zinc-900/50 backdrop-blur-xl border border-zinc-800 shadow-2xl overflow-hidden p-1 transition-all duration-300 hover:border-zinc-700 hover:shadow-cyan-900/20">
@@ -182,17 +213,17 @@ export function FoodInput({ onParse, isParsing, loadingMessage, onStateChange }:
 
       <form onSubmit={handleSubmit} className="relative flex flex-col h-full z-10">
         
-        {/* Animated Placeholder Layer */}
+        {/* Animated Placeholder Layer (Increased high-contrast opacity to 0.85) */}
         {!input && !isParsing && (
-          <div className="absolute top-5 left-5 pointer-events-none overflow-hidden h-8">
+          <div className="absolute top-[22px] left-5 pointer-events-none overflow-hidden h-8">
             <AnimatePresence mode="wait">
               <motion.div
                 key={placeholderIndex}
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 0.5 }}
-                exit={{ y: -20, opacity: 0 }}
-                transition={{ duration: 0.3 }}
-                className="text-lg text-zinc-400"
+                initial={{ y: 15, opacity: 0 }}
+                animate={{ y: 0, opacity: 0.85 }}
+                exit={{ y: -15, opacity: 0 }}
+                transition={{ duration: 0.25 }}
+                className="text-base text-zinc-400"
               >
                 {placeholderExamples[placeholderIndex]}
               </motion.div>
@@ -201,23 +232,97 @@ export function FoodInput({ onParse, isParsing, loadingMessage, onStateChange }:
         )}
 
         <textarea
+          ref={textareaRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setTimeout(() => setIsFocused(false), 200)}
           disabled={isParsing}
-          className="w-full bg-transparent border-none resize-none outline-none text-lg text-zinc-100 placeholder-transparent p-5 min-h-[120px]"
+          className="w-full bg-transparent border-none resize-none outline-none text-base text-zinc-100 placeholder-transparent px-5 pt-[22px] pb-3 min-h-[80px]"
           placeholder="What did you eat today?"
           onKeyDown={handleKeyDown}
         />
 
-        {/* Autocomplete Dropdown list */}
+        {/* Smart Quick Add Chips Panel (Surfaced when empty or focused) */}
+        <AnimatePresence>
+          {isFocused && !hasInput && !isParsing && (
+            <motion.div
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -5 }}
+              className="px-5 pb-3 flex flex-col space-y-2"
+            >
+              {/* Popular categories */}
+              <div className="flex items-center gap-1 text-[10px] text-zinc-500 uppercase tracking-wider font-bold">
+                <Sparkles size={10} className="text-cyan-500" />
+                <span>Quick Add Categories</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { label: "🍳 Breakfast", text: "2 Scrambled Eggs + Whole Wheat Toast" },
+                  { label: "🥗 Healthy Lunch", text: "Grilled Chicken Breast Salad" },
+                  { label: "🥤 Protein Shake", text: "1 Scoop Whey Protein + Milk" },
+                  { label: "🍎 Fruit Snack", text: "1 Apple + Almonds" }
+                ].map(item => (
+                  <button
+                    key={item.label}
+                    type="button"
+                    onClick={() => {
+                      setInput(item.text);
+                      textareaRef.current?.focus();
+                    }}
+                    className="text-[11px] bg-zinc-800/80 hover:bg-zinc-800 border border-zinc-700/60 hover:border-cyan-500/50 px-2.5 py-1.5 rounded-xl text-zinc-300 hover:text-white transition-all flex items-center gap-1 shadow-sm"
+                  >
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Recents list if available */}
+              {recentMeals.length > 0 && (
+                <>
+                  <div className="flex items-center gap-1 text-[10px] text-zinc-500 uppercase tracking-wider font-bold pt-1.5">
+                    <Clock size={10} className="text-purple-400" />
+                    <span>Recent meals</span>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    {recentMeals.map((meal, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        onClick={() => {
+                          setInput(meal);
+                          textareaRef.current?.focus();
+                        }}
+                        className="text-left text-[11px] bg-zinc-950/40 hover:bg-zinc-800 border border-zinc-800/40 hover:border-purple-500/40 px-3 py-2 rounded-xl text-zinc-400 hover:text-white transition-all flex items-center justify-between"
+                      >
+                        <span className="truncate">{meal}</span>
+                        <Plus size={10} className="text-zinc-500" />
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Autocomplete Dropdown list (Surface clear selected hover outlines) */}
         <AnimatePresence>
           {filteredSuggestions.length > 0 && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="mx-4 mb-2 bg-zinc-950 border border-zinc-800 rounded-2xl shadow-xl z-50 overflow-hidden max-h-48 overflow-y-auto"
+              className="mx-4 mb-3 bg-zinc-950 border border-zinc-800 rounded-2xl shadow-xl z-50 overflow-hidden max-h-48 overflow-y-auto"
             >
+              <div className="px-4 py-2 border-b border-zinc-800/40 bg-zinc-900/30 flex items-center justify-between">
+                <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold flex items-center gap-1">
+                  <Sparkles size={10} className="text-cyan-400" />
+                  Smart Suggestions
+                </span>
+                <span className="text-[9px] text-zinc-600 font-medium">Use ↑ ↓ and Enter</span>
+              </div>
               {filteredSuggestions.map((suggestion, index) => (
                 <button
                   key={suggestion}
@@ -225,11 +330,11 @@ export function FoodInput({ onParse, isParsing, loadingMessage, onStateChange }:
                   onClick={() => handleSelectSuggestion(suggestion)}
                   className={`w-full text-left px-4 py-3 transition text-xs flex items-center space-x-2 border-l-2 ${
                     index === selectedSuggestionIndex
-                      ? 'bg-cyan-600/20 text-cyan-300 border-l-2 border-cyan-400'
+                      ? 'bg-cyan-600/20 text-cyan-300 border-l-2 border-cyan-400 outline-none ring-1 ring-cyan-500/20'
                       : 'text-zinc-200 hover:bg-zinc-800 border-l-2 border-transparent'
                   }`}
                 >
-                  <Sparkles size={12} className={index === selectedSuggestionIndex ? 'text-cyan-300' : 'text-zinc-500'} />
+                  <Flame size={11} className={index === selectedSuggestionIndex ? 'text-cyan-300' : 'text-zinc-500'} />
                   <span>{suggestion}</span>
                 </button>
               ))}
@@ -281,12 +386,17 @@ export function FoodInput({ onParse, isParsing, loadingMessage, onStateChange }:
                 )}
              </AnimatePresence>
 
+             {/* Send Button: Dominated Visual Hierarchy, pulsing and glowing on valid content */}
              <button
                 type="submit"
-                disabled={!input.trim() || isParsing}
-                className="p-3 bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-xl shadow-lg hover:shadow-cyan-500/30 disabled:opacity-50 disabled:shadow-none disabled:cursor-not-allowed transition-all duration-300"
+                disabled={!hasInput || isParsing}
+                className={`p-3 text-white rounded-xl shadow-lg transition-all duration-300 flex items-center justify-center shrink-0 cursor-pointer ${
+                  hasInput && !isParsing 
+                    ? 'bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 shadow-cyan-500/25 hover:shadow-cyan-400/40 hover:scale-105 animate-pulse' 
+                    : 'bg-zinc-800 text-zinc-500 border border-zinc-700/40 disabled:opacity-40 disabled:scale-100 disabled:cursor-not-allowed'
+                }`}
               >
-                <Send size={18} className={input.trim() && !isParsing ? 'opacity-100' : 'opacity-70'} />
+                <Send size={18} className={hasInput && !isParsing ? 'opacity-100' : 'opacity-70'} />
               </button>
           </div>
 
