@@ -626,109 +626,255 @@ export default function Reports() {
           {/* TAB 1: WEEKLY REPORTS */}
           {activeTab === 'weekly' && (
             <div className="space-y-8">
-              {/* Ongoing Report Section */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-white/40">
-                  <Hourglass size={16} className="text-violet-400" />
-                  <h3 className="text-xs font-black uppercase tracking-widest text-white/50">Ongoing Week Report</h3>
+              {/* Primary Section: Latest Completed Report and Ongoing Report side-by-side */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                {/* Prominent Left: Latest Completed Report */}
+                <div className="lg:col-span-2 space-y-4">
+                  <div className="flex items-center gap-2 text-white/40">
+                    <CheckCircle2 size={16} className="text-emerald-400" />
+                    <h3 className="text-xs font-black uppercase tracking-widest text-white/50">Latest Completed Report</h3>
+                  </div>
+
+                  {(() => {
+                    const latestCompleted = completedReportCards[0];
+                    if (!latestCompleted) {
+                      return (
+                        <div className="p-8 rounded-3xl border border-white/5 bg-white/[0.01] text-center h-[230px] flex flex-col items-center justify-center">
+                          <p className="text-xs text-white/40 font-semibold uppercase">No completed weeks with validated activity yet.</p>
+                          <p className="text-[11px] text-white/20 mt-2">Complete tasks, study sessions and workouts to compile your first report cycle.</p>
+                        </div>
+                      );
+                    }
+                    const { weeksAgo, startDateStr, endDateStr, last7Days, prev7Days, weekKey, stats } = latestCompleted;
+                    return (
+                      <div className="p-6 rounded-3xl border border-emerald-500/20 bg-gradient-to-br from-emerald-600/[0.02] to-transparent relative overflow-hidden group shadow-lg flex flex-col justify-between h-[230px]">
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-600/5 rounded-full blur-[80px] pointer-events-none" />
+                        
+                        {/* Hover Trash Delete button */}
+                        <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
+                          <button
+                            onClick={() => {
+                              play('click');
+                              setConfirmDeleteKey(weekKey);
+                            }}
+                            className="p-2 rounded-xl bg-white/[0.02] hover:bg-red-500/10 text-white/40 hover:text-red-400 border border-white/5 hover:border-red-500/20 transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
+                            title="Delete Report"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+
+                        {/* Beautiful Glassmorphic Absolute Confirmation Overlay */}
+                        <AnimatePresence>
+                          {confirmDeleteKey === weekKey && (
+                            <motion.div 
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                              className="absolute inset-0 bg-zinc-950/95 backdrop-blur-md rounded-3xl p-5 flex flex-col justify-between z-20 border border-red-500/30"
+                            >
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2 text-red-400">
+                                  <AlertTriangle size={14} />
+                                  <span className="text-[9px] font-black uppercase tracking-widest">Delete Report?</span>
+                                </div>
+                                <p className="text-[11px] text-white/70 font-semibold leading-relaxed">
+                                  Are you sure you want to delete this weekly report card from the list? (This will not affect your historical trend charts.)
+                                </p>
+                              </div>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => {
+                                    play('click');
+                                    setConfirmDeleteKey(null);
+                                  }}
+                                  className="flex-1 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white text-xs font-black uppercase tracking-wider transition-all"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    play('error');
+                                    deleteReport(weekKey);
+                                    setConfirmDeleteKey(null);
+                                  }}
+                                  className="flex-1 py-2 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/25 text-xs font-black uppercase tracking-wider transition-all"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+
+                        <div className="flex justify-between items-start gap-4">
+                          <div className="space-y-1">
+                            <span className="px-2 py-0.5 rounded text-[8px] font-black bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-wider">
+                              Completed Cycle
+                            </span>
+                            <h4 className="text-xl font-black text-white uppercase tracking-wider mt-2">
+                              {startDateStr} – {endDateStr}
+                            </h4>
+                            <p className="text-[11px] text-white/45 font-medium">Fully synthesized with canonical OS metrics & deltas</p>
+                          </div>
+                          <ConsistencyRing score={stats.focusQualityScore} />
+                        </div>
+
+                        {/* Stat badges comparison */}
+                        <div className="grid grid-cols-3 gap-4 py-3 border-y border-white/5 my-2">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-[8px] font-bold text-white/30 uppercase flex items-center gap-1">
+                              <Clock size={8} className="text-violet-400" /> Focus
+                            </span>
+                            <span className="text-[13px] font-black text-white">
+                              {(stats.focusMinutes / 60).toFixed(1)}h <span className="text-[9px] text-white/40 font-semibold">({stats.completedSessions}s)</span>
+                            </span>
+                          </div>
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-[8px] font-bold text-white/30 uppercase flex items-center gap-1">
+                              <Code2 size={8} className="text-cyan-400" /> Code
+                            </span>
+                            <span className="text-[13px] font-black text-white">
+                              {stats.problemsSolved} solved
+                            </span>
+                          </div>
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-[8px] font-bold text-white/30 uppercase flex items-center gap-1">
+                              <BookOpen size={8} className="text-amber-400" /> Study
+                            </span>
+                            <span className="text-[13px] font-black text-white">
+                              {stats.chaptersRead} chapters
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Double button layout */}
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => {
+                              play('click');
+                              setSelectedWeeksAgo(weeksAgo);
+                            }}
+                            className="flex-1 btn-glow py-2 text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5"
+                          >
+                            <Eye size={12} /> View Report
+                          </button>
+                          <button
+                            onClick={() => triggerPdfGeneration(weeksAgo, last7Days, prev7Days)}
+                            disabled={pdfGeneratingWeek === weeksAgo}
+                            className="flex-1 btn-ghost py-2 text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 disabled:opacity-40"
+                          >
+                            {pdfGeneratingWeek === weeksAgo ? (
+                              <span className="w-3 h-3 rounded-full border-2 border-t-transparent border-white animate-spin" />
+                            ) : (
+                              <>
+                                <Download size={12} /> Export PDF
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
 
-                {(() => {
-                  const ongoing = uiReportAggregates.find(w => w.weeksAgo === 0);
-                  if (!ongoing) return null;
-                  const { weeksAgo, startDateStr, endDateStr, last7Days, prev7Days, stats } = ongoing;
+                {/* Right: Ongoing Cycle Report */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 text-white/40">
+                    <Hourglass size={16} className="text-violet-400 animate-spin" style={{ animationDuration: '4s' }} />
+                    <h3 className="text-xs font-black uppercase tracking-widest text-white/50">Ongoing Cycle</h3>
+                  </div>
 
-                  return (
-                    <div 
-                      className="p-6 rounded-3xl border border-violet-500/20 bg-gradient-to-br from-violet-600/[0.02] to-transparent relative overflow-hidden group max-w-xl"
-                    >
-                      <div className="absolute top-0 right-0 w-48 h-48 bg-violet-600/5 rounded-full blur-[60px] pointer-events-none" />
-                      <div className="flex justify-between items-start gap-4">
-                        <div className="space-y-1">
-                          <span className="px-2 py-0.5 rounded text-[8px] font-black bg-violet-500/10 text-violet-400 border border-violet-500/20 uppercase tracking-wider">
-                            Active Ongoing
-                          </span>
-                          <h4 className="text-lg font-black text-white uppercase tracking-wider mt-2.5">
-                            {startDateStr} – {endDateStr}
-                          </h4>
-                          <p className="text-[10px] text-white/30 font-semibold uppercase mt-1">Calculates dynamically in real time</p>
-                        </div>
-                        {/* Interactive watch style Consistency Ring */}
-                        <ConsistencyRing score={stats.focusQualityScore} />
-                      </div>
+                  {(() => {
+                    const ongoing = uiReportAggregates.find(w => w.weeksAgo === 0);
+                    if (!ongoing) return null;
+                    const { weeksAgo, startDateStr, endDateStr, last7Days, prev7Days, stats } = ongoing;
 
-                      {/* Stat badges comparison */}
-                      <div className="grid grid-cols-3 gap-2 py-4 border-y border-white/5 my-4">
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-[8px] font-bold text-white/30 uppercase flex items-center gap-1">
-                            <Clock size={8} className="text-violet-400" /> Focus
-                          </span>
-                          <span className="text-[11px] font-bold text-white/80">
-                            {(stats.focusMinutes / 60).toFixed(1)}h <span className="text-[8px] text-white/40">({stats.completedSessions}s)</span>
-                          </span>
+                    return (
+                      <div className="p-6 rounded-3xl border border-violet-500/15 bg-white/[0.01] hover:bg-white/[0.02] transition-all relative overflow-hidden group h-[230px] flex flex-col justify-between shadow-lg">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-violet-600/5 rounded-full blur-[40px] pointer-events-none" />
+                        <div className="flex justify-between items-start gap-4">
+                          <div className="space-y-1">
+                            <span className="px-2 py-0.5 rounded text-[8px] font-black bg-violet-500/10 text-violet-400 border border-violet-500/20 uppercase tracking-wider">
+                              In Progress
+                            </span>
+                            <h4 className="text-lg font-black text-white uppercase tracking-wider mt-2">
+                              {startDateStr} – {endDateStr}
+                            </h4>
+                            <p className="text-[10px] text-white/30 font-semibold uppercase mt-0.5">Real-time compilation</p>
+                          </div>
+                          <ConsistencyRing score={stats.focusQualityScore} />
                         </div>
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-[8px] font-bold text-white/30 uppercase flex items-center gap-1">
-                            <Code2 size={8} className="text-cyan-400" /> Code
-                          </span>
-                          <span className="text-[11px] font-bold text-white/80">
-                            {stats.problemsSolved} solved
-                          </span>
-                        </div>
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-[8px] font-bold text-white/30 uppercase flex items-center gap-1">
-                            <BookOpen size={8} className="text-amber-400" /> Reading
-                          </span>
-                          <span className="text-[11px] font-bold text-white/80">
-                            {stats.chaptersRead} ch
-                          </span>
-                        </div>
-                      </div>
 
-                      {/* Double button layout */}
-                      <div className="flex items-center gap-3">
-                        <button
-                          onClick={() => {
-                            play('click');
-                            setSelectedWeeksAgo(weeksAgo);
-                          }}
-                          className="flex-1 btn-glow py-2 text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5"
-                        >
-                          <Eye size={12} /> View
-                        </button>
-                        <button
-                          onClick={() => triggerPdfGeneration(weeksAgo, last7Days, prev7Days)}
-                          disabled={pdfGeneratingWeek === weeksAgo}
-                          className="flex-1 btn-ghost py-2 text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 disabled:opacity-40"
-                        >
-                          {pdfGeneratingWeek === weeksAgo ? (
-                            <span className="w-3 h-3 rounded-full border-2 border-t-transparent border-white animate-spin" />
-                          ) : (
-                            <>
-                              <Download size={12} /> Export
-                            </>
-                          )}
-                        </button>
+                        {/* Stat badges comparison */}
+                        <div className="grid grid-cols-3 gap-2 py-3 border-y border-white/5 my-2">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-[8px] font-bold text-white/30 uppercase">Focus</span>
+                            <span className="text-[11px] font-bold text-white/80">
+                              {(stats.focusMinutes / 60).toFixed(1)}h
+                            </span>
+                          </div>
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-[8px] font-bold text-white/30 uppercase">Code</span>
+                            <span className="text-[11px] font-bold text-white/80">
+                              {stats.problemsSolved} slv
+                            </span>
+                          </div>
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-[8px] font-bold text-white/30 uppercase">Read</span>
+                            <span className="text-[11px] font-bold text-white/80">
+                              {stats.chaptersRead} ch
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Double button layout */}
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => {
+                              play('click');
+                              setSelectedWeeksAgo(weeksAgo);
+                            }}
+                            className="flex-1 btn-glow py-2 text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5"
+                          >
+                            <Eye size={12} /> View
+                          </button>
+                          <button
+                            onClick={() => triggerPdfGeneration(weeksAgo, last7Days, prev7Days)}
+                            disabled={pdfGeneratingWeek === weeksAgo}
+                            className="flex-1 btn-ghost py-2 text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 disabled:opacity-40"
+                          >
+                            {pdfGeneratingWeek === weeksAgo ? (
+                              <span className="w-3 h-3 rounded-full border-2 border-t-transparent border-white animate-spin" />
+                            ) : (
+                              <>
+                                <Download size={12} /> Export
+                              </>
+                            )}
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })()}
+                    );
+                  })()}
+                </div>
+
               </div>
 
               {/* Completed Reports Section */}
               <div className="space-y-4 pt-4 border-t border-white/5">
                 <div className="flex items-center gap-2 text-white/40">
-                  <CheckCircle2 size={16} className="text-emerald-400" />
-                  <h3 className="text-xs font-black uppercase tracking-widest text-white/50">Completed Weekly Reports</h3>
+                  <CalendarRange size={16} className="text-violet-400" />
+                  <h3 className="text-xs font-black uppercase tracking-widest text-white/50">Other Completed Cycles</h3>
                 </div>
 
-                {completedReportCards.length === 0 ? (
+                {completedReportCards.filter((_, idx) => idx > 0).length === 0 ? (
                   <div className="p-8 rounded-3xl border border-white/5 bg-white/[0.01] text-center max-w-xl">
-                    <p className="text-xs text-white/40 font-semibold uppercase">No completed weeks with validated activity yet.</p>
+                    <p className="text-xs text-white/40 font-semibold uppercase">No older completed weekly reports found.</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                    {completedReportCards.map(({ weeksAgo, startDateStr, endDateStr, last7Days, prev7Days, weekKey, stats }) => {
+                    {completedReportCards.filter((_, idx) => idx > 0).map(({ weeksAgo, startDateStr, endDateStr, last7Days, prev7Days, weekKey, stats }) => {
                       return (
                         <div 
                           key={weeksAgo}

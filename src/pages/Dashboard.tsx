@@ -32,6 +32,8 @@ import { useMemo, useState } from 'react';
 import DeferredOnVisible from '../components/DeferredOnVisible';
 import FinanceWidget from '../components/dashboard/FinanceWidget';
 import WeeklyReportModal from '../components/dashboard/WeeklyReportModal';
+import { calculateWeeklyReport } from '../services/reports/weeklyReportCalculator';
+import { generateWeeklyReportPDF } from '../services/reports/weeklyReportPdf';
 import { lazyWithRetry } from '../lib/lazyWithRetry';
 
 const SpaceClock = lazyWithRetry(() => import('../components/dashboard/SpaceClock'));
@@ -114,6 +116,63 @@ export default function Dashboard() {
     if (new Date().getDay() !== 1) return true; // Keep viewed state high if not Monday
     return localStorage.getItem(`weekly_report_viewed_${currentMondayStr}`) === 'true';
   });
+
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+
+  const handleDownloadPDF = async () => {
+    if (downloadingPdf) return;
+    setDownloadingPdf(true);
+    setWeeklyReportViewed(true);
+    localStorage.setItem(`weekly_report_viewed_${currentMondayStr}`, 'true');
+    const toastId = toast.loading('Synthesizing completed week metrics & rendering PDF...');
+    
+    try {
+      const now = new Date();
+      const currentDay = now.getDay();
+      const daysToMonday = currentDay === 0 ? 6 : currentDay - 1;
+      const startOfCurrentWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysToMonday);
+      const startOfTargetWeek = new Date(startOfCurrentWeek);
+      startOfTargetWeek.setDate(startOfTargetWeek.getDate() - 7); // 1 week ago (Completed Week)
+
+      const last7Days: string[] = [];
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(startOfTargetWeek);
+        d.setDate(d.getDate() + i);
+        last7Days.push(format(d, 'yyyy-MM-dd'));
+      }
+
+      const prev7Days: string[] = [];
+      for (let i = 1; i <= 7; i++) {
+        const d = new Date(startOfTargetWeek);
+        d.setDate(d.getDate() - i);
+        prev7Days.unshift(format(d, 'yyyy-MM-dd'));
+      }
+
+      const stats = calculateWeeklyReport({
+        focusSessions,
+        problems,
+        waterEntries,
+        sleepEntries,
+        workoutEntries,
+        bookChapters: book?.chapters ?? [],
+        stepsData,
+        healthGoals,
+        last7Days,
+        prev7Days,
+        meals,
+        trackers,
+      });
+
+      await generateWeeklyReportPDF(stats);
+      toast.success('Weekly report PDF downloaded successfully!', { id: toastId });
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to generate PDF. Opening preview modal instead...', { id: toastId });
+      setShowWeeklyModal(true);
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
 
   React.useEffect(() => {
     // Immediate load if data is ready, but keep a tiny gap for mount animations
@@ -345,20 +404,23 @@ export default function Dashboard() {
                   setWeeklyReportViewed(true);
                   localStorage.setItem(`weekly_report_viewed_${currentMondayStr}`, 'true');
                 }}
-                className="btn-glow px-4 py-2.5 text-xs font-black uppercase tracking-wider flex items-center gap-1.5"
+                disabled={downloadingPdf}
+                className="btn-glow px-4 py-2.5 text-xs font-black uppercase tracking-wider flex items-center gap-1.5 disabled:opacity-50"
               >
                 <Eye size={13} /> View Report
               </button>
               
               <button
-                onClick={() => {
-                  setWeeklyReportViewed(true);
-                  localStorage.setItem(`weekly_report_viewed_${currentMondayStr}`, 'true');
-                  setShowWeeklyModal(true);
-                }}
-                className="btn-ghost px-4 py-2.5 text-xs font-black uppercase tracking-wider flex items-center gap-1.5"
+                onClick={handleDownloadPDF}
+                disabled={downloadingPdf}
+                className="btn-ghost px-4 py-2.5 text-xs font-black uppercase tracking-wider flex items-center gap-1.5 disabled:opacity-50"
               >
-                <Download size={13} /> Download PDF
+                {downloadingPdf ? (
+                  <span className="w-3 h-3 rounded-full border-2 border-t-transparent border-white animate-spin" />
+                ) : (
+                  <Download size={13} />
+                )}
+                {downloadingPdf ? 'Downloading...' : 'Download PDF'}
               </button>
             </div>
           </div>
@@ -844,6 +906,7 @@ export default function Dashboard() {
         healthGoals={healthGoals}
         meals={meals}
         trackers={trackers}
+        weeksAgo={1}
       />
     </motion.div>
   );

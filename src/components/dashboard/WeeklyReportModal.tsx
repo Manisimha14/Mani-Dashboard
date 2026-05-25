@@ -43,6 +43,13 @@ export default function WeeklyReportModal({
   const [report, setReport] = useState<WeeklyReportStats | null>(null);
   const [generating, setGenerating] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [localWeeksAgo, setLocalWeeksAgo] = useState(weeksAgo);
+
+  useEffect(() => {
+    if (open) {
+      setLocalWeeksAgo(weeksAgo);
+    }
+  }, [open, weeksAgo]);
 
   const last7Days = useMemo(() => {
     const now = new Date();
@@ -50,7 +57,7 @@ export default function WeeklyReportModal({
     const daysToMonday = currentDay === 0 ? 6 : currentDay - 1;
     const startOfCurrentWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysToMonday);
     const startOfTargetWeek = new Date(startOfCurrentWeek);
-    startOfTargetWeek.setDate(startOfTargetWeek.getDate() - weeksAgo * 7);
+    startOfTargetWeek.setDate(startOfTargetWeek.getDate() - localWeeksAgo * 7);
 
     const dates: string[] = [];
     for (let index = 0; index < 7; index += 1) {
@@ -59,7 +66,7 @@ export default function WeeklyReportModal({
       dates.push(format(value, 'yyyy-MM-dd'));
     }
     return dates;
-  }, [weeksAgo]);
+  }, [localWeeksAgo]);
 
   const prev7Days = useMemo(() => {
     const start = new Date(`${last7Days[0]}T00:00:00`);
@@ -131,7 +138,7 @@ export default function WeeklyReportModal({
   return (
     <Modal open={open} onClose={onClose} maxWidth="max-w-[92vw]" title="Weekly Intelligence Report">
       <div className="space-y-5">
-        <div className="flex items-center justify-between gap-4 border-b border-white/5 pb-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 pb-4">
           <div>
             <div className="text-[10px] font-black uppercase tracking-[0.25em] text-cyan-400 flex items-center gap-2">
               <ShieldCheck size={12} />
@@ -141,10 +148,35 @@ export default function WeeklyReportModal({
               Premium report built from canonical Mani OS metrics only.
             </div>
           </div>
+
+          {/* Premium Segment Control for Week Selection */}
+          <div className="flex p-0.5 rounded-xl bg-white/[0.03] border border-white/5 backdrop-blur-md self-start md:self-center">
+            {[
+              { val: 1, label: 'Last Week (Completed)' },
+              { val: 0, label: 'This Week (Ongoing)' },
+              { val: 2, label: '2 Weeks Ago' }
+            ].map((opt) => {
+              const active = localWeeksAgo === opt.val;
+              return (
+                <button
+                  key={opt.val}
+                  onClick={() => setLocalWeeksAgo(opt.val)}
+                  className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${
+                    active
+                      ? 'bg-gradient-to-r from-cyan-600 to-blue-500 text-white shadow-md'
+                      : 'text-white/40 hover:text-white hover:bg-white/[0.02]'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+
           <button
             onClick={handleExport}
             disabled={!report || generating || exporting}
-            className="btn-glow px-4 py-2 text-xs font-black uppercase tracking-wider flex items-center gap-2 disabled:opacity-40"
+            className="btn-glow px-4 py-2 text-xs font-black uppercase tracking-wider flex items-center gap-2 disabled:opacity-40 self-end md:self-center"
           >
             <Download size={14} />
             {exporting ? 'Exporting...' : 'Download PDF'}
