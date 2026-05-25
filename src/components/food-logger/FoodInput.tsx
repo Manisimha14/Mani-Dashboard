@@ -17,10 +17,63 @@ const placeholderExamples = [
   "poha and chai..."
 ];
 
+const autocompleteSuggestions = [
+  "2 Chapatis",
+  "Paneer Biryani",
+  "Egg Noodles",
+  "Dal Tadka",
+  "White Rice",
+  "3 Boiled Eggs",
+  "Poha and Chai",
+  "Idli and Sambar",
+  "Masala Dosa",
+  "Oatmeal with Almonds",
+  "Chicken Salad",
+  "Greek Yogurt",
+  "Butter Popcorn",
+  "Whey Protein Shake",
+  "Avocado Toast",
+  "Samosa",
+  "Upma",
+  "Rotis",
+  "Curd Rice",
+  "Bhindi Masala"
+];
+
 export function FoodInput({ onParse, isParsing, loadingMessage, onStateChange }: FoodInputProps) {
   const [input, setInput] = useState('');
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
+  const [filteredSuggestions, setFilteredSuggestions] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Helper to extract last delimiter-separated phrase
+  const getLastQueryPart = (text: string) => {
+    if (!text) return '';
+    const parts = text.split(/[+,]|\band\b/);
+    return parts[parts.length - 1].trim();
+  };
+
+  // Filter autocomplete suggestions based on the last typed part
+  useEffect(() => {
+    const lastPart = getLastQueryPart(input);
+    if (lastPart.length >= 2) {
+      const matches = autocompleteSuggestions.filter(item => 
+        item.toLowerCase().includes(lastPart.toLowerCase()) && 
+        item.toLowerCase() !== lastPart.toLowerCase()
+      );
+      setFilteredSuggestions(matches);
+    } else {
+      setFilteredSuggestions([]);
+    }
+  }, [input]);
+
+  const handleSelectSuggestion = (suggestion: string) => {
+    const delimiterPattern = /([+,]|\band\b)/;
+    const parts = input.split(delimiterPattern);
+    parts[parts.length - 1] = ` ${suggestion} `;
+    setInput(parts.join('').replace(/\s+/g, ' ').trim());
+    setFilteredSuggestions([]);
+  };
 
   // Rotate placeholders every 3 seconds if empty
   useEffect(() => {
@@ -205,6 +258,30 @@ export function FoodInput({ onParse, isParsing, loadingMessage, onStateChange }:
             }
           }}
         />
+
+        {/* Autocomplete Dropdown list */}
+        <AnimatePresence>
+          {filteredSuggestions.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="mx-4 mb-2 bg-zinc-950/90 backdrop-blur-xl border border-zinc-800 rounded-2xl overflow-hidden max-h-48 overflow-y-auto z-20 shadow-xl"
+            >
+              {filteredSuggestions.map((suggestion, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => handleSelectSuggestion(suggestion)}
+                  className="w-full text-left px-4 py-2.5 text-xs text-zinc-300 hover:text-white hover:bg-cyan-500/10 hover:border-l-2 hover:border-cyan-400 transition-all border-l-2 border-transparent flex items-center space-x-2"
+                >
+                  <Sparkles size={12} className="text-cyan-400" />
+                  <span>{suggestion}</span>
+                </button>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <div className="flex items-center justify-between p-3 bg-zinc-900/80 rounded-2xl m-2">
           
