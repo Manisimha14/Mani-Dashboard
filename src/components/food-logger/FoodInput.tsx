@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Mic, Camera, Send, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
-import { getSuggestions, type MealLog } from '../../lib/suggestionEngine';
+import { useAutocomplete } from '../../hooks/useAutocomplete';
 
 type FoodInputProps = {
   onParse: (input: string, image?: { data: string; mimeType: string }, previewUrl?: string, rawBlob?: Blob) => void;
@@ -19,75 +19,9 @@ const placeholderExamples = [
 ];
 
 export function FoodInput({ onParse, isParsing, loadingMessage, onStateChange }: FoodInputProps) {
-  const [input, setInput] = useState('');
+   const [input, setInput] = useState('');
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
-  const [filteredSuggestions, setFilteredSuggestions] = useState<string[]>([]);
-  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
-  const [mealHistory, setMealHistory] = useState<MealLog[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Load user meal history on mount
-  useEffect(() => {
-    const saved = localStorage.getItem("meal-history");
-    if (saved) {
-      try {
-        setMealHistory(JSON.parse(saved));
-      } catch (err) {
-        console.error("Error loading meal history:", err);
-      }
-    }
-  }, []);
-
-  const getLastQueryPart = (text: string) => {
-    if (!text.trim()) return '';
-
-    const separators = /(?:,|\+|\sand\s)/i;
-    const parts = text.split(separators);
-
-    return parts[parts.length - 1].trim();
-  };
-
-  // Filter and smart rank autocomplete suggestions based on the last typed part with debounce
-  useEffect(() => {
-    const lastPart = getLastQueryPart(input);
-
-    const isReadyForSuggestions = 
-      lastPart.length >= 2 || 
-      input.trim().endsWith('+') || 
-      input.trim().endsWith(',') || 
-      input.trim().toLowerCase().endsWith('and');
-
-    if (!isReadyForSuggestions) {
-      setFilteredSuggestions([]);
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      const suggestions = getSuggestions(
-        input,
-        lastPart,
-        mealHistory,
-        new Date().getHours()
-      );
-      setFilteredSuggestions(suggestions);
-      setSelectedSuggestionIndex(-1);
-    }, 150); // 150ms debounce
-
-    return () => clearTimeout(timer);
-  }, [input, mealHistory]);
-
-  const handleSelectSuggestion = (suggestion: string) => {
-    const separators = /(?:,|\+|\sand\s)/i;
-    const parts = input.split(separators);
-
-    parts[parts.length - 1] = suggestion;
-
-    const rebuilt = parts.join(' + ');
-
-    setInput(rebuilt + ' ');
-    setFilteredSuggestions([]);
-    setSelectedSuggestionIndex(-1);
-  };
 
   // Rotate placeholders every 3 seconds if empty
   useEffect(() => {
@@ -128,6 +62,13 @@ export function FoodInput({ onParse, isParsing, loadingMessage, onStateChange }:
       setInput(''); // clear after sending
     }
   };
+
+  const {
+    filteredSuggestions,
+    selectedSuggestionIndex,
+    handleSelectSuggestion,
+    handleKeyDown
+  } = useAutocomplete(input, setInput, handleSubmit);
 
   const handleVoiceClick = () => {
     alert("Voice logging coming soon.");
@@ -265,36 +206,7 @@ export function FoodInput({ onParse, isParsing, loadingMessage, onStateChange }:
           disabled={isParsing}
           className="w-full bg-transparent border-none resize-none outline-none text-lg text-zinc-100 placeholder-transparent p-5 min-h-[120px]"
           placeholder="What did you eat today?"
-          onKeyDown={(e) => {
-            if (filteredSuggestions.length > 0) {
-              if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                setSelectedSuggestionIndex(prev =>
-                  prev < filteredSuggestions.length - 1 ? prev + 1 : 0
-                );
-                return;
-              }
-
-              if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                setSelectedSuggestionIndex(prev =>
-                  prev > 0 ? prev - 1 : filteredSuggestions.length - 1
-                );
-                return;
-              }
-
-              if (e.key === 'Enter' && selectedSuggestionIndex >= 0) {
-                e.preventDefault();
-                handleSelectSuggestion(filteredSuggestions[selectedSuggestionIndex]);
-                return;
-              }
-            }
-
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              handleSubmit(e);
-            }
-          }}
+          onKeyDown={handleKeyDown}
         />
 
         {/* Autocomplete Dropdown list */}

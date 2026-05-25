@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
 import { useAddMeal, useHealthGoals } from './useHealthQuery';
 import { format } from 'date-fns';
+import { mealRepository } from '../lib/mealRepository';
 
 export type FoodItem = {
   id?: string;
@@ -266,17 +267,12 @@ export function useFoodLogger() {
 
       toast.success('Meal saved successfully!');
       
-      // Learn from the confirmed meal log to fuel personalized future autocomplete recommendations
+      // Learn asynchronously from the confirmed meal to precompute co-occurrence graph in IndexedDB
       try {
         const foods = parsedData.items.map(item => item.food_name);
-        const existingLogs = JSON.parse(localStorage.getItem("meal-history") || "[]");
-        existingLogs.unshift({
-          timestamp: Date.now(),
-          foods: foods.map(name => ({ name }))
-        });
-        localStorage.setItem("meal-history", JSON.stringify(existingLogs.slice(0, 500)));
+        await mealRepository.saveMeal(foods);
       } catch (historyErr) {
-        console.warn("Failed to update meal history suggestions:", historyErr);
+        console.warn("Failed to update meal suggestions:", historyErr);
       }
       
       // Cleanup preview URLs and states

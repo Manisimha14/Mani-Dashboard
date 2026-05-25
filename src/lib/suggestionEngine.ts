@@ -1,7 +1,4 @@
-export type MealLog = {
-  timestamp: number;
-  foods: { name: string }[];
-};
+import { type MealLog } from './mealRepository';
 
 const STATIC_FALLBACK = [
   "2 Chapatis",
@@ -20,7 +17,6 @@ const STATIC_FALLBACK = [
   "Bhindi Masala"
 ];
 
-// Curated co-occurrence defaults for Indian/global items in case of empty local logs
 const DEFAULT_CO_OCCURRENCES: Record<string, string[]> = {
   "rice": ["Dal Tadka", "Sambar", "Rajma", "Curd", "Chicken Curry"],
   "white rice": ["Dal Tadka", "Sambar", "Rajma", "Curd", "Chicken Curry"],
@@ -31,8 +27,7 @@ const DEFAULT_CO_OCCURRENCES: Record<string, string[]> = {
   "poha": ["Chai", "Tea", "Lemon"],
   "idli": ["Sambar", "Coconut Chutney"],
   "dosa": ["Sambar", "Coconut Chutney", "Potato Masala"],
-  "eggs": ["Toast", "Avocado", "Black Coffee"],
-  "boiled eggs": ["Toast", "Avocado", "Black Coffee"]
+  "eggs": ["Toast", "Avocado", "Black Coffee"]
 };
 
 // Fast Levenshtein distance calculation for fuzzy matching
@@ -57,54 +52,72 @@ function levenshtein(a: string, b: string): number {
 }
 
 /**
- * Extracts already entered foods from the input string.
+ * Extracts numeric quantity and the following query string from inputs like "2 ch"
  */
-function getExistingFoods(input: string): string[] {
-  const separators = /(?:,|\+|\sand\s)/i;
-  return input
-    .split(separators)
-    .map(f => f.trim().toLowerCase())
-    .filter(f => f.length > 0);
+function parseQuantityAndQuery(input: string): { quantityPrefix: string; cleanQuery: string } {
+  const quantityMatch = input.trim().match(/^(\d+(?:\.\d+)?\s*)(.*)$/);
+  if (quantityMatch) {
+    return {
+      quantityPrefix: quantityMatch[1], // e.g. "2 "
+      cleanQuery: quantityMatch[2].trim() // e.g. "ch"
+    };
+  }
+  return { quantityPrefix: '', cleanQuery: input.trim() };
 }
 
 /**
- * Core Suggestions Engine: Ranks foods based on:
- * - Direct prefix & substring matching
- * - Fuzzy Levenshtein match (typo tolerance)
- * - Recency & Frequency of the logged food item
- * - Time-of-day affinity (breakfast/lunch/dinner alignment)
- * - Co-occurrence matching (past pairings with typed foods in this input session)
+ * Core Suggestions Engine: High-performance, memory-efficient combined ranking
  */
 export function getSuggestions(
   input: string,
   lastQueryPart: string,
   mealLogs: MealLog[],
-  currentHour: number
+  currentHour: number,
+  precomputedCoOccurrences: string[] = []
 ): string[] {
   const normalizedQuery = lastQueryPart.toLowerCase().trim();
   const scoreMap = new Map<string, number>();
-  
-  // 1. Pre-seed with fallback recommendations (low score base)
+  const frequencyMap = new Map<string, number>();
+
+  // 1. Parse Quantity Prefixes (e.g., "2 ch")
+  const { quantityPrefix, cleanQuery } = parseQuantityAndQuery(normalizedQuery);
+  const searchTarget = cleanQuery || normalizedQuery;
+
+  // 2. Pre-seed with fallback recommendations
   for (const fallback of STATIC_FALLBACK) {
     scoreMap.set(fallback, 10);
+    frequencyMap.set(fallback, 1);
   }
 
-  // Extract other foods typed in the same input to compute co-occurrence
-  const existingFoodsInInput = getExistingFoods(input);
-  // If we are currently typing a food, remove the active partial term from the existing set
+  // Pre-extract matching set of clean inputs to prevent self-recommendations
+  const existingFoodsInInput = input
+    .split(/(?:,|\+|\sand\s)/i)
+    .map(f => f.trim().toLowerCase())
+    .filter(f => f.length > 0);
   if (normalizedQuery && existingFoodsInInput.length > 0) {
     existingFoodsInInput.pop();
   }
 
-  // 2. Process meal logs to calculate high-fidelity signals
+  // 3. Process meal logs to calculate frequency mapping first
+  mealLogs.forEach(log => {
+    log.foods.forEach(food => {
+      const name = food.name;
+      frequencyMap.set(name, (frequencyMap.get(name) || 0) + 1);
+    });
+  });
+
+  // 4. Calculate signal scores for all historical logs
   mealLogs.forEach(log => {
     const ageDays = (Date.now() - log.timestamp) / (1000 * 60 * 60 * 24);
-    // Recency boost: massive boost for items consumed today/yesterday, scaling down gracefully
     const recencyBoost = Math.max(5, 40 - ageDays);
 
-    // Time-of-day affinity: +20 points if consumed within 2 hours of current hour in previous logs
+    // Circular Time affinity: Wraps properly around midnight (23 -> 1 is 2 hours difference)
     const logHour = new Date(log.timestamp).getHours();
-    const timeAffinity = Math.abs(logHour - currentHour) <= 2 ? 25 : 0;
+    const hourDiff = Math.min(
+      Math.abs(logHour - currentHour),
+      24 - Math.abs(logHour - currentHour)
+    );
+    const timeAffinity = hourDiff <= 2 ? 30 : 0;
 
     const logFoodNames = log.foods.map(f => f.name.toLowerCase().trim());
 
@@ -114,43 +127,63 @@ export function getSuggestions(
       let score = 0;
 
       // Direct Matches
-      if (normalizedQuery) {
-        if (lower.startsWith(normalizedQuery)) {
-          score += 120; // Exact prefix gets absolute priority
-        } else if (lower.includes(normalizedQuery)) {
-          score += 65;  // Substring match
+      if (searchTarget) {
+        let isMatched = false;
+        
+        // Exact prefix match
+        if (lower.startsWith(searchTarget)) {
+          score += 150;
+          isMatched = true;
+        } 
+        // Substring match
+        else if (lower.includes(searchTarget)) {
+          score += 65;
+          isMatched = true;
         }
 
         // Individual Word Match (e.g. "rice" matching "Brown Rice")
         const words = lower.split(/\s+/);
-        if (words.some(word => word.startsWith(normalizedQuery))) {
+        if (words.some(word => word.startsWith(searchTarget))) {
           score += 35;
+          isMatched = true;
         }
 
-        // Typo tolerance / Fuzzy match using Levenshtein distance
-        if (normalizedQuery.length >= 3 && lower.length >= 3) {
-          const distance = levenshtein(normalizedQuery, lower);
+        // ─── OPTIMIZED SELECTIVE FUZZY LEVENSHTEIN ───
+        // Only run expensive Levenshtein fuzzy match if query is long, AND prefix/substring failed
+        if (!isMatched && searchTarget.length >= 4 && lower.length >= 4) {
+          const distance = levenshtein(searchTarget, lower);
           if (distance <= 2) {
-            score += 45; // Close typo match
+            score += 45;
           }
         }
       }
 
-      // 3. Co-occurrence calculation
-      // If user has already typed another item in this input (e.g. "Rice + [typing]"),
-      // check if this item appeared alongside the existing item in past meal logs.
-      if (existingFoodsInInput.length > 0) {
-        const hasCoOccurred = existingFoodsInInput.some(existingFood => {
-          // If the log contains the existing food, boost other foods in this same log
-          return logFoodNames.includes(existingFood) && lower !== existingFood;
-        });
-
-        if (hasCoOccurred) {
-          score += 80; // High co-occurrence boost
+      // Quantity Intelligence: Match numeric prefixes (e.g. "2 ch" matches "2 Chapatis")
+      if (quantityPrefix && normalizedQuery) {
+        const itemQuantityMatch = name.match(/^(\d+(?:\.\d+)?)/);
+        if (itemQuantityMatch && itemQuantityMatch[1]) {
+          const prefixNumber = parseFloat(quantityPrefix);
+          const itemNumber = parseFloat(itemQuantityMatch[1]);
+          if (prefixNumber === itemNumber) {
+            score += 60; // Huge score boost for quantity alignment
+          }
         }
       }
 
-      // Add recency, frequency, and time-of-day signals
+      // Fuzzy / Semantic Co-occurrence inside logs
+      if (existingFoodsInInput.length > 0) {
+        const hasCoOccurred = existingFoodsInInput.some(existingFood => {
+          return logFoodNames.some(logFood => 
+            logFood.includes(existingFood) || existingFood.includes(logFood)
+          ) && lower !== existingFood;
+        });
+
+        if (hasCoOccurred) {
+          score += 85; // High co-occurrence match
+        }
+      }
+
+      // Base context boosts
       score += recencyBoost;
       score += timeAffinity;
 
@@ -158,47 +191,58 @@ export function getSuggestions(
     });
   });
 
-  // 4. Default co-occurrence hints from curated sets if no logs match yet
-  if (existingFoodsInInput.length > 0 && !normalizedQuery) {
+  // 5. Precomputed Co-occurrence Index Injection (Instant O(1) Graph matching)
+  if (precomputedCoOccurrences.length > 0) {
+    precomputedCoOccurrences.forEach(foodName => {
+      scoreMap.set(foodName, (scoreMap.get(foodName) || 0) + 90);
+    });
+  }
+
+  // 6. Seed defaults if query is empty but delimiters are open (e.g. typing "+")
+  if (existingFoodsInInput.length > 0 && !searchTarget) {
     existingFoodsInInput.forEach(existingFood => {
       const matches = Object.keys(DEFAULT_CO_OCCURRENCES).filter(key => 
         existingFood.includes(key)
       );
       matches.forEach(matchKey => {
         DEFAULT_CO_OCCURRENCES[matchKey].forEach(item => {
-          scoreMap.set(item, (scoreMap.get(item) || 0) + 70); // Seed pairing boost
+          scoreMap.set(item, (scoreMap.get(item) || 0) + 70);
         });
       });
     });
   }
 
-  // 5. If query is empty but we have space for general recommendation (e.g., just opened),
-  // boost suggestions matching current mealtime
-  if (!normalizedQuery) {
+  // 7. Inject time of day affinity for fallback items if query is empty
+  if (!searchTarget) {
     let mealType = 'snack';
     if (currentHour >= 5 && currentHour < 11) mealType = 'breakfast';
     else if (currentHour >= 11 && currentHour < 16) mealType = 'lunch';
     else if (currentHour >= 16 && currentHour < 19) mealType = 'snack';
     else if (currentHour >= 19 && currentHour < 23) mealType = 'dinner';
 
-    if (mealType === 'breakfast') {
-      ["Idli Sambar", "Masala Dosa", "Poha", "Oatmeal with Almonds", "Whey Protein Shake"].forEach(f => {
-        scoreMap.set(f, (scoreMap.get(f) || 0) + 15);
-      });
-    } else if (mealType === 'lunch' || mealType === 'dinner') {
-      ["2 Chapatis", "White Rice", "Dal Tadka", "Paneer Biryani", "Bhindi Masala"].forEach(f => {
-        scoreMap.set(f, (scoreMap.get(f) || 0) + 15);
-      });
-    }
+    const timeMatches = mealType === 'breakfast' 
+      ? ["Idli Sambar", "Masala Dosa", "Poha", "Oatmeal with Almonds", "Whey Protein Shake"]
+      : ["2 Chapatis", "White Rice", "Dal Tadka", "Paneer Biryani", "Bhindi Masala"];
+
+    timeMatches.forEach(f => {
+      scoreMap.set(f, (scoreMap.get(f) || 0) + 15);
+    });
   }
 
-  // Sort by final combined intelligence score and slice top recommendations
+  // 8. Logarithmic Frequency Dampening & Scoring Sort
+  // Instead of pure cumulative inflation which biases popular foods forever,
+  // we apply logarithmic scaling to the frequency signal.
   return [...scoreMap.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .filter(([name]) => {
-      // Don't suggest foods already typed in the input to prevent duplicates
-      return !existingFoodsInInput.includes(name.toLowerCase().trim());
+    .map(([name, score]) => {
+      const frequency = frequencyMap.get(name) || 0;
+      const dampedFrequencyScore = Math.log(frequency + 1) * 20;
+      return {
+        name,
+        totalScore: score + dampedFrequencyScore
+      };
     })
+    .sort((a, b) => b.totalScore - a.totalScore)
+    .filter(x => !existingFoodsInInput.includes(x.name.toLowerCase().trim()))
     .slice(0, 8)
-    .map(([name]) => name);
+    .map(x => x.name);
 }
