@@ -250,10 +250,12 @@ export function useFoodLogger() {
 
       // 2. Save to primary health_meals dashboard table
       const now = new Date();
+      const normalizedMealType = parsedData.meal_type === 'snack' ? 'snacks' : parsedData.meal_type;
+      
       await addMealMutation.mutateAsync({
         date: format(now, 'yyyy-MM-dd'),
         time: format(now, 'HH:mm'),
-        mealType: parsedData.meal_type as any,
+        mealType: normalizedMealType as any,
         name: parsedData.items.map(i => i.food_name).join(', '),
         calories: parsedData.totals.calories,
         protein: parsedData.totals.protein,
