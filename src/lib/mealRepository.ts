@@ -25,11 +25,33 @@ function getDB(): Promise<IDBDatabase> {
   });
 }
 
+let dbVersion = 0;
+const listeners = new Set<() => void>();
+
 /**
  * Repository for managing food logging history using IndexedDB
  * avoids localStorage size constraints and synchronous blocking.
  */
 export const mealRepository = {
+  getVersion(): number {
+    return dbVersion;
+  },
+
+  subscribe(listener: () => void) {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  },
+
+  notify() {
+    listeners.forEach(l => {
+      try {
+        l();
+      } catch (err) {
+        console.error("Subscriber notification crash:", err);
+      }
+    });
+  },
+
   /**
    * Save a newly confirmed meal log.
    * Asynchronously updates the raw meal logs and precomputes the co-occurrence graph.
@@ -88,6 +110,9 @@ export const mealRepository = {
         });
       }
     }
+
+    dbVersion++;
+    this.notify();
   },
 
   /**

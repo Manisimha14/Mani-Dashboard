@@ -54,8 +54,8 @@ export function FoodInput({ onParse, isParsing, loadingMessage, onStateChange }:
     return () => document.removeEventListener('paste', handlePaste);
   }, [isParsing]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (input.trim() && !isParsing) {
       if (onStateChange) onStateChange('analyzing');
       onParse(input);
@@ -68,7 +68,7 @@ export function FoodInput({ onParse, isParsing, loadingMessage, onStateChange }:
     selectedSuggestionIndex,
     handleSelectSuggestion,
     handleKeyDown
-  } = useAutocomplete(input, setInput, handleSubmit);
+  } = useAutocomplete(input, setInput, () => handleSubmit());
 
   const handleVoiceClick = () => {
     alert("Voice logging coming soon.");

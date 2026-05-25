@@ -1,8 +1,19 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { getSuggestions } from '../lib/suggestionEngine';
 import { mealRepository, type MealLog } from '../lib/mealRepository';
 
-export function useAutocomplete(input: string, setInput: (val: string) => void, handleSubmit: (e: any) => void) {
+// Compile static, high-performance separating regular expressions outside hot execution path
+const SEPARATORS = /(?:,|\+|\sand\s)/i;
+const SEPARATORS_WITH_GROUPS = /((?:,|\+|\sand\s))/i;
+const VISIBILITY_TRIGGER_REGEX = /(?:\+|,|\band\s*)$/i;
+
+const MAX_CACHE_SIZE = 100;
+
+export function useAutocomplete(
+  input: string, 
+  setInput: (val: string) => void, 
+  handleSubmit: () => void
+) {
   const [filteredSuggestions, setFilteredSuggestions] = useState<string[]>([]);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
   const [mealHistory, setMealHistory] = useState<MealLog[]>([]);
@@ -11,66 +22,78 @@ export function useAutocomplete(input: string, setInput: (val: string) => void, 
   // High-performance Query Memoization cache (Prevents redundant CPU computations)
   const queryCache = useRef<Map<string, string[]>>(new Map());
 
-  // Load and subscribe to async IndexedDB meal logs
+  // Helper to extract last delimiter-separated phrase
+  const getLastQueryPart = useCallback((text: string) => {
+    if (!text.trim()) return '';
+    const parts = text.split(SEPARATORS);
+    return parts[parts.length - 1].trim();
+  }, []);
+
+  // 1. Reactive Subscription to IndexedDB updates (No more polling or false useEffect dependencies)
   useEffect(() => {
     async function loadHistory() {
       try {
         const logs = await mealRepository.getMealLogs();
         setMealHistory(logs);
-        // Reset query cache upon new meal saves
+        // Clear memoization cache upon fresh logs to ensure instant synchronization
         queryCache.current.clear();
       } catch (err) {
         console.error("IndexedDB loading failed, falling back to empty:", err);
       }
     }
+    
     loadHistory();
-  }, [input === '']); // Reload history whenever input gets cleared after save
+    const unsubscribe = mealRepository.subscribe(loadHistory);
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
-  const getLastQueryPart = (text: string) => {
-    if (!text.trim()) return '';
-    const separators = /(?:,|\+|\sand\s)/i;
-    const parts = text.split(separators);
-    return parts[parts.length - 1].trim();
-  };
-
-  // Fetch precomputed co-occurrences asynchronously for the typed text
+  // 2. Race-Condition Proof Co-occurrence Fetch
   useEffect(() => {
-    const separators = /(?:,|\+|\sand\s)/i;
-    const parts = input.split(separators);
+    const parts = input.split(SEPARATORS);
     if (parts.length > 1) {
-      // Find the second-to-last item to lookup pairing suggestions
       const previousItem = parts[parts.length - 2].trim();
       if (previousItem) {
-        mealRepository.getCoOccurrences(previousItem).then(setPrecomputedCoOccurrences);
+        let active = true;
+        mealRepository.getCoOccurrences(previousItem).then(result => {
+          if (active) {
+            setPrecomputedCoOccurrences(result);
+          }
+        });
+        return () => {
+          active = false;
+        };
       }
     } else {
       setPrecomputedCoOccurrences([]);
     }
   }, [input]);
 
-  // Debounced, Cached Combined Autocomplete Engine
+  // 3. Debounced, LRU Cached Suggestions Scorer
   useEffect(() => {
     const lastPart = getLastQueryPart(input);
 
     const isReady = 
       lastPart.length >= 2 || 
-      input.trim().endsWith('+') || 
-      input.trim().endsWith(',') || 
-      input.trim().toLowerCase().endsWith('and');
+      VISIBILITY_TRIGGER_REGEX.test(input.trim());
 
     if (!isReady) {
       setFilteredSuggestions([]);
       return;
     }
 
-    const cacheKey = `${lastPart}_${precomputedCoOccurrences.join(',')}_${mealHistory.length}`;
+    const currentVersion = mealRepository.getVersion();
+    const cacheKey = `${lastPart}_${precomputedCoOccurrences.join(',')}_${currentVersion}`;
+    
+    // Serve from cache if entry already calculated
     if (queryCache.current.has(cacheKey)) {
       setFilteredSuggestions(queryCache.current.get(cacheKey)!);
       setSelectedSuggestionIndex(-1);
       return;
     }
 
-    // 150ms Adaptive debounce to avoid blocking typing frames
+    // 150ms Debouncer
     const timer = setTimeout(() => {
       const suggestions = getSuggestions(
         input,
@@ -80,29 +103,36 @@ export function useAutocomplete(input: string, setInput: (val: string) => void, 
         precomputedCoOccurrences
       );
       
-      // Cache results
+      // LRU Eviction: Capping memoization cache to prevent memory leaks over time
+      if (queryCache.current.size >= MAX_CACHE_SIZE) {
+        const oldestKey = queryCache.current.keys().next().value;
+        if (oldestKey !== undefined) {
+          queryCache.current.delete(oldestKey);
+        }
+      }
+
       queryCache.current.set(cacheKey, suggestions);
       setFilteredSuggestions(suggestions);
       setSelectedSuggestionIndex(-1);
     }, 150);
 
     return () => clearTimeout(timer);
-  }, [input, mealHistory, precomputedCoOccurrences]);
+  }, [input, mealHistory, precomputedCoOccurrences, getLastQueryPart]);
 
-  const handleSelectSuggestion = (suggestion: string) => {
-    const separators = /(?:,|\+|\sand\s)/i;
-    const parts = input.split(separators);
+  // 4. Exact Delimiter-Preserving Selection replacement (No more custom delimiter override mutations)
+  const handleSelectSuggestion = useCallback((suggestion: string) => {
+    const parts = input.split(SEPARATORS_WITH_GROUPS);
+    
+    // Replace only the final active typed token, preserving commas, plusses and delimiters intact
+    parts[parts.length - 1] = ' ' + suggestion;
 
-    parts[parts.length - 1] = suggestion;
-
-    const rebuilt = parts.join(' + ');
-
-    setInput(rebuilt + ' ');
+    setInput(parts.join('') + ' ');
     setFilteredSuggestions([]);
     setSelectedSuggestionIndex(-1);
-  };
+  }, [input, setInput]);
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  // 5. Typesafe, Closure-Safe Keyboard Navigation Handler
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (filteredSuggestions.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -136,9 +166,9 @@ export function useAutocomplete(input: string, setInput: (val: string) => void, 
 
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit(e);
+      handleSubmit();
     }
-  };
+  }, [filteredSuggestions, selectedSuggestionIndex, handleSelectSuggestion, handleSubmit]);
 
   return {
     filteredSuggestions,
