@@ -30,43 +30,51 @@ const DEFAULT_CO_OCCURRENCES: Record<string, string[]> = {
   "eggs": ["Toast", "Avocado", "Black Coffee"]
 };
 
-// Fast Levenshtein distance calculation for fuzzy matching
+// Extremely fast rolling rows Levenshtein distance calculation
+// Memory Complexity: O(min(n, m)) instead of O(n * m) matrix allocation
 function levenshtein(a: string, b: string): number {
-  const tmp: number[][] = [];
-  for (let i = 0; i <= a.length; i++) {
-    tmp[i] = [i];
-  }
-  for (let j = 0; j <= b.length; j++) {
-    tmp[0][j] = j;
-  }
-  for (let i = 1; i <= a.length; i++) {
-    for (let j = 1; j <= b.length; j++) {
-      tmp[i][j] = Math.min(
-        tmp[i - 1][j] + 1,
-        tmp[i][j - 1] + 1,
-        tmp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)
-      );
+  if (a.length > b.length) return levenshtein(b, a);
+  
+  let prevRow = Array.from({ length: a.length + 1 }, (_, i) => i);
+  let currentRow = new Array<number>(a.length + 1);
+
+  for (let i = 1; i <= b.length; i++) {
+    currentRow[0] = i;
+    for (let j = 1; j <= a.length; j++) {
+      const insert = prevRow[j] + 1;
+      const deleteCost = currentRow[j - 1] + 1;
+      const substitute = prevRow[j - 1] + (b[i - 1] === a[j - 1] ? 0 : 1);
+      currentRow[j] = Math.min(insert, deleteCost, substitute);
     }
+    prevRow = [...currentRow];
   }
-  return tmp[a.length][b.length];
+  return prevRow[a.length];
 }
 
 /**
- * Extracts numeric quantity and the following query string from inputs like "2 ch"
+ * Parses spacing and handles quantities robustly (e.g. "2 ch" -> prefix "2 ", query "ch")
  */
 function parseQuantityAndQuery(input: string): { quantityPrefix: string; cleanQuery: string } {
-  const quantityMatch = input.trim().match(/^(\d+(?:\.\d+)?\s*)(.*)$/);
+  // Normalize spacing to avoid formatting mismatch
+  const normalizedInput = input.replace(/\s+/g, ' ').trim();
+  const quantityMatch = normalizedInput.match(/^(\d+(?:\.\d+)?\s*)(.*)$/);
+  
   if (quantityMatch) {
     return {
       quantityPrefix: quantityMatch[1], // e.g. "2 "
       cleanQuery: quantityMatch[2].trim() // e.g. "ch"
     };
   }
-  return { quantityPrefix: '', cleanQuery: input.trim() };
+  return { quantityPrefix: '', cleanQuery: normalizedInput };
 }
 
 /**
- * Core Suggestions Engine: High-performance, memory-efficient combined ranking
+ * Tokenizes a string into exact word units
+ */
+const tokenize = (s: string): string[] => s.split(/\s+/).map(t => t.toLowerCase().trim()).filter(Boolean);
+
+/**
+ * Core Suggestions Engine: High-performance, single-pass combined scorer
  */
 export function getSuggestions(
   input: string,
@@ -75,21 +83,22 @@ export function getSuggestions(
   currentHour: number,
   precomputedCoOccurrences: string[] = []
 ): string[] {
-  const normalizedQuery = lastQueryPart.toLowerCase().trim();
+  // Spacing normalization to avoid token breaking
+  const normalizedQuery = lastQueryPart.replace(/\s+/g, ' ').toLowerCase().trim();
+  
   const scoreMap = new Map<string, number>();
   const frequencyMap = new Map<string, number>();
+  const canonicalNames = new Map<string, string>(); // Casing Deduplication mapping (lowercase -> original)
 
-  // 1. Parse Quantity Prefixes (e.g., "2 ch")
-  const { quantityPrefix, cleanQuery } = parseQuantityAndQuery(normalizedQuery);
-  const searchTarget = cleanQuery || normalizedQuery;
-
-  // 2. Pre-seed with fallback recommendations
+  // 1. Seed fallback list with small scores
   for (const fallback of STATIC_FALLBACK) {
-    scoreMap.set(fallback, 10);
-    frequencyMap.set(fallback, 1);
+    const lowerFallback = fallback.toLowerCase().trim();
+    scoreMap.set(lowerFallback, 10);
+    frequencyMap.set(lowerFallback, 1);
+    canonicalNames.set(lowerFallback, fallback);
   }
 
-  // Pre-extract matching set of clean inputs to prevent self-recommendations
+  // Parse current delimiters
   const existingFoodsInInput = input
     .split(/(?:,|\+|\sand\s)/i)
     .map(f => f.trim().toLowerCase())
@@ -98,20 +107,32 @@ export function getSuggestions(
     existingFoodsInInput.pop();
   }
 
-  // 3. Process meal logs to calculate frequency mapping first
-  mealLogs.forEach(log => {
-    log.foods.forEach(food => {
-      const name = food.name;
-      frequencyMap.set(name, (frequencyMap.get(name) || 0) + 1);
-    });
-  });
+  const { quantityPrefix, cleanQuery } = parseQuantityAndQuery(normalizedQuery);
+  const searchTarget = cleanQuery || normalizedQuery;
 
-  // 4. Calculate signal scores for all historical logs
+  // Short-circuit: If search query is empty and no co-occurrences exist,
+  // serve time-of-day affinity matches instantly to bypass log iteration.
+  if (!searchTarget && existingFoodsInInput.length === 0 && precomputedCoOccurrences.length === 0) {
+    let mealType = 'snack';
+    if (currentHour >= 5 && currentHour < 11) mealType = 'breakfast';
+    else if (currentHour >= 11 && currentHour < 16) mealType = 'lunch';
+    else if (currentHour >= 16 && currentHour < 19) mealType = 'snack';
+    else if (currentHour >= 19 && currentHour < 23) mealType = 'dinner';
+
+    const timeMatches = mealType === 'breakfast' 
+      ? ["Idli Sambar", "Masala Dosa", "Poha", "Oatmeal with Almonds", "Whey Protein Shake"]
+      : ["2 Chapatis", "White Rice", "Dal Tadka", "Paneer Biryani", "Bhindi Masala"];
+
+    return timeMatches;
+  }
+
+  // ─── SINGLE PASS OVER MEAL LOGS ───
+  // Computes direct score mapping, recency/frequency, co-occurrences and time affinity in 1 pass
   mealLogs.forEach(log => {
     const ageDays = (Date.now() - log.timestamp) / (1000 * 60 * 60 * 24);
     const recencyBoost = Math.max(5, 40 - ageDays);
 
-    // Circular Time affinity: Wraps properly around midnight (23 -> 1 is 2 hours difference)
+    // Circular clocks: safely wraps around midnight (e.g. 23:00 to 01:00 is 2 hours)
     const logHour = new Date(log.timestamp).getHours();
     const hourDiff = Math.min(
       Math.abs(logHour - currentHour),
@@ -124,32 +145,36 @@ export function getSuggestions(
     log.foods.forEach(food => {
       const name = food.name;
       const lower = name.toLowerCase().trim();
+      
+      // Deduplicate casing - map to original most recent casing
+      if (!canonicalNames.has(lower)) {
+        canonicalNames.set(lower, name);
+      }
+
+      // Track exact frequencies cleanly using casing-deduplicated keys
+      frequencyMap.set(lower, (frequencyMap.get(lower) || 0) + 1);
+
       let score = 0;
 
       // Direct Matches
       if (searchTarget) {
         let isMatched = false;
         
-        // Exact prefix match
         if (lower.startsWith(searchTarget)) {
           score += 150;
           isMatched = true;
-        } 
-        // Substring match
-        else if (lower.includes(searchTarget)) {
+        } else if (lower.includes(searchTarget)) {
           score += 65;
           isMatched = true;
         }
 
-        // Individual Word Match (e.g. "rice" matching "Brown Rice")
         const words = lower.split(/\s+/);
         if (words.some(word => word.startsWith(searchTarget))) {
           score += 35;
           isMatched = true;
         }
 
-        // ─── OPTIMIZED SELECTIVE FUZZY LEVENSHTEIN ───
-        // Only run expensive Levenshtein fuzzy match if query is long, AND prefix/substring failed
+        // Highly optimized Levenshtein fallback
         if (!isMatched && searchTarget.length >= 4 && lower.length >= 4) {
           const distance = levenshtein(searchTarget, lower);
           if (distance <= 2) {
@@ -158,47 +183,54 @@ export function getSuggestions(
         }
       }
 
-      // Quantity Intelligence: Match numeric prefixes (e.g. "2 ch" matches "2 Chapatis")
-      if (quantityPrefix && normalizedQuery) {
+      // Quantity matches (e.g. "2 ch" -> "2 Chapatis")
+      if (quantityPrefix && searchTarget) {
         const itemQuantityMatch = name.match(/^(\d+(?:\.\d+)?)/);
         if (itemQuantityMatch && itemQuantityMatch[1]) {
           const prefixNumber = parseFloat(quantityPrefix);
           const itemNumber = parseFloat(itemQuantityMatch[1]);
           if (prefixNumber === itemNumber) {
-            score += 60; // Huge score boost for quantity alignment
+            score += 60;
           }
         }
       }
 
-      // Fuzzy / Semantic Co-occurrence inside logs
+      // Co-occurrence with Token Bound Matching
+      // Avoids false substring collisions (e.g. "egg" matching "veggie") by splitting into words
       if (existingFoodsInInput.length > 0) {
         const hasCoOccurred = existingFoodsInInput.some(existingFood => {
-          return logFoodNames.some(logFood => 
-            logFood.includes(existingFood) || existingFood.includes(logFood)
-          ) && lower !== existingFood;
+          const existTokens = tokenize(existingFood);
+          return logFoodNames.some(logFood => {
+            const logTokens = tokenize(logFood);
+            // Verify there is an exact word intersection between previous foods and the log
+            return logTokens.some(lt => existTokens.includes(lt)) && lower !== existingFood;
+          });
         });
 
         if (hasCoOccurred) {
-          score += 85; // High co-occurrence match
+          score += 85;
         }
       }
 
-      // Base context boosts
       score += recencyBoost;
       score += timeAffinity;
 
-      scoreMap.set(name, (scoreMap.get(name) || 0) + score);
+      scoreMap.set(lower, (scoreMap.get(lower) || 0) + score);
     });
   });
 
-  // 5. Precomputed Co-occurrence Index Injection (Instant O(1) Graph matching)
+  // Inject Precomputed co-occurrence graph weights
   if (precomputedCoOccurrences.length > 0) {
     precomputedCoOccurrences.forEach(foodName => {
-      scoreMap.set(foodName, (scoreMap.get(foodName) || 0) + 90);
+      const lower = foodName.toLowerCase().trim();
+      if (!canonicalNames.has(lower)) {
+        canonicalNames.set(lower, foodName);
+      }
+      scoreMap.set(lower, (scoreMap.get(lower) || 0) + 90);
     });
   }
 
-  // 6. Seed defaults if query is empty but delimiters are open (e.g. typing "+")
+  // Inject curated pairs if user just typed delimiter
   if (existingFoodsInInput.length > 0 && !searchTarget) {
     existingFoodsInInput.forEach(existingFood => {
       const matches = Object.keys(DEFAULT_CO_OCCURRENCES).filter(key => 
@@ -206,38 +238,26 @@ export function getSuggestions(
       );
       matches.forEach(matchKey => {
         DEFAULT_CO_OCCURRENCES[matchKey].forEach(item => {
-          scoreMap.set(item, (scoreMap.get(item) || 0) + 70);
+          const lower = item.toLowerCase().trim();
+          if (!canonicalNames.has(lower)) {
+            canonicalNames.set(lower, item);
+          }
+          scoreMap.set(lower, (scoreMap.get(lower) || 0) + 70);
         });
       });
     });
   }
 
-  // 7. Inject time of day affinity for fallback items if query is empty
-  if (!searchTarget) {
-    let mealType = 'snack';
-    if (currentHour >= 5 && currentHour < 11) mealType = 'breakfast';
-    else if (currentHour >= 11 && currentHour < 16) mealType = 'lunch';
-    else if (currentHour >= 16 && currentHour < 19) mealType = 'snack';
-    else if (currentHour >= 19 && currentHour < 23) mealType = 'dinner';
-
-    const timeMatches = mealType === 'breakfast' 
-      ? ["Idli Sambar", "Masala Dosa", "Poha", "Oatmeal with Almonds", "Whey Protein Shake"]
-      : ["2 Chapatis", "White Rice", "Dal Tadka", "Paneer Biryani", "Bhindi Masala"];
-
-    timeMatches.forEach(f => {
-      scoreMap.set(f, (scoreMap.get(f) || 0) + 15);
-    });
-  }
-
-  // 8. Logarithmic Frequency Dampening & Scoring Sort
-  // Instead of pure cumulative inflation which biases popular foods forever,
-  // we apply logarithmic scaling to the frequency signal.
+  // Balanced Normalized Scoring Sort featuring Logarithmic Frequency Damping
   return [...scoreMap.entries()]
-    .map(([name, score]) => {
-      const frequency = frequencyMap.get(name) || 0;
+    .map(([lower, score]) => {
+      const frequency = frequencyMap.get(lower) || 0;
       const dampedFrequencyScore = Math.log(frequency + 1) * 20;
+      const originalName = canonicalNames.get(lower) || lower;
+      
+      // Combine scoring factors cleanly
       return {
-        name,
+        name: originalName,
         totalScore: score + dampedFrequencyScore
       };
     })
