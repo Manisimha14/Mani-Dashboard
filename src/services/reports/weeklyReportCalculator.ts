@@ -5,68 +5,35 @@ import type { FocusSession, LeetCodeProblem, Tracker } from '../../types';
 import type { WaterEntry, SleepEntry, WorkoutEntry, HealthGoal, MealEntry } from '../../types/health';
 import type {
   CustomTrackerWeeklySummary,
-  DailyReportPoint,
   ReportMetricCard,
-  ValidatedInsight,
   WeeklyComparisonRow,
   WeeklyReportStats,
 } from '../../types/report';
 
-interface ReportChapter {
-  id?: string | number;
-  number?: number;
-  title?: string;
-  completed?: boolean;
-  dateCompleted?: string;
-}
+import {
+  dedupeFocusSessions,
+  dedupeProblems,
+  dedupeWorkouts,
+  dedupeSleepEntries,
+  dedupeChapters,
+  safeNumber,
+  type ReportChapter,
+} from './analytics/dedupe';
 
-interface AggregateTotals {
-  focusMinutes: number;
-  completedSessions: number;
-  totalSessions: number;
-  problemsSolved: number;
-  chaptersRead: number;
-  waterMl: number;
-  sleepMinutes: number;
-  sleepDaysWithData: number;
-  workoutsCount: number;
-  steps: number;
-  caloriesIn: number;
-  caloriesOut: number;
-  waterDaysHit: number;
-  sleepDaysHit: number;
-  problemsDaysHit: number;
-  readingDaysHit: number;
-}
+import {
+  buildDailyBreakdown,
+  aggregateDaily,
+  type DailyReportPoint,
+  type AggregateTotals,
+} from './analytics/aggregation';
+
+import {
+  buildValidatedInsights,
+} from './analytics/correlations';
 
 const CODING_WEEKLY_TARGET = 7;
 const READING_WEEKLY_TARGET = 3;
 const FOCUS_WEEKLY_TARGET_MIN = 300;
-
-function safeNumber(value: number | undefined | null): number {
-  return Number.isFinite(value) ? Number(value) : 0;
-}
-
-function problemKey(problem: LeetCodeProblem): string {
-  const slug = problem.link?.trim().toLowerCase() || '';
-  if (slug.includes('/problems/')) {
-    return slug.split('/problems/')[1]?.split('/')[0] || problem.name.trim().toLowerCase();
-  }
-  return problem.name.trim().toLowerCase();
-}
-
-function sessionKey(session: FocusSession): string {
-  const dateKey = normalizeToLocalDateString(session.date || session.startTime) || session.date || session.startTime;
-  return `${dateKey}_${session.startTime}_${session.actualDuration || session.duration}_${session.mode}`;
-}
-
-function workoutKey(workout: WorkoutEntry): string {
-  return `${workout.date}_${workout.startTime || '08:30'}_${workout.name.trim().toLowerCase()}_${workout.durationMinutes}`;
-}
-
-function chapterKey(chapter: ReportChapter): string {
-  return `${chapter.id ?? `${chapter.number ?? 'x'}_${chapter.title ?? 'chapter'}`}_${chapter.dateCompleted ?? 'n/a'}`;
-}
 
 function percentageChange(current: number, previous: number): number {
   if (previous === 0) return current > 0 ? 100 : 0;
@@ -79,33 +46,10 @@ function directionFromDelta(delta: number): 'up' | 'down' | 'flat' {
   return 'flat';
 }
 
-function calculatePearsonCorrelation(x: number[], y: number[]): number {
-  const n = x.length;
-  if (n < 5) return 0;
-
-  let sumX = 0;
-  let sumY = 0;
-  let sumXY = 0;
-  let sumX2 = 0;
-  let sumY2 = 0;
-
-  for (let i = 0; i < n; i++) {
-    sumX += x[i];
-    sumY += y[i];
-    sumXY += x[i] * y[i];
-    sumX2 += x[i] * x[i];
-    sumY2 += y[i] * y[i];
-  }
-
-  const numerator = n * sumXY - sumX * sumY;
-  const denominator = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
-
-  if (denominator === 0) return 0;
-  return numerator / denominator;
-}
-
 function toLocalDayLabel(date: string, token: string): string {
-  return format(new Date(`${date}T00:00:00`), token);
+  // Avoid timezone shift using Z-string standard
+  const d = new Date(date + 'T00:00:00');
+  return d.toLocaleDateString('en-US', token === 'EEE' ? { weekday: 'short' } : { weekday: 'long', month: 'short', day: 'numeric' });
 }
 
 function formatHours(minutes: number): string {
@@ -116,105 +60,7 @@ function formatLiters(ml: number): string {
   return `${(ml / 1000).toFixed(1)}L`;
 }
 
-function dedupeProblems(problems: LeetCodeProblem[]): LeetCodeProblem[] {
-  const bestByKey = new Map<string, LeetCodeProblem>();
-
-  for (const problem of problems) {
-    const key = problemKey(problem);
-    const existing = bestByKey.get(key);
-    if (!existing) {
-      bestByKey.set(key, problem);
-      continue;
-    }
-
-    const existingDate = normalizeToLocalDateString(existing.date) || existing.date;
-    const currentDate = normalizeToLocalDateString(problem.date) || problem.date;
-
-    const shouldReplace =
-      (problem.completed && !existing.completed) ||
-      (problem.completed === existing.completed && currentDate > existingDate);
-
-    if (shouldReplace) {
-      bestByKey.set(key, problem);
-    }
-  }
-
-  return Array.from(bestByKey.values());
-}
-
-function dedupeFocusSessions(sessions: FocusSession[]): FocusSession[] {
-  const bestByKey = new Map<string, FocusSession>();
-
-  for (const session of sessions) {
-    const key = sessionKey(session);
-    const existing = bestByKey.get(key);
-    if (!existing) {
-      bestByKey.set(key, session);
-      continue;
-    }
-
-    const existingMinutes = safeNumber(existing.actualDuration) || existing.duration;
-    const currentMinutes = safeNumber(session.actualDuration) || session.duration;
-    const shouldReplace =
-      (session.completed && !existing.completed) ||
-      (session.completed === existing.completed && currentMinutes > existingMinutes);
-
-    if (shouldReplace) {
-      bestByKey.set(key, session);
-    }
-  }
-
-  return Array.from(bestByKey.values());
-}
-
-function dedupeWorkouts(workouts: WorkoutEntry[]): WorkoutEntry[] {
-  const bestByKey = new Map<string, WorkoutEntry>();
-
-  for (const workout of workouts) {
-    const key = workoutKey(workout);
-    const existing = bestByKey.get(key);
-    if (!existing) {
-      bestByKey.set(key, workout);
-      continue;
-    }
-
-    const existingCalories = safeNumber(existing.caloriesBurned);
-    const currentCalories = safeNumber(workout.caloriesBurned);
-    if (currentCalories > existingCalories) {
-      bestByKey.set(key, workout);
-    }
-  }
-
-  return Array.from(bestByKey.values());
-}
-
-function dedupeSleepEntries(entries: SleepEntry[]): SleepEntry[] {
-  const bestByDate = new Map<string, SleepEntry>();
-
-  for (const entry of entries) {
-    const date = normalizeToLocalDateString(entry.date);
-    if (!date) continue;
-    const existing = bestByDate.get(date);
-    if (!existing || entry.totalMinutes > existing.totalMinutes) {
-      bestByDate.set(date, entry);
-    }
-  }
-
-  return Array.from(bestByDate.values());
-}
-
-function dedupeChapters(chapters: ReportChapter[]): ReportChapter[] {
-  const seen = new Set<string>();
-  return chapters.filter((chapter) => {
-    if (!chapter.completed || !chapter.dateCompleted) return false;
-    const key = chapterKey(chapter);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
-function longestStreak(values: DailyReportPoint[], predicate: (point: DailyReportPoint) => boolean): number {
+function longestStreak(values: { focusMinutes: number; codingSolved: number }[], predicate: (point: { focusMinutes: number; codingSolved: number }) => boolean): number {
   let best = 0;
   let current = 0;
 
@@ -230,171 +76,22 @@ function longestStreak(values: DailyReportPoint[], predicate: (point: DailyRepor
   return best;
 }
 
-function buildDailyBreakdown(params: {
-  dates: string[];
-  focusSessions: FocusSession[];
-  problems: LeetCodeProblem[];
-  waterEntries: WaterEntry[];
-  sleepEntries: SleepEntry[];
-  workouts: WorkoutEntry[];
-  chapters: ReportChapter[];
-  stepsData: Record<string, number>;
-  meals: MealEntry[];
-}): DailyReportPoint[] {
-  const {
-    dates,
-    focusSessions,
-    problems,
-    waterEntries,
-    sleepEntries,
-    workouts,
-    chapters,
-    stepsData,
-    meals,
-  } = params;
-
-  const focusMap = new Map<string, FocusSession[]>();
-  for (const session of focusSessions) {
-    const date = normalizeToLocalDateString(session.date || session.startTime);
-    if (!date || !dates.includes(date)) continue;
-    const list = focusMap.get(date) || [];
-    list.push(session);
-    focusMap.set(date, list);
-  }
-
-  const problemMap = new Map<string, LeetCodeProblem[]>();
-  for (const problem of problems) {
-    const date = normalizeToLocalDateString(problem.date);
-    if (!date || !dates.includes(date)) continue;
-    const list = problemMap.get(date) || [];
-    list.push(problem);
-    problemMap.set(date, list);
-  }
-
-  const waterMap = new Map<string, WaterEntry[]>();
-  for (const water of waterEntries) {
-    const date = normalizeToLocalDateString(water.date);
-    if (!date || !dates.includes(date)) continue;
-    const list = waterMap.get(date) || [];
-    list.push(water);
-    waterMap.set(date, list);
-  }
-
-  const sleepMap = new Map<string, SleepEntry>();
-  for (const sleep of sleepEntries) {
-    const date = normalizeToLocalDateString(sleep.date);
-    if (!date || !dates.includes(date)) continue;
-    const existing = sleepMap.get(date);
-    if (!existing || sleep.totalMinutes > existing.totalMinutes) {
-      sleepMap.set(date, sleep);
-    }
-  }
-
-  const workoutMap = new Map<string, WorkoutEntry[]>();
-  for (const workout of workouts) {
-    const date = normalizeToLocalDateString(workout.date);
-    if (!date || !dates.includes(date)) continue;
-    const list = workoutMap.get(date) || [];
-    list.push(workout);
-    workoutMap.set(date, list);
-  }
-
-  const chapterMap = new Map<string, ReportChapter[]>();
-  for (const chapter of chapters) {
-    const date = normalizeToLocalDateString(chapter.dateCompleted || '');
-    if (!date || !dates.includes(date)) continue;
-    const list = chapterMap.get(date) || [];
-    list.push(chapter);
-    chapterMap.set(date, list);
-  }
-
-  const mealMap = new Map<string, MealEntry[]>();
-  for (const meal of meals) {
-    const date = normalizeToLocalDateString(meal.date);
-    if (!date || !dates.includes(date)) continue;
-    const list = mealMap.get(date) || [];
-    list.push(meal);
-    mealMap.set(date, list);
-  }
-
-  return dates.map((date) => {
-    const daySessions = (focusMap.get(date) || []).filter((session) => session.completed);
-    const focusMinutes = daySessions.reduce((total, session) => total + (safeNumber(session.actualDuration) || session.duration), 0);
-    const dayProblems = (problemMap.get(date) || []).filter((problem) => problem.completed);
-    const dayWater = waterMap.get(date) || [];
-    const hydrationMl = dayWater.reduce((total, water) => total + water.amount, 0);
-    const sleep = sleepMap.get(date);
-    const dayWorkouts = workoutMap.get(date) || [];
-    const dayMeals = mealMap.get(date) || [];
-
-    return {
-      date,
-      shortLabel: toLocalDayLabel(date, 'EEE'),
-      fullLabel: toLocalDayLabel(date, 'EEEE, MMM d'),
-      focusMinutes,
-      focusSessions: daySessions.length,
-      codingSolved: dayProblems.length,
-      codingNames: dayProblems.map((problem) => problem.name),
-      hydrationMl,
-      sleepMinutes: sleep?.totalMinutes || 0,
-      steps: stepsData[date] || 0,
-      caloriesIn: dayMeals.reduce((total, meal) => total + meal.calories, 0),
-      caloriesOut: dayWorkouts.reduce((total, workout) => total + safeNumber(workout.caloriesBurned), 0),
-      readingChapters: (chapterMap.get(date) || []).length,
-      workoutCount: dayWorkouts.length,
-      workoutMinutes: dayWorkouts.reduce((total, workout) => total + workout.durationMinutes, 0),
-      workoutNames: dayWorkouts.map((workout) => workout.name),
-    };
-  });
-}
-
-function aggregateDaily(points: DailyReportPoint[], targets: { waterGoalMl: number; sleepGoalMin: number }): AggregateTotals {
-  return points.reduce<AggregateTotals>((totals, point) => {
-    totals.focusMinutes += point.focusMinutes;
-    totals.completedSessions += point.focusSessions;
-    totals.totalSessions += point.focusSessions;
-    totals.problemsSolved += point.codingSolved;
-    totals.chaptersRead += point.readingChapters;
-    totals.waterMl += point.hydrationMl;
-    totals.sleepMinutes += point.sleepMinutes;
-    totals.sleepDaysWithData += point.sleepMinutes > 0 ? 1 : 0;
-    totals.workoutsCount += point.workoutCount;
-    totals.steps += point.steps;
-    totals.caloriesIn += point.caloriesIn;
-    totals.caloriesOut += point.caloriesOut;
-    totals.waterDaysHit += point.hydrationMl >= targets.waterGoalMl ? 1 : 0;
-    totals.sleepDaysHit += point.sleepMinutes >= targets.sleepGoalMin ? 1 : 0;
-    totals.problemsDaysHit += point.codingSolved > 0 ? 1 : 0;
-    totals.readingDaysHit += point.readingChapters > 0 ? 1 : 0;
-    return totals;
-  }, {
-    focusMinutes: 0,
-    completedSessions: 0,
-    totalSessions: 0,
-    problemsSolved: 0,
-    chaptersRead: 0,
-    waterMl: 0,
-    sleepMinutes: 0,
-    sleepDaysWithData: 0,
-    workoutsCount: 0,
-    steps: 0,
-    caloriesIn: 0,
-    caloriesOut: 0,
-    waterDaysHit: 0,
-    sleepDaysHit: 0,
-    problemsDaysHit: 0,
-    readingDaysHit: 0,
-  });
-}
-
 function buildComparisonRows(params: {
   current: AggregateTotals;
   previous: AggregateTotals;
   currentSleepAverageHours: number;
   previousSleepAverageHours: number;
-  stepsGoalDaily: number;
+  periodDays: number;
 }): WeeklyComparisonRow[] {
-  const { current, previous, currentSleepAverageHours, previousSleepAverageHours } = params;
+  const { current, previous, currentSleepAverageHours, previousSleepAverageHours, periodDays } = params;
+
+  const focusChange = percentageChange(current.focusMinutes, previous.focusMinutes);
+  const codingChange = percentageChange(current.problemsSolved, previous.problemsSolved);
+  const sleepChange = percentageChange(currentSleepAverageHours, previousSleepAverageHours);
+  const waterChange = percentageChange(current.waterMl, previous.waterMl);
+  const stepsChange = percentageChange(current.steps, previous.steps);
+  const readingChange = percentageChange(current.chaptersRead, previous.chaptersRead);
+  const workoutsChange = percentageChange(current.workoutsCount, previous.workoutsCount);
 
   return [
     {
@@ -402,8 +99,8 @@ function buildComparisonRows(params: {
       label: 'Focus Hours',
       currentValue: formatHours(current.focusMinutes),
       previousValue: formatHours(previous.focusMinutes),
-      deltaPct: percentageChange(current.focusMinutes, previous.focusMinutes),
-      direction: directionFromDelta(percentageChange(current.focusMinutes, previous.focusMinutes)),
+      deltaPct: focusChange,
+      direction: directionFromDelta(focusChange),
       source: 'focus_sessions',
     },
     {
@@ -411,8 +108,8 @@ function buildComparisonRows(params: {
       label: 'Coding Solves',
       currentValue: `${current.problemsSolved}`,
       previousValue: `${previous.problemsSolved}`,
-      deltaPct: percentageChange(current.problemsSolved, previous.problemsSolved),
-      direction: directionFromDelta(percentageChange(current.problemsSolved, previous.problemsSolved)),
+      deltaPct: codingChange,
+      direction: directionFromDelta(codingChange),
       source: 'validated_leetcode_problems',
     },
     {
@@ -420,8 +117,8 @@ function buildComparisonRows(params: {
       label: 'Sleep Average',
       currentValue: `${currentSleepAverageHours.toFixed(1)}h`,
       previousValue: `${previousSleepAverageHours.toFixed(1)}h`,
-      deltaPct: percentageChange(currentSleepAverageHours, previousSleepAverageHours),
-      direction: directionFromDelta(percentageChange(currentSleepAverageHours, previousSleepAverageHours)),
+      deltaPct: sleepChange,
+      direction: directionFromDelta(sleepChange),
       source: 'sleep_logs',
     },
     {
@@ -429,17 +126,17 @@ function buildComparisonRows(params: {
       label: 'Hydration',
       currentValue: formatLiters(current.waterMl),
       previousValue: formatLiters(previous.waterMl),
-      deltaPct: percentageChange(current.waterMl, previous.waterMl),
-      direction: directionFromDelta(percentageChange(current.waterMl, previous.waterMl)),
+      deltaPct: waterChange,
+      direction: directionFromDelta(waterChange),
       source: 'water_logs',
     },
     {
       id: 'steps',
       label: 'Steps',
-      currentValue: `${Math.round(current.steps / 7).toLocaleString()}/day`,
-      previousValue: `${Math.round(previous.steps / 7).toLocaleString()}/day`,
-      deltaPct: percentageChange(current.steps, previous.steps),
-      direction: directionFromDelta(percentageChange(current.steps, previous.steps)),
+      currentValue: `${Math.round(current.steps / periodDays).toLocaleString()}/day`,
+      previousValue: `${Math.round(previous.steps / periodDays).toLocaleString()}/day`,
+      deltaPct: stepsChange,
+      direction: directionFromDelta(stepsChange),
       source: 'steps_daily_totals',
     },
     {
@@ -447,8 +144,8 @@ function buildComparisonRows(params: {
       label: 'Reading',
       currentValue: `${current.chaptersRead} chapters`,
       previousValue: `${previous.chaptersRead} chapters`,
-      deltaPct: percentageChange(current.chaptersRead, previous.chaptersRead),
-      direction: directionFromDelta(percentageChange(current.chaptersRead, previous.chaptersRead)),
+      deltaPct: readingChange,
+      direction: directionFromDelta(readingChange),
       source: 'reading_chapters',
     },
     {
@@ -456,8 +153,8 @@ function buildComparisonRows(params: {
       label: 'Workouts',
       currentValue: `${current.workoutsCount}`,
       previousValue: `${previous.workoutsCount}`,
-      deltaPct: percentageChange(current.workoutsCount, previous.workoutsCount),
-      direction: directionFromDelta(percentageChange(current.workoutsCount, previous.workoutsCount)),
+      deltaPct: workoutsChange,
+      direction: directionFromDelta(workoutsChange),
       source: 'workout_logs',
     },
   ];
@@ -472,6 +169,9 @@ function buildHeroMetrics(params: {
   sleepGoalHours: number;
   stepsGoalDaily: number;
   weeklyPerformanceScore: number;
+  focusGoalWeeklyMin: number;
+  codingGoalWeekly: number;
+  periodDays: number;
 }): ReportMetricCard[] {
   const {
     current,
@@ -482,7 +182,16 @@ function buildHeroMetrics(params: {
     sleepGoalHours,
     stepsGoalDaily,
     weeklyPerformanceScore,
+    focusGoalWeeklyMin,
+    codingGoalWeekly,
+    periodDays,
   } = params;
+
+  const focusChange = percentageChange(current.focusMinutes, previous.focusMinutes);
+  const codingChange = percentageChange(current.problemsSolved, previous.problemsSolved);
+  const sleepChange = percentageChange(currentSleepAverageHours, previousSleepAverageHours);
+  const waterChange = percentageChange(current.waterMl, previous.waterMl);
+  const stepsChange = percentageChange(current.steps, previous.steps);
 
   return [
     {
@@ -490,11 +199,11 @@ function buildHeroMetrics(params: {
       label: 'Focus Hours',
       value: formatHours(current.focusMinutes),
       subtitle: `${current.completedSessions} completed sessions`,
-      targetLabel: `${formatHours(FOCUS_WEEKLY_TARGET_MIN)} target`,
-      deltaPct: percentageChange(current.focusMinutes, previous.focusMinutes),
+      targetLabel: `${formatHours(focusGoalWeeklyMin)} target`,
+      deltaPct: focusChange,
       deltaLabel: 'vs last week',
-      direction: directionFromDelta(percentageChange(current.focusMinutes, previous.focusMinutes)),
-      progressPct: Math.min((current.focusMinutes / FOCUS_WEEKLY_TARGET_MIN) * 100, 100),
+      direction: directionFromDelta(focusChange),
+      progressPct: Math.min((current.focusMinutes / focusGoalWeeklyMin) * 100, 100),
       source: 'focus_sessions',
     },
     {
@@ -502,11 +211,11 @@ function buildHeroMetrics(params: {
       label: 'Coding Solves',
       value: `${current.problemsSolved}`,
       subtitle: `${current.problemsDaysHit} active days`,
-      targetLabel: `${CODING_WEEKLY_TARGET} weekly target`,
-      deltaPct: percentageChange(current.problemsSolved, previous.problemsSolved),
+      targetLabel: `${codingGoalWeekly} weekly target`,
+      deltaPct: codingChange,
       deltaLabel: 'vs last week',
-      direction: directionFromDelta(percentageChange(current.problemsSolved, previous.problemsSolved)),
-      progressPct: Math.min((current.problemsSolved / CODING_WEEKLY_TARGET) * 100, 100),
+      direction: directionFromDelta(codingChange),
+      progressPct: Math.min((current.problemsSolved / codingGoalWeekly) * 100, 100),
       source: 'validated_leetcode_problems',
     },
     {
@@ -515,34 +224,34 @@ function buildHeroMetrics(params: {
       value: `${currentSleepAverageHours.toFixed(1)}h`,
       subtitle: `${current.sleepDaysWithData} logged nights`,
       targetLabel: `${sleepGoalHours.toFixed(1)}h target`,
-      deltaPct: percentageChange(currentSleepAverageHours, previousSleepAverageHours),
+      deltaPct: sleepChange,
       deltaLabel: 'vs last week',
-      direction: directionFromDelta(percentageChange(currentSleepAverageHours, previousSleepAverageHours)),
+      direction: directionFromDelta(sleepChange),
       progressPct: Math.min((currentSleepAverageHours / sleepGoalHours) * 100, 100),
       source: 'sleep_logs',
     },
     {
       id: 'hydration',
       label: 'Hydration',
-      value: `${(current.waterMl / 7000).toFixed(1)}L/day`,
+      value: `${(current.waterMl / (periodDays * 1000)).toFixed(1)}L/day`,
       subtitle: `${formatLiters(current.waterMl)} total`,
       targetLabel: `${(waterGoalMl / 1000).toFixed(1)}L/day target`,
-      deltaPct: percentageChange(current.waterMl, previous.waterMl),
+      deltaPct: waterChange,
       deltaLabel: 'vs last week',
-      direction: directionFromDelta(percentageChange(current.waterMl, previous.waterMl)),
-      progressPct: Math.min((current.waterMl / (waterGoalMl * 7)) * 100, 100),
+      direction: directionFromDelta(waterChange),
+      progressPct: Math.min((current.waterMl / (waterGoalMl * periodDays)) * 100, 100),
       source: 'water_logs',
     },
     {
       id: 'steps',
       label: 'Steps',
-      value: `${Math.round(current.steps / 7).toLocaleString()}`,
+      value: `${Math.round(current.steps / periodDays).toLocaleString()}`,
       subtitle: `${current.steps.toLocaleString()} weekly total`,
       targetLabel: `${stepsGoalDaily.toLocaleString()}/day target`,
-      deltaPct: percentageChange(current.steps, previous.steps),
+      deltaPct: stepsChange,
       deltaLabel: 'vs last week',
-      direction: directionFromDelta(percentageChange(current.steps, previous.steps)),
-      progressPct: Math.min((current.steps / (stepsGoalDaily * 7)) * 100, 100),
+      direction: directionFromDelta(stepsChange),
+      progressPct: Math.min((current.steps / (stepsGoalDaily * periodDays)) * 100, 100),
       source: 'steps_daily_totals',
     },
     {
@@ -551,62 +260,13 @@ function buildHeroMetrics(params: {
       value: `${weeklyPerformanceScore}`,
       subtitle: 'Composite trust score',
       targetLabel: '100-point scale',
-      deltaPct: percentageChange(weeklyPerformanceScore, weeklyPerformanceScore),
+      deltaPct: 0,
       deltaLabel: 'composite',
       direction: 'flat',
       progressPct: weeklyPerformanceScore,
       source: 'canonical_weekly_report',
     },
   ];
-}
-
-function buildValidatedInsights(dailyBreakdown: DailyReportPoint[]): { insights: ValidatedInsight[]; fallback: string | null; correlationInsights: string[] } {
-  const insights: ValidatedInsight[] = [];
-  const correlationInsights: string[] = [];
-
-  const sleepFocusPairs = dailyBreakdown.filter((point) => point.sleepMinutes > 0 && point.focusMinutes > 0);
-  if (sleepFocusPairs.length >= 5) {
-    const sleepValues = sleepFocusPairs.map((point) => point.sleepMinutes);
-    const focusValues = sleepFocusPairs.map((point) => point.focusMinutes);
-    const r = calculatePearsonCorrelation(sleepValues, focusValues);
-    if (Math.abs(r) >= 0.45) {
-      const confidence = Math.abs(r) >= 0.65 ? 'high' : 'medium';
-      const direction = r > 0 ? 'rose' : 'fall';
-      insights.push({
-        id: 'sleep-focus-correlation',
-        title: 'Sleep and focus moved together',
-        body: `Across ${sleepFocusPairs.length} overlapping days, sleep duration and focus output showed a statistically meaningful ${r > 0 ? 'positive' : 'negative'} correlation (r = ${r.toFixed(2)}).`,
-        confidence,
-        source: 'sleep_logs + focus_sessions',
-      });
-      correlationInsights.push(`Sleep/focus correlation detected (${direction}, r = ${r.toFixed(2)}) across ${sleepFocusPairs.length} days.`);
-    }
-  }
-
-  const hydrationFocusPairs = dailyBreakdown.filter((point) => point.hydrationMl > 0 && point.focusMinutes > 0);
-  if (hydrationFocusPairs.length >= 5) {
-    const hydrationValues = hydrationFocusPairs.map((point) => point.hydrationMl);
-    const focusValues = hydrationFocusPairs.map((point) => point.focusMinutes);
-    const r = calculatePearsonCorrelation(hydrationValues, focusValues);
-    if (Math.abs(r) >= 0.45) {
-      const confidence = Math.abs(r) >= 0.65 ? 'high' : 'medium';
-      insights.push({
-        id: 'hydration-focus-correlation',
-        title: 'Hydration tracked with focus volume',
-        body: `Hydration and focus showed a statistically valid ${r > 0 ? 'positive' : 'negative'} relationship (r = ${r.toFixed(2)}) across ${hydrationFocusPairs.length} overlapping days.`,
-        confidence,
-        source: 'water_logs + focus_sessions',
-      });
-      correlationInsights.push(`Hydration/focus correlation detected (r = ${r.toFixed(2)}) across ${hydrationFocusPairs.length} days.`);
-    }
-  }
-
-  const fallback = insights.length === 0 ? 'Not enough reliable data for insight generation.' : null;
-  if (fallback) {
-    correlationInsights.push(fallback);
-  }
-
-  return { insights, fallback, correlationInsights };
 }
 
 function buildStatusLabel(params: {
@@ -617,6 +277,7 @@ function buildStatusLabel(params: {
   focusChange: number;
   codingChange: number;
   waterDaysHit: number;
+  focusGoalWeeklyMin: number;
 }): { label: string; tone: 'emerald' | 'amber' | 'rose' | 'violet' } {
   const {
     weeklyPerformanceScore,
@@ -626,13 +287,14 @@ function buildStatusLabel(params: {
     focusChange,
     codingChange,
     waterDaysHit,
+    focusGoalWeeklyMin,
   } = params;
 
   if (weeklyPerformanceScore >= 82 && currentSleepAverageHours >= sleepGoalHours && waterDaysHit >= 4) {
     return { label: 'Peak Performance Week', tone: 'emerald' };
   }
 
-  if (focusMinutes >= FOCUS_WEEKLY_TARGET_MIN && currentSleepAverageHours < sleepGoalHours) {
+  if (focusMinutes >= focusGoalWeeklyMin && currentSleepAverageHours < sleepGoalHours) {
     return { label: 'Focused but Under-Recovered', tone: 'amber' };
   }
 
@@ -645,11 +307,12 @@ function buildStatusLabel(params: {
 
 function buildCustomTrackerCards(trackers: Tracker[], last7Days: string[]): CustomTrackerWeeklySummary[] {
   const cards: CustomTrackerWeeklySummary[] = [];
+  const dateSet = new Set(last7Days);
 
   for (const tracker of trackers) {
     const relevantItems = tracker.items.filter((item) => {
       const date = normalizeToLocalDateString(item.dateCompleted || '');
-      return !!date && last7Days.includes(date);
+      return !!date && dateSet.has(date);
     });
 
     if (relevantItems.length === 0) continue;
@@ -724,11 +387,19 @@ export function calculateWeeklyReport(params: {
     trackers,
   } = params;
 
+  const dateSet = new Set(last7Days);
+  const periodDays = last7Days.length || 7;
+
+  // Resolve target goals dynamically from healthGoals with standard static defaults
   const waterGoalMl = healthGoals.find((goal) => goal.type === 'water')?.targetValue ?? 3000;
   const sleepGoalHours = healthGoals.find((goal) => goal.type === 'sleep_hours')?.targetValue ?? 7.5;
   const sleepGoalMin = sleepGoalHours * 60;
   const stepsGoalDaily = healthGoals.find((goal) => goal.type === 'steps')?.targetValue ?? 10000;
   const workoutGoalWeekly = healthGoals.find((goal) => goal.type === 'workouts_per_week')?.targetValue ?? 5;
+
+  const codingGoalWeekly = healthGoals.find((g) => g.type === 'custom' && g.label.toLowerCase().includes('coding'))?.targetValue ?? CODING_WEEKLY_TARGET;
+  const readingGoalWeekly = healthGoals.find((g) => g.type === 'custom' && g.label.toLowerCase().includes('reading'))?.targetValue ?? READING_WEEKLY_TARGET;
+  const focusGoalWeeklyMin = healthGoals.find((g) => g.type === 'custom' && g.label.toLowerCase().includes('focus'))?.targetValue ?? FOCUS_WEEKLY_TARGET_MIN;
 
   const focusSessions = dedupeFocusSessions(rawFocusSessions);
   const problems = dedupeProblems(rawProblems);
@@ -736,7 +407,7 @@ export function calculateWeeklyReport(params: {
   const sleepEntries = dedupeSleepEntries(rawSleepEntries);
   const bookChapters = dedupeChapters(rawBookChapters);
 
-  const dailyBreakdown = buildDailyBreakdown({
+  const dailyBreakdownRaw = buildDailyBreakdown({
     dates: last7Days,
     focusSessions,
     problems,
@@ -748,7 +419,7 @@ export function calculateWeeklyReport(params: {
     meals,
   });
 
-  const previousBreakdown = buildDailyBreakdown({
+  const previousBreakdownRaw = buildDailyBreakdown({
     dates: prev7Days,
     focusSessions,
     problems,
@@ -760,16 +431,40 @@ export function calculateWeeklyReport(params: {
     meals,
   });
 
-  const current = aggregateDaily(dailyBreakdown, { waterGoalMl, sleepGoalMin });
-  const previous = aggregateDaily(previousBreakdown, { waterGoalMl, sleepGoalMin });
+  const dailyBreakdown = dailyBreakdownRaw.map((p) => ({
+    date: p.date,
+    shortLabel: p.shortLabel,
+    fullLabel: p.fullLabel,
+    focusMinutes: p.focusMinutes,
+    focusSessions: p.focusSessionsCompleted, // Keep perfectly compatible with WeeklyReportStats.dailyBreakdown format
+    codingSolved: p.codingSolved,
+    codingNames: p.codingNames,
+    hydrationMl: p.hydrationMl,
+    sleepMinutes: p.sleepMinutes,
+    steps: p.steps,
+    caloriesIn: p.caloriesIn,
+    caloriesOut: p.caloriesOut,
+    readingChapters: p.readingChapters,
+    workoutCount: p.workoutCount,
+    workoutMinutes: p.workoutMinutes,
+    workoutNames: p.workoutNames,
+  }));
+
+  const current = aggregateDaily(dailyBreakdownRaw, { waterGoalMl, sleepGoalMin });
+  const previous = aggregateDaily(previousBreakdownRaw, { waterGoalMl, sleepGoalMin });
+
+  // Prevent recovery average score inflation: provide both logged-day average and calendar average
   const currentSleepAverageHours = current.sleepDaysWithData > 0 ? current.sleepMinutes / current.sleepDaysWithData / 60 : 0;
   const previousSleepAverageHours = previous.sleepDaysWithData > 0 ? previous.sleepMinutes / previous.sleepDaysWithData / 60 : 0;
 
+  const currentSleepCalendarAverageHours = current.sleepMinutes / periodDays / 60;
+
   const currentProblemsList = problems.filter((problem) => {
     const date = normalizeToLocalDateString(problem.date);
-    return !!date && last7Days.includes(date) && problem.completed;
+    return !!date && dateSet.has(date) && problem.completed;
   });
 
+  // Safe completion rate calculation
   const completionRate = current.totalSessions > 0
     ? Math.round((current.completedSessions / current.totalSessions) * 100)
     : 100;
@@ -783,8 +478,8 @@ export function calculateWeeklyReport(params: {
     consistencyDays: dailyBreakdown.filter((point) => point.focusMinutes > 0).length,
     averageSleepMinutes: currentSleepAverageHours * 60,
     sleepGoalMinutes: sleepGoalMin,
-    focusGoalMinutes: FOCUS_WEEKLY_TARGET_MIN,
-    codingGoalPoints: CODING_WEEKLY_TARGET,
+    focusGoalMinutes: focusGoalWeeklyMin,
+    codingGoalPoints: codingGoalWeekly,
   });
 
   const focusChange = percentageChange(current.focusMinutes, previous.focusMinutes);
@@ -793,16 +488,31 @@ export function calculateWeeklyReport(params: {
   const waterChange = percentageChange(current.waterMl, previous.waterMl);
   const sleepChange = percentageChange(currentSleepAverageHours, previousSleepAverageHours);
 
-  const bestFocusPoint = [...dailyBreakdown].sort((a, b) => b.focusMinutes - a.focusMinutes)[0];
-  const bestCodingPoint = [...dailyBreakdown].sort((a, b) => b.codingSolved - a.codingSolved)[0];
-  const weakestSleepPoint = dailyBreakdown
-    .filter((point) => point.sleepMinutes > 0)
-    .sort((a, b) => a.sleepMinutes - b.sleepMinutes)[0];
-  const strongestDayPoint = [...dailyBreakdown].sort((a, b) => {
-    const aScore = a.focusMinutes + a.codingSolved * 60 + a.readingChapters * 35 + a.workoutMinutes * 0.6;
-    const bScore = b.focusMinutes + b.codingSolved * 60 + b.readingChapters * 35 + b.workoutMinutes * 0.6;
-    return bScore - aScore;
-  })[0];
+  // Single-pass reduction O(N) to discover extreme metric points (replaces multiple repeated O(N log N) sorts)
+  let bestFocusPoint = dailyBreakdown[0] || null;
+  let bestCodingPoint = dailyBreakdown[0] || null;
+  let weakestSleepPoint = null;
+  let strongestDayPoint = dailyBreakdown[0] || null;
+  let strongestDayScore = -1;
+
+  for (const point of dailyBreakdown) {
+    if (!bestFocusPoint || point.focusMinutes > bestFocusPoint.focusMinutes) {
+      bestFocusPoint = point;
+    }
+    if (!bestCodingPoint || point.codingSolved > bestCodingPoint.codingSolved) {
+      bestCodingPoint = point;
+    }
+    if (point.sleepMinutes > 0) {
+      if (!weakestSleepPoint || point.sleepMinutes < weakestSleepPoint.sleepMinutes) {
+        weakestSleepPoint = point;
+      }
+    }
+    const score = point.focusMinutes + point.codingSolved * 60 + point.readingChapters * 35 + point.workoutMinutes * 0.6;
+    if (score > strongestDayScore) {
+      strongestDayScore = score;
+      strongestDayPoint = point;
+    }
+  }
 
   const longestFocusStreakDays = longestStreak(dailyBreakdown, (point) => point.focusMinutes > 0);
   const bestCodingStreakDays = longestStreak(dailyBreakdown, (point) => point.codingSolved > 0);
@@ -812,7 +522,7 @@ export function calculateWeeklyReport(params: {
     previous,
     currentSleepAverageHours,
     previousSleepAverageHours,
-    stepsGoalDaily,
+    periodDays,
   });
 
   const biggestImprovementRow = [...comparisonRows].sort((a, b) => b.deltaPct - a.deltaPct)[0];
@@ -829,6 +539,7 @@ export function calculateWeeklyReport(params: {
     focusChange,
     codingChange,
     waterDaysHit: current.waterDaysHit,
+    focusGoalWeeklyMin,
   });
 
   const weeklyNarrativeParts: string[] = [];
@@ -837,8 +548,9 @@ export function calculateWeeklyReport(params: {
   }
   if (weakestSleepPoint && weakestSleepPoint.sleepMinutes > 0) {
     const nextDay = dailyBreakdown[dailyBreakdown.findIndex((point) => point.date === weakestSleepPoint.date) + 1];
-    if (nextDay && nextDay.focusMinutes < (current.focusMinutes / 7)) {
-      weeklyNarrativeParts.push(`Sleep dropped below target on ${toLocalDayLabel(weakestSleepPoint.date, 'EEEE')}, followed by lighter focus output on ${toLocalDayLabel(nextDay.date, 'EEEE')}.`);
+    if (nextDay && nextDay.focusMinutes < (current.focusMinutes / periodDays)) {
+      // Softened causal framing to maintain high factual confidence standards
+      weeklyNarrativeParts.push(`Sleep dropped below target on ${toLocalDayLabel(weakestSleepPoint.date, 'EEEE')}, which coincided with lighter focus output on ${toLocalDayLabel(nextDay.date, 'EEEE')}.`);
     }
   }
   if (waterChange !== 0) {
@@ -866,7 +578,7 @@ export function calculateWeeklyReport(params: {
     risks.push(`Recovery averaged ${currentSleepAverageHours.toFixed(1)}h against a ${sleepGoalHours.toFixed(1)}h target.`);
   }
   if (current.waterDaysHit < 4) {
-    risks.push(`Hydration target was only met on ${current.waterDaysHit} of 7 days.`);
+    risks.push(`Hydration target was only met on ${current.waterDaysHit} of ${periodDays} days.`);
   }
   if (current.problemsSolved === 0) {
     risks.push('No validated coding solves were recorded this week.');
@@ -888,8 +600,8 @@ export function calculateWeeklyReport(params: {
   if (current.waterDaysHit < 4) {
     recommendations.push(`Anchor hydration earlier in the day to reach ${(waterGoalMl / 1000).toFixed(1)}L more consistently.`);
   }
-  if (current.problemsSolved < CODING_WEEKLY_TARGET) {
-    recommendations.push(`Schedule one dedicated coding block on your lightest day to close the gap to ${CODING_WEEKLY_TARGET} weekly solves.`);
+  if (current.problemsSolved < codingGoalWeekly) {
+    recommendations.push(`Schedule one dedicated coding block on your lightest day to close the gap to ${codingGoalWeekly} weekly solves.`);
   }
   if (current.workoutsCount < workoutGoalWeekly) {
     recommendations.push(`Spread shorter movement sessions across the week to approach your ${workoutGoalWeekly} workout target.`);
@@ -899,8 +611,8 @@ export function calculateWeeklyReport(params: {
   }
 
   const actionPlan = [
-    `Protect one ${Math.max(25, Math.round(FOCUS_WEEKLY_TARGET_MIN / 5))}-minute focus block on your historically weakest focus day.`,
-    `Raise hydration consistency to at least 4/7 target-hit days next week.`,
+    `Protect one ${Math.max(25, Math.round(focusGoalWeeklyMin / 5))}-minute focus block on your historically weakest focus day.`,
+    `Raise hydration consistency to at least 4/${periodDays} target-hit days next week.`,
     `Use ${bestCodingPoint?.shortLabel || 'your best coding day'} as the template for next week’s coding schedule.`,
   ];
 
@@ -914,14 +626,17 @@ export function calculateWeeklyReport(params: {
     sleepGoalHours,
     stepsGoalDaily,
     weeklyPerformanceScore,
+    focusGoalWeeklyMin,
+    codingGoalWeekly,
+    periodDays,
   });
 
   const radarMetrics = [
-    { label: 'Focus', value: Math.min(Math.round((current.focusMinutes / FOCUS_WEEKLY_TARGET_MIN) * 100), 100) },
-    { label: 'Coding', value: Math.min(Math.round((current.problemsSolved / CODING_WEEKLY_TARGET) * 100), 100) },
+    { label: 'Focus', value: Math.min(Math.round((current.focusMinutes / focusGoalWeeklyMin) * 100), 100) },
+    { label: 'Coding', value: Math.min(Math.round((current.problemsSolved / codingGoalWeekly) * 100), 100) },
     { label: 'Sleep', value: Math.min(Math.round((currentSleepAverageHours / sleepGoalHours) * 100), 100) },
-    { label: 'Hydration', value: Math.min(Math.round((current.waterMl / (waterGoalMl * 7)) * 100), 100) },
-    { label: 'Steps', value: Math.min(Math.round((current.steps / (stepsGoalDaily * 7)) * 100), 100) },
+    { label: 'Hydration', value: Math.min(Math.round((current.waterMl / (waterGoalMl * periodDays)) * 100), 100) },
+    { label: 'Steps', value: Math.min(Math.round((current.steps / (stepsGoalDaily * periodDays)) * 100), 100) },
     { label: 'Workouts', value: Math.min(Math.round((current.workoutsCount / workoutGoalWeekly) * 100), 100) },
   ];
 
@@ -940,7 +655,7 @@ export function calculateWeeklyReport(params: {
 
   const codingProblemsThisWeek = problems.filter((problem) => {
     const date = normalizeToLocalDateString(problem.date);
-    return date ? last7Days.includes(date) : false;
+    return date ? dateSet.has(date) : false;
   });
 
   const solvedCodingProblems = codingProblemsThisWeek.filter((problem) => problem.completed && problem.status === 'solved');
@@ -1010,28 +725,25 @@ export function calculateWeeklyReport(params: {
     spacedRepetitionQueue,
   };
 
+  // Safe and clean parser that handles JSON reflections without parsing redundant details
   let problemsSolvedReflections = 0;
   let learningMinutesReflections = 0;
   let pagesReadReflections = 0;
   let featuresShippedReflections = 0;
+
   for (const session of focusSessions) {
     const date = normalizeToLocalDateString(session.date || session.startTime);
-    if (!date || !last7Days.includes(date) || !session.completed || !session.reflection) continue;
+    if (!date || !dateSet.has(date) || !session.completed || !session.reflection) continue;
     try {
-      const parsed = JSON.parse(session.reflection) as {
-        quantities?: {
-          problemsSolved?: number;
-          minutesOfLearning?: number;
-          pagesRead?: number;
-          featuresShipped?: number;
-        };
-      };
-      problemsSolvedReflections += safeNumber(parsed.quantities?.problemsSolved);
-      learningMinutesReflections += safeNumber(parsed.quantities?.minutesOfLearning);
-      pagesReadReflections += safeNumber(parsed.quantities?.pagesRead);
-      featuresShippedReflections += safeNumber(parsed.quantities?.featuresShipped);
+      const parsed = JSON.parse(session.reflection);
+      if (parsed?.quantities) {
+        problemsSolvedReflections += safeNumber(parsed.quantities.problemsSolved);
+        learningMinutesReflections += safeNumber(parsed.quantities.minutesOfLearning);
+        pagesReadReflections += safeNumber(parsed.quantities.pagesRead);
+        featuresShippedReflections += safeNumber(parsed.quantities.featuresShipped);
+      }
     } catch {
-      // Ignore free-form reflections.
+      // Ignore free-form reflections
     }
   }
 
@@ -1042,10 +754,11 @@ export function calculateWeeklyReport(params: {
     focusQualityScore: weeklyPerformanceScore,
     problemsSolved: current.problemsSolved,
     chaptersRead: current.chaptersRead,
-    waterAverageL: (current.waterMl / 7000).toFixed(1),
+    waterAverageL: (current.waterMl / (periodDays * 1000)).toFixed(1),
     sleepAverageH: currentSleepAverageHours.toFixed(1),
+    sleepCalendarAverageH: currentSleepCalendarAverageHours.toFixed(1),
     workoutCount: current.workoutsCount,
-    stepsAverage: Math.round(current.steps / 7),
+    stepsAverage: Math.round(current.steps / periodDays),
     focusChange,
     codingChange,
     readingChange,

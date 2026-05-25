@@ -114,6 +114,7 @@ export interface WeeklyReportStats {
   chaptersRead: number;
   waterAverageL: string;
   sleepAverageH: string;
+  sleepCalendarAverageH?: string;
   workoutCount: number;
   stepsAverage: number;
   focusChange: number;
