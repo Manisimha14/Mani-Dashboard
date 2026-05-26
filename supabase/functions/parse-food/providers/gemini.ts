@@ -7,7 +7,7 @@ export async function parseWithGemini(
     input: string, 
     apiKey: string, 
     image?: { data: string; mimeType: string }
-): Promise<{ data?: any; latency: number; error?: string }> {
+): Promise<{ data?: unknown; latency: number; error?: string }> {
     const startTime = Date.now();
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
@@ -15,7 +15,7 @@ export async function parseWithGemini(
     try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${apiKey}`;
         
-        const parts: any[] = [
+        const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
             { text: input || "Identify the food in this image and estimate the nutritional content." }
         ];
 
@@ -54,7 +54,9 @@ export async function parseWithGemini(
             throw new Error(`Gemini API error: ${response.status}`);
         }
 
-        const json = await response.json();
+        const json = await response.json() as {
+            candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+        };
         const content = json.candidates?.[0]?.content?.parts?.[0]?.text;
         
         if (!content) {
@@ -65,10 +67,11 @@ export async function parseWithGemini(
             data: JSON.parse(content),
             latency: Date.now() - startTime
         };
-    } catch (e: any) {
+    } catch (e: unknown) {
         clearTimeout(timeoutId);
+        const message = e instanceof Error ? e.message : String(e);
         return {
-            error: e.name === 'AbortError' ? 'Gemini timeout exceeded' : e.message,
+            error: message === 'AbortError' ? 'Gemini timeout exceeded' : message,
             latency: Date.now() - startTime
         };
     }

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Volume2, VolumeX, Music, CloudRain, Wind, Coffee, Waves, X, Play, Pause } from 'lucide-react';
+import { Volume2, Music, CloudRain, Wind, Coffee, Waves, X } from 'lucide-react';
 
 const SOUNDS = [
   { id: 'rain', label: 'Heavy Rain', icon: CloudRain, color: 'text-blue-400', freq: 400 },
@@ -8,6 +8,27 @@ const SOUNDS = [
   { id: 'cafe', label: 'Quiet Cafe', icon: Coffee, color: 'text-amber-400', freq: 1200 },
   { id: 'waves', label: 'Deep Ocean', icon: Waves, color: 'text-cyan-400', freq: 200 },
 ];
+
+// Pre-computed waveform bars — stable across renders (no Math.random in JSX)
+const WAVEFORM_BARS = Array.from({ length: 20 }, () => ({
+  height: Math.random() * 20 + 4,
+  duration: 0.5 + Math.random(),
+}));
+
+function WaveformBar() {
+  return (
+    <div className="absolute bottom-0 left-0 right-0 h-1 flex items-end gap-[2px] px-2 opacity-50">
+      {WAVEFORM_BARS.map((bar, i) => (
+        <motion.div
+          key={i}
+          animate={{ height: [4, bar.height, 4] }}
+          transition={{ duration: bar.duration, repeat: Infinity }}
+          className="flex-1 bg-violet-500/30 rounded-t-sm"
+        />
+      ))}
+    </div>
+  );
+}
 
 export default function SoundscapeMixer() {
   const [isOpen, setIsOpen] = useState(false);
@@ -136,19 +157,8 @@ export default function SoundscapeMixer() {
               />
             </div>
             
-            {/* Animated Waveform when playing */}
-            {activeSound && (
-              <div className="absolute bottom-0 left-0 right-0 h-1 flex items-end gap-[2px] px-2 opacity-50">
-                {Array.from({ length: 20 }).map((_, i) => (
-                  <motion.div
-                    key={i}
-                    animate={{ height: [4, Math.random() * 20 + 4, 4] }}
-                    transition={{ duration: 0.5 + Math.random(), repeat: Infinity }}
-                    className="flex-1 bg-violet-500/30 rounded-t-sm"
-                  />
-                ))}
-              </div>
-            )}
+            {/* Animated Waveform when playing - values stabilized via useMemo */}
+            {activeSound && <WaveformBar />}
           </motion.div>
         )}
       </AnimatePresence>

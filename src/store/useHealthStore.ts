@@ -1,8 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type {
-  MealEntry, WaterEntry, WorkoutEntry, SleepEntry,
-  WeightEntry, HealthGoal, HealthRestriction, HealthState
+  HealthGoal, HealthRestriction, HealthState
 } from '../types/health';
 
 function uid(): string {
@@ -28,7 +27,7 @@ const DEFAULT_RESTRICTIONS: HealthRestriction[] = [
 
 export const useHealthStore = create<HealthState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       meals: [],
       water: [],
       workouts: [],

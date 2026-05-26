@@ -114,6 +114,68 @@ export function FoodInput({ onParse, isParsing, loadingMessage, onStateChange }:
     }
   };
 
+  const compressImageMainThread = async (
+    file: File, 
+    maxDimension = 768, 
+    quality = 0.72
+  ): Promise<{ data: string; mimeType: string; blob: Blob }> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.src = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(img.src);
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("Could not acquire 2D context from canvas"));
+          return;
+        }
+
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxDimension) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          }
+        } else {
+          if (height > maxDimension) {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            reject(new Error("Canvas to blob conversion failed"));
+            return;
+          }
+          const reader = new FileReader();
+          reader.onload = () => {
+            const base64String = reader.result as string;
+            const match = base64String.match(/^data:(image\/jpeg);base64,(.+)$/);
+            if (match) {
+              resolve({ data: match[2], mimeType: match[1], blob });
+            } else {
+              reject(new Error("Failed to parse optimized image data"));
+            }
+          };
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(blob);
+        }, "image/jpeg", quality);
+      };
+      img.onerror = (err) => {
+        URL.revokeObjectURL(img.src);
+        reject(err);
+      };
+    });
+  };
+
   const processFile = (file: File) => {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
     if (!allowedTypes.includes(file.type)) {
@@ -131,6 +193,26 @@ export function FoodInput({ onParse, isParsing, loadingMessage, onStateChange }:
 
     const previewUrl = URL.createObjectURL(file);
     if (onStateChange) onStateChange('compressing');
+
+    const runMainThreadFallback = () => {
+      if (onStateChange) onStateChange('compressing');
+      compressImageMainThread(file).then(({ data, mimeType, blob }) => {
+        if (onStateChange) onStateChange('uploading');
+        onParse("", { data, mimeType }, previewUrl, blob);
+      }).catch(err => {
+        console.error("Main thread compression fallback failed, using raw upload:", err);
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64String = reader.result as string;
+          const match = base64String.match(/^data:(image\/[a-zA-Z+.-]+);base64,(.+)$/);
+          if (match) {
+            if (onStateChange) onStateChange('uploading');
+            onParse("", { data: match[2], mimeType: match[1] }, previewUrl, file);
+          }
+        };
+        reader.readAsDataURL(file);
+      });
+    };
 
     try {
       const worker = new Worker(
@@ -166,32 +248,20 @@ export function FoodInput({ onParse, isParsing, loadingMessage, onStateChange }:
           };
           reader.readAsDataURL(blob);
         } else {
-          toast.error(error || "Image optimization failed.");
-          if (onStateChange) onStateChange('error');
-          URL.revokeObjectURL(previewUrl);
+          console.warn("Worker compression failed, trying fallback:", error);
+          runMainThreadFallback();
         }
       };
 
       worker.onerror = (err) => {
-        console.error("Worker crash:", err);
-        toast.error("Optimizing thread crashed. Using fallback...");
+        console.error("Worker crash, trying fallback:", err);
         worker.terminate();
-        if (onStateChange) onStateChange('error');
-        URL.revokeObjectURL(previewUrl);
+        runMainThreadFallback();
       };
 
     } catch (workerErr) {
-      console.error("Failed to spawn worker, fallback to direct reading:", workerErr);
-      const reader = new FileReader();
-      reader.onload = () => {
-        const base64String = reader.result as string;
-        const match = base64String.match(/^data:(image\/[a-zA-Z+.-]+);base64,(.+)$/);
-        if (match) {
-          if (onStateChange) onStateChange('uploading');
-          onParse("", { data: match[2], mimeType: match[1] }, previewUrl, file);
-        }
-      };
-      reader.readAsDataURL(file);
+      console.error("Failed to spawn worker, trying fallback:", workerErr);
+      runMainThreadFallback();
     }
   };
 

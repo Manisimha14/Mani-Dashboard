@@ -108,5 +108,5 @@ EXPECTED OUTPUT (Strictly consistent math: totals sum of items, macros equal cal
     "fiber": 14
   }
 }
-\`;
+`;
 

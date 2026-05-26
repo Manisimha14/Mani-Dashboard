@@ -24,7 +24,7 @@ export function useAutoBackup() {
         
         // Save to rolling ledger (auto-backup slot)
         const stored = localStorage.getItem('backupSnapshots');
-        let snapshots = stored ? JSON.parse(stored) : [];
+        const snapshots = stored ? JSON.parse(stored) : [];
         
         const newSnapshot = {
           id: `auto-snap-${Date.now()}`,
@@ -55,7 +55,7 @@ export function useAutoBackup() {
           const encrypted = encryptVaultData(data);
           
           const stored = localStorage.getItem('backupSnapshots');
-          let snapshots = stored ? JSON.parse(stored) : [];
+          const snapshots = stored ? JSON.parse(stored) : [];
           
           const newSnapshot = {
             id: `auto-snap-${Date.now()}`,

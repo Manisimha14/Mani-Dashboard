@@ -1,4 +1,4 @@
-import { format } from 'date-fns';
+
 import { normalizeToLocalDateString } from '../../utils/dateNormalization';
 import { calculateFocusQualityScore } from '../../utils/scoring';
 import type { FocusSession, LeetCodeProblem, Tracker } from '../../types';
@@ -23,7 +23,6 @@ import {
 import {
   buildDailyBreakdown,
   aggregateDaily,
-  type DailyReportPoint,
   type AggregateTotals,
 } from './analytics/aggregation';
 
@@ -398,7 +397,6 @@ export function calculateWeeklyReport(params: {
   const workoutGoalWeekly = healthGoals.find((goal) => goal.type === 'workouts_per_week')?.targetValue ?? 5;
 
   const codingGoalWeekly = healthGoals.find((g) => g.type === 'custom' && g.label.toLowerCase().includes('coding'))?.targetValue ?? CODING_WEEKLY_TARGET;
-  const readingGoalWeekly = healthGoals.find((g) => g.type === 'custom' && g.label.toLowerCase().includes('reading'))?.targetValue ?? READING_WEEKLY_TARGET;
   const focusGoalWeeklyMin = healthGoals.find((g) => g.type === 'custom' && g.label.toLowerCase().includes('focus'))?.targetValue ?? FOCUS_WEEKLY_TARGET_MIN;
 
   const focusSessions = dedupeFocusSessions(rawFocusSessions);

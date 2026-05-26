@@ -17,7 +17,13 @@ serve(async (req) => {
     }
 
     try {
-        const { input, image, mealTypeHint } = await req.json();
+        const body = await req.json().catch(() => ({}));
+        if (body.warmup) {
+            return new Response(JSON.stringify({ status: "warmed" }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+        }
+        const { input, image, mealTypeHint } = body;
         const hasImage = !!(image && image.data && image.mimeType);
         
         if (!hasImage && (!input || typeof input !== 'string')) {
@@ -106,8 +112,9 @@ serve(async (req) => {
             }
         }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
-    } catch (error: any) {
-        return new Response(JSON.stringify({ error: error.message }), {
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        return new Response(JSON.stringify({ error: message }), {
             status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
     }

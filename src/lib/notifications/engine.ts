@@ -105,7 +105,7 @@ export function getContextualNotifications(state: NotificationState): Contextual
   select(tPool, 300);
 
   // ─── 4. Streak (Type-specific) ───
-  let stPool: ContextualMessage[] = [];
+  const stPool: ContextualMessage[] = [];
   if (codingStreak > 5) stPool.push(...STREAK_POOL.filter(m => m.streakType === 'coding'));
   if (readingStreak > 5) stPool.push(...STREAK_POOL.filter(m => m.streakType === 'reading'));
   if (focusStreak > 5) stPool.push(...STREAK_POOL.filter(m => m.streakType === 'focus'));

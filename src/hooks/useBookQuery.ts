@@ -45,7 +45,7 @@ export function useUpdateChapter(): UseMutationResult<
       const store = useAppStore.getState();
       if (!user) {
         store.updateChapter(chapterId, updates);
-        return store.book;
+        return useAppStore.getState().book; // read post-update state (store.book is stale snapshot)
       }
       
       const currentBook = await qc.fetchQuery<Book>({
@@ -143,7 +143,7 @@ export function useSetBookMeta(): UseMutationResult<
       const store = useAppStore.getState();
       if (!user) {
         store.setBookMeta(meta);
-        return store.book;
+        return useAppStore.getState().book; // read post-update state (store.book is stale snapshot)
       }
 
       const currentBook = await qc.fetchQuery<Book>({

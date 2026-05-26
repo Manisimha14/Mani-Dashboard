@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import toast from 'react-hot-toast';
 import { 
   CalendarRange, Clock, Eye, Download, Hourglass, FileText,
   BookOpen, Code2, BarChart3, AlertTriangle, 
@@ -119,6 +120,32 @@ export default function Reports() {
   const [selectedBugArtifact, setSelectedBugArtifact] = useState<BugArtifact | null>(null);
   const [selectedBugReport, setSelectedBugReport] = useState<BugReport | null>(null);
   const [dismissedBugArtifacts, setDismissedBugArtifacts] = useState<string[]>([]);
+  const [pasteJsonInput, setPasteJsonInput] = useState('');
+  const [jsonMeta, setJsonMeta] = useState<{ fields: number; sizeKb: number; type: string } | null>(null);
+  const [jsonError, setJsonError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!pasteJsonInput.trim()) {
+      setJsonMeta(null);
+      setJsonError(null);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(pasteJsonInput);
+      setJsonError(null);
+      const fields = Array.isArray(parsed) ? parsed.length : typeof parsed === 'object' && parsed !== null ? Object.keys(parsed).length : 1;
+      const sizeKb = JSON.stringify(parsed).length / 1024;
+      setJsonMeta({
+        fields,
+        sizeKb,
+        type: Array.isArray(parsed) ? 'Array' : typeof parsed
+      });
+    } catch (e: any) {
+      setJsonMeta(null);
+      setJsonError(e.message || 'Invalid JSON syntax');
+    }
+  }, [pasteJsonInput]);
+
   const activeTab = (searchParams.get('tab') as ReportTab) || 'weekly';
   const setActiveTab = (tab: ReportTab) => {
     setSearchParams({ tab });
@@ -1120,7 +1147,7 @@ export default function Reports() {
 
           {/* TAB 3: BUG REPORTS / EXPORTS */}
           {activeTab === 'bugs' && (
-            <div className="space-y-8">
+            <div className="space-y-8 animate-enter">
               <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-5">
                 <div className="p-6 rounded-3xl bg-gradient-to-br from-rose-500/10 via-white/[0.02] to-transparent border border-rose-500/15">
                   <div className="flex items-center gap-2">
@@ -1148,6 +1175,90 @@ export default function Reports() {
                       <div className="text-2xl font-black text-emerald-300 mt-2">{bugStatusCounts.fixed}</div>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              {/* Premium JSON to PDF Converter dropzone card */}
+              <div className="p-6 rounded-3xl bg-white/[0.02] border border-white/5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FileText size={15} className="text-cyan-400" />
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">JSON to PDF Conversion Suite</span>
+                  </div>
+                  <div className="flex gap-2">
+                    {jsonMeta && (
+                      <span className="px-2 py-0.5 rounded text-[8px] font-black bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-wider">
+                        Valid {jsonMeta.type} ({jsonMeta.fields} fields, {jsonMeta.sizeKb.toFixed(2)} KB)
+                      </span>
+                    )}
+                    {jsonError && (
+                      <span className="px-2 py-0.5 rounded text-[8px] font-black bg-red-500/10 text-red-400 border border-red-500/20 uppercase tracking-wider">
+                        Invalid JSON Syntax
+                      </span>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-3">
+                    <textarea
+                      value={pasteJsonInput}
+                      onChange={(e) => setPasteJsonInput(e.target.value)}
+                      placeholder="Paste your raw JSON telemetry payload here..."
+                      className="w-full h-44 bg-black/20 border border-white/5 rounded-2xl p-4 text-[11px] font-mono text-zinc-100 placeholder-white/20 focus:outline-none focus:border-cyan-500/50 resize-none"
+                    />
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] text-white/25 font-bold uppercase">Max payload: 2MB</span>
+                      <button
+                        onClick={() => setPasteJsonInput('')}
+                        className="text-[9px] text-rose-400 hover:text-rose-300 font-black uppercase tracking-wider"
+                      >
+                        Clear workspace
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-dashed border-white/10 hover:border-cyan-500/30 bg-white/[0.01] hover:bg-cyan-500/[0.01] p-6 flex flex-col items-center justify-center text-center transition-all group relative cursor-pointer">
+                    <input
+                      type="file"
+                      accept=".json"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = (evt) => {
+                            if (evt.target?.result) {
+                              setPasteJsonInput(evt.target.result as string);
+                            }
+                          };
+                          reader.readAsText(file);
+                        }
+                      }}
+                      className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                    />
+                    <FileText size={24} className="text-white/20 group-hover:text-cyan-400 mb-3 transition-colors animate-pulse" />
+                    <span className="text-sm font-black text-white group-hover:text-cyan-300 transition-colors">Drag & Drop JSON File</span>
+                    <span className="text-[10px] text-white/30 font-semibold mt-1.5">or click to browse local folders</span>
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-2 border-t border-white/5">
+                  <button
+                    disabled={!jsonMeta}
+                    onClick={async () => {
+                      play('click');
+                      try {
+                        const parsed = JSON.parse(pasteJsonInput);
+                        const { generateGenericJSONPDF } = await import('../services/reports/bugReportPdf');
+                        await generateGenericJSONPDF(parsed, 'JSON Triage Intelligence Export');
+                      } catch (err) {
+                        toast.error("Failed to parse and export JSON.");
+                      }
+                    }}
+                    className="btn-glow px-6 py-2.5 text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-lg disabled:opacity-40 disabled:scale-100 disabled:cursor-not-allowed"
+                  >
+                    <Download size={12} /> Convert to Executive PDF
+                  </button>
                 </div>
               </div>
 
@@ -1191,7 +1302,17 @@ export default function Reports() {
                           }}
                           className="py-2 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 text-cyan-300 text-xs font-black uppercase tracking-wider transition-all"
                         >
-                          Download
+                          JSON
+                        </button>
+                        <button
+                          onClick={async () => {
+                            play('click');
+                            const { generateGenericJSONPDF } = await import('../services/reports/bugReportPdf');
+                            await generateGenericJSONPDF(artifact.payload, artifact.title);
+                          }}
+                          className="py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-300 text-xs font-black uppercase tracking-wider transition-all"
+                        >
+                          PDF
                         </button>
                         <button
                           onClick={async () => {
@@ -1216,7 +1337,7 @@ export default function Reports() {
                             play('click');
                             setDismissedBugArtifacts((current) => [...current, artifact.id]);
                           }}
-                          className="py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-300 text-xs font-black uppercase tracking-wider transition-all"
+                          className="col-span-2 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-300 text-xs font-black uppercase tracking-wider transition-all"
                         >
                           Delete
                         </button>
@@ -1227,9 +1348,23 @@ export default function Reports() {
               )}
 
               <div className="space-y-4">
-                <div className="flex items-center gap-2 text-white/40">
-                  <FileText size={16} className="text-violet-400" />
-                  <h3 className="text-xs font-black uppercase tracking-widest text-white/50">Recent Issue Ledger</h3>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-2 text-white/40">
+                    <FileText size={16} className="text-violet-400" />
+                    <h3 className="text-xs font-black uppercase tracking-widest text-white/50">Recent Issue Ledger</h3>
+                  </div>
+                  {bugReports.length > 0 && (
+                    <button
+                      onClick={async () => {
+                        play('click');
+                        const { generateBatchPDF } = await import('../services/reports/bugReportPdf');
+                        await generateBatchPDF(bugReports);
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/20 text-violet-300 text-[10px] font-black uppercase tracking-wider transition-all"
+                    >
+                      Batch PDF Export
+                    </button>
+                  )}
                 </div>
 
                 {bugReports.length === 0 ? (
@@ -1272,7 +1407,17 @@ export default function Reports() {
                             }}
                             className="py-2 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 text-cyan-300 text-xs font-black uppercase tracking-wider transition-all"
                           >
-                            Download
+                            JSON
+                          </button>
+                          <button
+                            onClick={async () => {
+                              play('click');
+                              const { generateBugReportPDF } = await import('../services/reports/bugReportPdf');
+                              await generateBugReportPDF(report);
+                            }}
+                            className="py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-300 text-xs font-black uppercase tracking-wider transition-all"
+                          >
+                            PDF
                           </button>
                           <button
                             onClick={async () => {
@@ -1297,7 +1442,7 @@ export default function Reports() {
                               play('click');
                               deleteBugReport(report);
                             }}
-                            className="py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-300 text-xs font-black uppercase tracking-wider transition-all"
+                            className="col-span-2 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-300 text-xs font-black uppercase tracking-wider transition-all"
                           >
                             Delete
                           </button>

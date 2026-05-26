@@ -10,7 +10,7 @@ import type { WeeklyReportStats } from '../../types/report';
 const A4_WIDTH_PT = 595.28;
 const A4_HEIGHT_PT = 841.89;
 const A4_WIDTH_PX = 794;
-const A4_HEIGHT_PX = 1123;
+
 const EXPORT_TIMEOUT_MS = 30000; // 30 seconds watchdog timeout
 
 // Export Mutex to block double-triggering memory crashes

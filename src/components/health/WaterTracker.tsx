@@ -1,8 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Droplets, Plus, Trash2, Waves, Edit2, Check, X } from 'lucide-react';
 import { useWater, useHealthGoals, useAddWater, useDeleteWater, useAddGoal, useUpdateGoal } from '../../hooks/useHealthQuery';
-import { todayString } from '../../lib/utils';
 import { useSoundFX } from '../../hooks/useSoundFX';
 
 const QUICK_ADD_CONFIG = [
@@ -24,6 +23,17 @@ export default function WaterTracker({ today }: { today: string }) {
   const updateGoalMut = useUpdateGoal();
   const [isEditingGoal, setIsEditingGoal] = useState(false);
   const [tempGoalVal, setTempGoalVal] = useState('');
+
+  // Stabilize bubble animation values so Math.random() doesn't re-run on every render
+  const bubbles = useMemo(() => Array.from({ length: 6 }, (_, i) => ({
+    key: i,
+    width: Math.random() * 6 + 3,
+    height: Math.random() * 6 + 3,
+    left: `${Math.random() * 80 + 10}%`,
+    xAnim: Math.random() * 16 - 8,
+    duration: Math.random() * 2.5 + 1.5,
+    delay: Math.random() * 1.5,
+  })), []);
 
   const todayWater = water; // already filtered by date from the hook
   const totalMl = todayWater.reduce((a, w) => a + w.amount, 0);
@@ -71,26 +81,26 @@ export default function WaterTracker({ today }: { today: string }) {
                 transition={{ duration: 1.5, ease: 'circOut' }}
               />
 
-              {/* Floating Bubbles */}
-              {Array.from({ length: 6 }).map((_, i) => (
+              {/* Floating Bubbles - values stabilized via useMemo to prevent render churn */}
+              {bubbles.map((b) => (
                 <motion.div
-                  key={i}
+                  key={b.key}
                   className="absolute bg-white/20 rounded-full"
                   style={{
-                    width: Math.random() * 6 + 3,
-                    height: Math.random() * 6 + 3,
-                    left: `${Math.random() * 80 + 10}%`,
+                    width: b.width,
+                    height: b.height,
+                    left: b.left,
                     bottom: '0%'
                   }}
                   animate={{
                     bottom: ['0%', '100%'],
-                    x: [0, Math.random() * 16 - 8, 0],
+                    x: [0, b.xAnim, 0],
                     opacity: [0, 0.7, 0]
                   }}
                   transition={{
-                    duration: Math.random() * 2.5 + 1.5,
+                    duration: b.duration,
                     repeat: Infinity,
-                    delay: Math.random() * 1.5,
+                    delay: b.delay,
                     ease: 'easeInOut'
                   }}
                 />

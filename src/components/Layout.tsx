@@ -20,6 +20,7 @@ import { useIsMobile } from '../hooks/useIsMobile';
 import { getAppVersion } from '../lib/appVersion';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { useAutoBackup } from '../hooks/useAutoBackup';
+import { useFocusTimerEngine } from '../hooks/useFocusTimerEngine';
 
 const CommandPalette = lazy(() => import('./CommandPalette'));
 const WeatherOverlay = lazy(() => import('./WeatherOverlay'));
@@ -84,6 +85,7 @@ export default function Layout() {
   useAchievementsEngine();
   useExtensionSync();
   useAutoBackup();
+  useFocusTimerEngine();
 
   // PWA installation prompt states
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -171,6 +173,19 @@ export default function Layout() {
       window.removeEventListener('mousedown', unlock);
       window.removeEventListener('keydown', unlock);
     };
+  }, []);
+
+  // Warm up the parse-food edge function to prevent cold start latency
+  React.useEffect(() => {
+    const warmupEdgeFunction = async () => {
+      try {
+        const { supabase } = await import('../lib/supabase');
+        supabase.functions.invoke('parse-food', { body: { warmup: true } }).catch(() => {});
+      } catch (e) {
+        // ignore warmup errors
+      }
+    };
+    warmupEdgeFunction();
   }, []);
 
   React.useEffect(() => {

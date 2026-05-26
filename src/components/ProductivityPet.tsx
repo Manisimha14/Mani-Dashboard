@@ -2,49 +2,127 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, useSpring, useMotionValue } from 'framer-motion';
 import { useAppStore } from '../store/useAppStore';
 import { getProductivityScore, todayString } from '../lib/utils';
-import { Settings, X, MessageSquare, Zap, Heart } from 'lucide-react';
+import { X, MessageSquare, Zap, Heart } from 'lucide-react';
 import { useIsMobile } from '../hooks/useIsMobile';
+import type { UserSettings } from '../types';
+
+type PetState = 'excited' | 'awake' | 'sleepy';
+type PetType = UserSettings['petType'];
+
+const PET_TYPES: PetType[] = ['owl', 'fox', 'orb', 'bonsai'];
+const PET_SPEECH: Record<PetState, string[]> = {
+  excited: [
+    'Absolute beast mode! 🔥',
+    'Unstoppable focus—keep the streak.',
+    'You are crushing it right now.',
+  ],
+  awake: [
+    'I see that focus. Keep it up. 🚀',
+    'Nice flow—let’s maintain momentum.',
+    'Sharp and steady wins the day.',
+  ],
+  sleepy: [
+    'Zzz... wake me up with some work.',
+    'Time for a power-up?',
+    'A little focus can snap you awake.',
+  ]
+};
 
 function ProductivityPet() {
   const isMobile = useIsMobile();
   const dailyActivity = useAppStore(s => s.dailyActivity);
-  const userSettings = useAppStore(s => s.userSettings);
+  const petType = useAppStore(s => s.userSettings.petType);
   const updateUserSettings = useAppStore(s => s.updateUserSettings);
   const [isOpen, setIsOpen] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const [isBlinking, setIsBlinking] = useState(false);
+  const [petPosition, setPetPosition] = useState(() => {
+    if (typeof window === 'undefined') return { x: 0, y: 0 };
+    try {
+      const stored = window.localStorage.getItem('productivity-pet-position');
+      return stored ? JSON.parse(stored) : { x: 0, y: 0 };
+    } catch {
+      return { x: 0, y: 0 };
+    }
+  });
+  const [dragConstraints, setDragConstraints] = useState({ left: 0, right: 0, top: 0, bottom: 0 });
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const blinkTimeoutRef = useRef<number | null>(null);
+  const blinkIntervalRef = useRef<number | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const pendingMouseRef = useRef<MouseEvent | null>(null);
+  const isDraggingRef = useRef(false);
   
-  // Mouse tracking for eyes
-  const mouseX = useMotionValue(0);
-  const mouseY = useMotionValue(0);
   const eyeX = useSpring(useMotionValue(0), { stiffness: 300, damping: 20 });
   const eyeY = useSpring(useMotionValue(0), { stiffness: 300, damping: 20 });
 
   useEffect(() => {
     if (isMobile) return;
-    const handleMouseMove = (e: MouseEvent) => {
-      const { clientX, clientY } = e;
-      const x = (clientX / window.innerWidth - 0.5) * 8;
-      const y = (clientY / window.innerHeight - 0.5) * 8;
-      eyeX.set(x);
-      eyeY.set(y);
+
+    const updateConstraints = () => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const maxLeft = Math.max(window.innerWidth - rect.width - 20, 0);
+      const maxTop = Math.max(window.innerHeight - rect.height - 20, 0);
+      setDragConstraints({ left: -maxLeft, right: 0, top: -maxTop, bottom: 0 });
     };
-    window.addEventListener('mousemove', handleMouseMove);
-    
-    // Blinking logic
-    const blinkInterval = setInterval(() => {
-      setIsBlinking(true);
-      setTimeout(() => setIsBlinking(false), 150);
-    }, 4000);
+
+    updateConstraints();
+    window.addEventListener('resize', updateConstraints);
 
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      clearInterval(blinkInterval);
+      window.removeEventListener('resize', updateConstraints);
     };
   }, [isMobile]);
 
+  useEffect(() => {
+    if (isMobile) return;
+
+    const handleMouseMove = (event: MouseEvent) => {
+      pendingMouseRef.current = event;
+      if (rafRef.current !== null) return;
+
+      rafRef.current = window.requestAnimationFrame(() => {
+        rafRef.current = null;
+        const next = pendingMouseRef.current;
+        if (!next) return;
+
+        const x = (next.clientX / window.innerWidth - 0.5) * 8;
+        const y = (next.clientY / window.innerHeight - 0.5) * 8;
+        eyeX.set(x);
+        eyeY.set(y);
+      });
+    };
+
+    const startBlink = () => {
+      setIsBlinking(true);
+      if (blinkTimeoutRef.current) {
+        window.clearTimeout(blinkTimeoutRef.current);
+      }
+      blinkTimeoutRef.current = window.setTimeout(() => setIsBlinking(false), 150);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    blinkIntervalRef.current = window.setInterval(startBlink, 4000);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      if (blinkIntervalRef.current) {
+        window.clearInterval(blinkIntervalRef.current);
+      }
+      if (blinkTimeoutRef.current) {
+        window.clearTimeout(blinkTimeoutRef.current);
+      }
+      if (rafRef.current !== null) {
+        window.cancelAnimationFrame(rafRef.current);
+      }
+    };
+  }, [isMobile, eyeX, eyeY]);
+
   const todayActivity = React.useMemo(() => {
-    return dailyActivity.find(a => a.date === todayString());
+    return dailyActivity.reduce<Record<string, typeof dailyActivity[number]>>((map, activity) => {
+      map[activity.date] = activity;
+      return map;
+    }, {})[todayString()];
   }, [dailyActivity]);
 
   const prodScore = React.useMemo(() => {
@@ -59,9 +137,13 @@ function ProductivityPet() {
     return prodScore >= 70 ? 'excited' : prodScore >= 20 ? 'awake' : 'sleepy';
   }, [prodScore]);
 
-  if (isMobile) return null;
+  const speechLine = React.useMemo(() => {
+    const options = PET_SPEECH[state];
+    const seed = state.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+    return options[seed % options.length];
+  }, [state]);
 
-  const petType = userSettings.petType || 'owl';
+  if (isMobile) return null;
 
   // Animation variants
   const bodyVariants: import('framer-motion').Variants = {
@@ -77,12 +159,24 @@ function ProductivityPet() {
 
   return (
     <motion.div 
+      ref={containerRef}
       drag
-      dragConstraints={{ left: -window.innerWidth + 100, right: 0, top: -window.innerHeight + 100, bottom: 0 }}
+      dragConstraints={dragConstraints}
+      dragMomentum={false}
       dragElastic={0.1}
       dragTransition={{ bounceStiffness: 600, bounceDamping: 20 }}
       whileDrag={{ scale: 1.05 }}
-      className="hidden md:flex fixed bottom-10 right-10 z-[200] flex flex-col items-end gap-6 pointer-events-auto cursor-grab active:cursor-grabbing"
+      onDragStart={() => {
+        isDraggingRef.current = true;
+      }}
+      onDragEnd={(_, info) => {
+        isDraggingRef.current = false;
+        const next = { x: petPosition.x + info.offset.x, y: petPosition.y + info.offset.y };
+        setPetPosition(next);
+        window.localStorage.setItem('productivity-pet-position', JSON.stringify(next));
+      }}
+      style={{ x: petPosition.x, y: petPosition.y }}
+      className="hidden md:flex fixed bottom-10 right-10 z-[200] flex-col items-end gap-6 pointer-events-auto cursor-grab active:cursor-grabbing"
     >
       {/* Speech Bubble */}
       <AnimatePresence>
@@ -95,7 +189,7 @@ function ProductivityPet() {
           >
             <div className="text-[11px] font-black text-white/90 uppercase tracking-widest flex items-center gap-2">
               <MessageSquare size={12} className="text-violet-400" />
-              {state === 'excited' ? "Absolute beast mode! 🔥" : state === 'awake' ? "I see that focus. Keep it up. 🚀" : "Zzz... wake me up with some work."}
+              {speechLine}
             </div>
             <div className="absolute -bottom-2 right-10 w-4 h-4 bg-[#0a0b14]/90 rotate-45 border-r border-b border-white/10" />
           </motion.div>
@@ -112,7 +206,12 @@ function ProductivityPet() {
 
         {/* The Kinetic Creature */}
         <motion.button
-          onClick={() => setIsOpen(!isOpen)}
+          onClick={() => {
+            if (isDraggingRef.current) return;
+            setIsOpen(!isOpen);
+          }}
+          aria-expanded={isOpen}
+          aria-label="Open productivity pet panel"
           variants={bodyVariants}
           animate={state}
           whileHover={{ scale: 1.1, rotate: 5 }}
@@ -182,7 +281,11 @@ function ProductivityPet() {
                   Evolution: Stage {prodScore > 50 ? '3' : '1'}
                 </div>
               </div>
-              <button onClick={() => setIsOpen(false)} className="text-white/20 hover:text-white transition-colors">
+              <button
+                onClick={() => setIsOpen(false)}
+                aria-label="Close pet panel"
+                className="text-white/20 hover:text-white transition-colors"
+              >
                 <X size={18} />
               </button>
             </div>
@@ -222,10 +325,11 @@ function ProductivityPet() {
               <div className="pt-4 border-t border-white/5">
                 <div className="text-[10px] text-white/20 uppercase font-black tracking-widest mb-3">Bonding Studio</div>
                 <div className="grid grid-cols-2 gap-2">
-                  {['owl', 'fox', 'orb', 'bonsai'].map(type => (
+                  {PET_TYPES.map((type) => (
                     <button
                       key={type}
-                      onClick={() => updateUserSettings({ petType: type as any })}
+                      onClick={() => updateUserSettings({ petType: type })}
+                      aria-label={`Choose ${type} pet`}
                       className={`px-3 py-2 rounded-xl border text-[10px] font-black uppercase transition-all ${
                         petType === type 
                         ? 'bg-violet-600/20 border-violet-500/50 text-white' 

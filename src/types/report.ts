@@ -1,5 +1,5 @@
-import type { FocusSession, LeetCodeProblem, Tracker } from './index';
-import type { WaterEntry, SleepEntry, WorkoutEntry, MealEntry } from './health';
+import type { FocusSession, LeetCodeProblem } from './index';
+import type { WaterEntry, SleepEntry, WorkoutEntry } from './health';
 
 export interface IndexedReportData {
   sessionsMap: Map<string, FocusSession[]>;

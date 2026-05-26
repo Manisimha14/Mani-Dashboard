@@ -22,15 +22,21 @@ import { useAppStore } from '../store/useAppStore';
 import { db } from '../lib/db';
 import { useBook, useUpdateChapter } from '../hooks/useBookQuery';
 
+export interface Chapter {
+  id: number;
+  number: number;
+  title: string;
+  completed: boolean;
+  status: 'completed' | 'not_started' | 'in_progress';
+  dateCompleted?: string;
+}
+
 interface BookReaderModalProps {
   open: boolean;
   onClose: () => void;
 }
 
 const FILE_ID = 'book-pdf';
-const PAGE_KEY = 'reader:last-page';
-const ZOOM_KEY = 'reader:zoom';
-const SIDEBAR_KEY = 'reader:sidebar';
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
 async function loadBookPdf() {
@@ -50,11 +56,34 @@ async function deleteBookPdf() {
   return db.files.delete(FILE_ID);
 }
 
+/**
+ * Direct binary metadata reader that extracts the main /Count value from a raw PDF stream.
+ */
+function parsePdfPageCount(arrayBuffer: ArrayBuffer): number {
+  try {
+    const decoder = new TextDecoder('latin1');
+    const view = new Uint8Array(arrayBuffer);
+    const limit = Math.min(view.length, 1024 * 500); // scan first 500KB
+    const chunk = decoder.decode(view.subarray(0, limit));
+    
+    const matches = [...chunk.matchAll(/\/Count\s+(\d+)/g)];
+    if (matches.length > 0) {
+      const counts = matches.map(m => parseInt(m[1], 10)).filter(c => c > 0);
+      if (counts.length > 0) {
+        return Math.max(...counts);
+      }
+    }
+  } catch (e) {
+    console.warn('Metadata scan failed to extract PDF page count:', e);
+  }
+  return 1000; // safe high fallback bounds
+}
+
 const ChapterItem = React.memo(function ChapterItem({
   chapter,
   onToggle,
 }: {
-  chapter: any;
+  chapter: Chapter;
   onToggle: (id: number, completed: boolean) => void;
 }) {
   return (
@@ -92,21 +121,21 @@ export default function BookReaderModal({ open, onClose }: BookReaderModalProps)
   const { data: book = localStore.book } = useBook();
   const { mutate: updateChapterMut } = useUpdateChapter();
 
+  const bookId = book?.id || 'default';
+
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showSidebar, setShowSidebar] = useState(
-    localStorage.getItem(SIDEBAR_KEY) !== 'false'
-  );
-  const [currentPage, setCurrentPage] = useState(
-    Number(localStorage.getItem(PAGE_KEY) || 1)
-  );
-  const [zoom, setZoom] = useState(Number(localStorage.getItem(ZOOM_KEY) || 100));
+  const [showSidebar, setShowSidebar] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [zoom, setZoom] = useState(100);
+  const [totalPages, setTotalPages] = useState<number>(1000);
   const urlRef = useRef<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const completedChapters = useMemo(
-    () => book.chapters.filter((c: any) => c.completed).length,
+    () => book.chapters.filter((c: Chapter) => c.completed).length,
     [book.chapters]
   );
 
@@ -127,24 +156,40 @@ export default function BookReaderModal({ open, onClose }: BookReaderModalProps)
     return `${pdfUrl}#page=${currentPage}&zoom=${zoom}&toolbar=0&navpanes=0&view=FitH`;
   }, [pdfUrl, currentPage, zoom]);
 
-  const loadPdf = useCallback(async () => {
+  const loadPdf = useCallback(async (activeRef: { active: boolean }) => {
     try {
       setLoading(true);
       cleanupUrl();
 
       const fileRecord = await loadBookPdf();
+      if (!activeRef.active) return;
       if (!fileRecord?.data) {
         setPdfUrl(null);
         return;
       }
 
+      // Read page count
+      try {
+        const buffer = await fileRecord.data.arrayBuffer();
+        if (activeRef.active) {
+          const count = parsePdfPageCount(buffer);
+          setTotalPages(count);
+        }
+      } catch (err) {
+        console.error('Failed to parse PDF metadata:', err);
+      }
+
       const url = URL.createObjectURL(fileRecord.data);
       urlRef.current = url;
-      setPdfUrl(url);
-    } catch (error) {
+      if (activeRef.active) {
+        setPdfUrl(url);
+      }
+    } catch {
       toast.error('Failed to load book file.');
     } finally {
-      setLoading(false);
+      if (activeRef.active) {
+        setLoading(false);
+      }
     }
   }, [cleanupUrl]);
 
@@ -173,6 +218,33 @@ export default function BookReaderModal({ open, onClose }: BookReaderModalProps)
     }
   }, []);
 
+  const handlePageChange = useCallback((newPage: number) => {
+    setCurrentPage((p) => {
+      const clamped = Math.max(1, Math.min(newPage, totalPages));
+      if (bookId) {
+        localStorage.setItem(`reader:last-page:${bookId}`, String(clamped));
+      }
+      return clamped;
+    });
+  }, [bookId, totalPages]);
+
+  const handleZoomChange = useCallback((newZoom: number) => {
+    setZoom((z) => {
+      const nextZoom = Math.max(50, Math.min(newZoom, 200));
+      if (bookId) {
+        localStorage.setItem(`reader:zoom:${bookId}`, String(nextZoom));
+      }
+      return nextZoom;
+    });
+  }, [bookId]);
+
+  const handleSidebarChange = useCallback((visible: boolean) => {
+    setShowSidebar(visible);
+    if (bookId) {
+      localStorage.setItem(`reader:sidebar:${bookId}`, String(visible));
+    }
+  }, [bookId]);
+
   useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement);
@@ -189,42 +261,62 @@ export default function BookReaderModal({ open, onClose }: BookReaderModalProps)
     };
   }, []);
 
+  // Sync state cleanly per book
   useEffect(() => {
+    if (open && bookId) {
+      const lastPage = Number(localStorage.getItem(`reader:last-page:${bookId}`) || 1);
+      const lastZoom = Number(localStorage.getItem(`reader:zoom:${bookId}`) || 100);
+      const lastSidebar = localStorage.getItem(`reader:sidebar:${bookId}`) !== 'false';
+      setCurrentPage(lastPage);
+      setZoom(lastZoom);
+      setShowSidebar(lastSidebar);
+    }
+  }, [open, bookId]);
+
+  // Handle load & cancellation guard
+  useEffect(() => {
+    const activeRef = { active: true };
+
     if (!open) {
       cleanupUrl();
       setPdfUrl(null);
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+      }
       setIsFullscreen(false);
       return;
     }
 
-    loadPdf();
+    loadPdf(activeRef);
+
+    return () => {
+      activeRef.active = false;
+    };
   }, [open, loadPdf, cleanupUrl]);
 
-  useEffect(() => {
-    localStorage.setItem(PAGE_KEY, String(currentPage));
-  }, [currentPage]);
-
-  useEffect(() => {
-    localStorage.setItem(ZOOM_KEY, String(zoom));
-  }, [zoom]);
-
-  useEffect(() => {
-    localStorage.setItem(SIDEBAR_KEY, String(showSidebar));
-  }, [showSidebar]);
-
+  // Safe keyboard event listener with input focus guards
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (!open) return;
 
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+
       if (e.key === 'Escape') {
         if (document.fullscreenElement) {
-          document.exitFullscreen();
+          document.exitFullscreen().catch(() => {});
         } else {
           onClose();
         }
       }
-      if (e.key === 'ArrowRight') setCurrentPage((p) => p + 1);
-      if (e.key === 'ArrowLeft') setCurrentPage((p) => Math.max(1, p - 1));
+      if (e.key === 'ArrowRight') handlePageChange(currentPage + 1);
+      if (e.key === 'ArrowLeft') handlePageChange(currentPage - 1);
       if (e.key.toLowerCase() === 'f') {
         toggleFullscreen();
       }
@@ -232,7 +324,7 @@ export default function BookReaderModal({ open, onClose }: BookReaderModalProps)
 
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [open, onClose, toggleFullscreen]);
+  }, [open, onClose, toggleFullscreen, currentPage, handlePageChange]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -240,11 +332,13 @@ export default function BookReaderModal({ open, onClose }: BookReaderModalProps)
 
     if (file.type !== 'application/pdf') {
       toast.error('Only PDF files are supported.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
 
     if (file.size > MAX_FILE_SIZE) {
       toast.error('File size must be under 50MB.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
 
@@ -252,10 +346,16 @@ export default function BookReaderModal({ open, onClose }: BookReaderModalProps)
       setLoading(true);
       await saveBookPdf(file);
       toast.success('Book uploaded successfully.');
-      await loadPdf();
-    } catch {
-      toast.error('Failed to save file.');
+      const activeRef = { active: true };
+      await loadPdf(activeRef);
+    } catch (err: any) {
+      if (err.name === 'QuotaExceededError' || err.message?.includes('quota')) {
+        toast.error('Browser storage limit exceeded. Please free up some disk space.');
+      } else {
+        toast.error('Failed to save file.');
+      }
     } finally {
+      if (fileInputRef.current) fileInputRef.current.value = '';
       setLoading(false);
     }
   };
@@ -272,6 +372,8 @@ export default function BookReaderModal({ open, onClose }: BookReaderModalProps)
   };
 
   const toggleChapter = (id: number, completed: boolean) => {
+    // Optimistic UI updates
+    const currentBookChapters = book.chapters;
     updateChapterMut({
       chapterId: id,
       updates: {
@@ -293,11 +395,11 @@ export default function BookReaderModal({ open, onClose }: BookReaderModalProps)
             initial={{ width: 0, opacity: 0 }}
             animate={{ width: 320, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
-            className="border-r border-white/10 bg-[#12131c] overflow-hidden"
+            className="border-r border-white/10 bg-[#12131c] overflow-hidden flex flex-col"
           >
-            <div className="p-5 border-b border-white/5">
-              <h2 className="font-bold text-white">{book.title}</h2>
-              <p className="text-xs text-white/40">{book.author}</p>
+            <div className="p-5 border-b border-white/5 flex-shrink-0">
+              <h2 className="font-bold text-white truncate">{book.title}</h2>
+              <p className="text-xs text-white/40 truncate">{book.author}</p>
               <div className="mt-4 h-2 rounded-full bg-white/5 overflow-hidden">
                 <motion.div
                   initial={{ width: 0 }}
@@ -306,8 +408,8 @@ export default function BookReaderModal({ open, onClose }: BookReaderModalProps)
                 />
               </div>
             </div>
-            <div className="p-3 overflow-y-auto h-[calc(100%-120px)] space-y-1">
-              {book.chapters.map((chapter: any) => (
+            <div className="p-3 overflow-y-auto flex-1 space-y-1">
+              {book.chapters.map((chapter: Chapter) => (
                 <ChapterItem key={chapter.id} chapter={chapter} onToggle={toggleChapter} />
               ))}
             </div>
@@ -315,25 +417,29 @@ export default function BookReaderModal({ open, onClose }: BookReaderModalProps)
         )}
       </AnimatePresence>
 
-      <div className="flex-1 flex flex-col">
-        <div className="h-14 border-b border-white/10 bg-black/30 flex items-center justify-between px-4">
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="h-14 border-b border-white/10 bg-black/30 flex items-center justify-between px-4 flex-shrink-0">
           <div className="flex items-center gap-2">
-            <button onClick={() => setShowSidebar((v) => !v)} className="btn-ghost p-2">
+            <button onClick={() => handleSidebarChange(!showSidebar)} className="btn-ghost p-2">
               <List size={16} />
             </button>
-            <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} className="btn-ghost p-2">
+            <button onClick={() => handlePageChange(currentPage - 1)} className="btn-ghost p-2">
               <ChevronLeft size={16} />
             </button>
-            <button onClick={() => setCurrentPage((p) => p + 1)} className="btn-ghost p-2">
+            <span className="text-xs text-white/50 px-1 font-mono">
+              Page {currentPage} of {totalPages === 1000 ? '?' : totalPages}
+            </span>
+            <button onClick={() => handlePageChange(currentPage + 1)} className="btn-ghost p-2">
               <ChevronRight size={16} />
             </button>
-            <button onClick={() => setZoom((z) => Math.max(50, z - 10))} className="btn-ghost p-2">
+            <button onClick={() => handleZoomChange(zoom - 10)} className="btn-ghost p-2">
               <ZoomOut size={16} />
             </button>
-            <button onClick={() => setZoom((z) => Math.min(200, z + 10))} className="btn-ghost p-2">
+            <span className="text-xs text-white/50 px-1 font-mono">{zoom}%</span>
+            <button onClick={() => handleZoomChange(zoom + 10)} className="btn-ghost p-2">
               <ZoomIn size={16} />
             </button>
-            <button onClick={() => setZoom(100)} className="btn-ghost p-2">
+            <button onClick={() => handleZoomChange(100)} className="btn-ghost p-2">
               <RotateCcw size={16} />
             </button>
           </div>
@@ -351,7 +457,12 @@ export default function BookReaderModal({ open, onClose }: BookReaderModalProps)
           </div>
         </div>
 
-        <iframe src={iframeSrc} className="w-full flex-1 border-none bg-white" title="Book Reader" />
+        <iframe
+          src={iframeSrc}
+          className="w-full flex-1 border-none bg-white"
+          title="Book Reader"
+          sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
+        />
       </div>
     </div>
   ) : (
@@ -361,14 +472,20 @@ export default function BookReaderModal({ open, onClose }: BookReaderModalProps)
       <p className="text-sm text-white/40 mb-6">Your PDF stays local in your browser.</p>
       <label className="btn-glow px-6 py-3 cursor-pointer flex items-center gap-2">
         <BookOpen size={16} /> Choose PDF
-        <input type="file" accept="application/pdf" className="hidden" onChange={handleFileUpload} />
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/pdf"
+          className="hidden"
+          onChange={handleFileUpload}
+        />
       </label>
     </div>
   );
 
   return (
     <Modal open={open} onClose={onClose} title="Interactive Reader" maxWidth="max-w-7xl" showClose>
-      <div className="h-[80vh]">{content}</div>
+      <div className="h-[80vh] flex flex-col">{content}</div>
     </Modal>
   );
 }

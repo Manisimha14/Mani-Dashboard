@@ -91,17 +91,6 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
   const [capturing, setCapturing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // Auto-capture screenshot on mount/open if requested
-  useEffect(() => {
-    if (isOpen && attachScreenshot && !screenshotPreview && !capturing) {
-      // Small timeout to allow the modal to initiate opening and let us capture the background
-      const timer = setTimeout(() => {
-        handleCaptureScreenshot();
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [isOpen, attachScreenshot]);
-
   const handleCaptureScreenshot = async () => {
     setCapturing(true);
     try {
@@ -143,6 +132,17 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
       setCapturing(false);
     }
   };
+
+  // Auto-capture screenshot on mount/open if requested
+  useEffect(() => {
+    if (isOpen && attachScreenshot && !screenshotPreview && !capturing) {
+      // Small timeout to allow the modal to initiate opening and let us capture the background
+      const timer = setTimeout(() => {
+        handleCaptureScreenshot();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, attachScreenshot]);
 
   const clearScreenshot = () => {
     setScreenshotBlob(null);
@@ -211,7 +211,7 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
       // 2. Call secure database RPC
       const diagnostics = includeDiagnostics ? getDiagnostics() : {};
       
-      const { data, error } = await supabase.rpc('submit_bug_report', {
+      const { error } = await supabase.rpc('submit_bug_report', {
         type: issueType,
         severity,
         title: title.trim(),

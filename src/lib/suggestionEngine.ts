@@ -36,7 +36,7 @@ function levenshtein(a: string, b: string): number {
   if (a.length > b.length) return levenshtein(b, a);
   
   let prevRow = Array.from({ length: a.length + 1 }, (_, i) => i);
-  let currentRow = new Array<number>(a.length + 1);
+  const currentRow = new Array<number>(a.length + 1);
 
   for (let i = 1; i <= b.length; i++) {
     currentRow[0] = i;

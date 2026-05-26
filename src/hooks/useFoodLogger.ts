@@ -267,92 +267,98 @@ export function useFoodLogger() {
   const saveMeal = async () => {
     if (!parsedData) return;
     
-    try {
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) throw new Error("Not authenticated");
+    // 1. Snapshot the current state variables for background execution
+    const snapshotData = { ...parsedData };
+    const snapshotInput = rawInput;
+    const snapshotImageUrl = uploadedImageUrl;
+    const snapshotProvider = metaData?.provider;
+    const snapshotLatency = metaData?.latency_ms;
+    const snapshotHash = metaData?.raw_input_hash;
 
-      // 1. Save to raw analytics tables (Resilient try/catch)
+    // 2. Optimistic UI transition: immediately clear states, close panels & show positive reinforcement toast!
+    cleanupPreview();
+    setParsedData(null);
+    setRawInput('');
+    setUploadedImageUrl(null);
+    setLoggerState('idle');
+    toast.success('Meal logged successfully!');
+
+    // 3. Background execution chain
+    (async () => {
       try {
-        const { data: logData, error: logError } = await supabase
-          .from('meal_logs')
-          .insert({
-            user_id: userData.user.id,
-            meal_type: parsedData.meal_type,
-            raw_input: rawInput,
-            total_calories: parsedData.totals.calories,
-            protein: parsedData.totals.protein,
-            carbs: parsedData.totals.carbs,
-            fat: parsedData.totals.fat,
-            fiber: parsedData.totals.fiber,
-            confidence: parsedData.confidence,
-            confidence_reason: parsedData.confidence_reason,
-            ai_provider: metaData?.provider,
-            ai_latency_ms: metaData?.latency_ms,
-            raw_input_hash: metaData?.raw_input_hash,
-            edited_by_user: true,
-            image_url: uploadedImageUrl
-          })
-          .select('id')
-          .single();
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData.user) return;
 
-        if (logError) throw logError;
+        // A. Save to raw analytics tables (Resilient try/catch)
+        try {
+          const { data: logData, error: logError } = await supabase
+            .from('meal_logs')
+            .insert({
+              user_id: userData.user.id,
+              meal_type: snapshotData.meal_type,
+              raw_input: snapshotInput,
+              total_calories: snapshotData.totals.calories,
+              protein: snapshotData.totals.protein,
+              carbs: snapshotData.totals.carbs,
+              fat: snapshotData.totals.fat,
+              fiber: snapshotData.totals.fiber,
+              confidence: snapshotData.confidence,
+              confidence_reason: snapshotData.confidence_reason,
+              ai_provider: snapshotProvider,
+              ai_latency_ms: snapshotLatency,
+              raw_input_hash: snapshotHash,
+              edited_by_user: true,
+              image_url: snapshotImageUrl
+            })
+            .select('id')
+            .single();
 
-        const itemsToInsert = parsedData.items.map(item => ({
-          meal_log_id: logData.id,
-          food_name: item.food_name,
-          quantity: item.quantity,
-          unit: item.unit,
-          calories: item.calories,
-          protein: item.protein,
-          carbs: item.carbs,
-          fat: item.fat,
-          fiber: item.fiber,
-          estimated: item.estimated
-        }));
+          if (!logError && logData) {
+            const itemsToInsert = snapshotData.items.map(item => ({
+              meal_log_id: logData.id,
+              food_name: item.food_name,
+              quantity: item.quantity,
+              unit: item.unit,
+              calories: item.calories,
+              protein: item.protein,
+              carbs: item.carbs,
+              fat: item.fat,
+              fiber: item.fiber,
+              estimated: item.estimated
+            }));
 
-        const { error: itemsError } = await supabase
-          .from('meal_items')
-          .insert(itemsToInsert);
+            await supabase.from('meal_items').insert(itemsToInsert);
+          }
+        } catch (dbError) {
+          console.warn("Advanced analytics logging bypassed or tables absent:", dbError);
+        }
 
-        if (itemsError) throw itemsError;
-      } catch (dbError) {
-        console.warn("Advanced analytics logging bypassed or tables absent:", dbError);
+        // B. Save to primary health_meals dashboard table
+        const now = new Date();
+        const normalizedMealType = snapshotData.meal_type === 'snack' ? 'snacks' : snapshotData.meal_type;
+        
+        await addMealMutation.mutateAsync({
+          date: format(now, 'yyyy-MM-dd'),
+          time: format(now, 'HH:mm'),
+          mealType: normalizedMealType as any,
+          name: snapshotData.items.map(i => i.food_name).join(', '),
+          calories: snapshotData.totals.calories,
+          protein: snapshotData.totals.protein,
+          carbs: snapshotData.totals.carbs,
+          fat: snapshotData.totals.fat,
+          fiber: snapshotData.totals.fiber
+        });
+
+        // C. Fire-and-forget IndexedDB update
+        const foods = snapshotData.items.map(item => item.food_name);
+        mealRepository.saveMeal(foods).catch(historyErr => {
+          console.warn("Background auto-completion indexing bypassed:", historyErr);
+        });
+
+      } catch (err) {
+        console.error('Background meal logging failed:', err);
       }
-
-      // 2. Save to primary health_meals dashboard table
-      const now = new Date();
-      const normalizedMealType = parsedData.meal_type === 'snack' ? 'snacks' : parsedData.meal_type;
-      
-      await addMealMutation.mutateAsync({
-        date: format(now, 'yyyy-MM-dd'),
-        time: format(now, 'HH:mm'),
-        mealType: normalizedMealType as any,
-        name: parsedData.items.map(i => i.food_name).join(', '),
-        calories: parsedData.totals.calories,
-        protein: parsedData.totals.protein,
-        carbs: parsedData.totals.carbs,
-        fat: parsedData.totals.fat,
-        fiber: parsedData.totals.fiber
-      });
-
-      toast.success('Meal saved successfully!');
-      
-      // 3. Fire-and-forget IndexedDB update (Bypasses UI thread block completely)
-      const foods = parsedData.items.map(item => item.food_name);
-      mealRepository.saveMeal(foods).catch(historyErr => {
-        console.warn("Background auto-completion indexing bypassed:", historyErr);
-      });
-      
-      cleanupPreview();
-      setParsedData(null);
-      setRawInput('');
-      setUploadedImageUrl(null);
-      setLoggerState('idle');
-    } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      console.error('Error saving meal:', err);
-      toast.error(`Failed to save meal: ${errorMsg}`);
-    }
+    })();
   };
 
   const askAICoach = async (

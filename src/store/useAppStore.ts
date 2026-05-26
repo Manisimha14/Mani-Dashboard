@@ -4,7 +4,7 @@ import type {
   Book, LeetCodeProblem, FocusSession, Achievement,
   PomodoroSettings, UserSettings, StreakData, DailyActivity,
   Tracker, TrackerItem, LeetCodeStatus,
-  AppLink, LauncherState
+  AppLink, LauncherState, PomodoroMode
 } from '../types';
 import type { Reminder, AppNotification, ReminderSettings, ISODateString, HHMMString } from '../types/reminder';
 import { DEFAULT_ACHIEVEMENTS, BOOK_CHAPTERS } from '../lib/data';
@@ -108,6 +108,22 @@ interface AppStore {
   undoLastAction: () => void;
   deletedReports: string[];
   deleteReport: (reportKey: string) => void;
+
+  // Focus Timer state & actions
+  focusTimer: {
+    timeLeft: number;
+    isRunning: boolean;
+    mode: PomodoroMode;
+    taskName: string;
+    mood: string;
+    currentSession: Partial<FocusSession> | null;
+    endTime: number | null;
+    growthProgress: number;
+    sessionFailed: boolean;
+    sessionCount: number;
+    isZen: boolean;
+  };
+  setFocusTimerState: (updates: Partial<AppStore['focusTimer']>) => void;
 }
 
 const DEFAULT_BOOK: Book = {
@@ -153,6 +169,20 @@ const DEFAULT_USER_SETTINGS: UserSettings = {
   financeTransactions: '[]',
   financeBudgetLimit: 1000,
   pwaBadgingEnabled: true,
+};
+
+const DEFAULT_FOCUS_TIMER = {
+  timeLeft: 25 * 60,
+  isRunning: false,
+  mode: 'focus' as PomodoroMode,
+  taskName: '',
+  mood: '',
+  currentSession: null,
+  endTime: null,
+  growthProgress: 0,
+  sessionFailed: false,
+  sessionCount: 0,
+  isZen: false,
 };
 
 const DEFAULT_APP_LINKS: AppLink[] = [
@@ -203,10 +233,17 @@ export const useAppStore = create<AppStore>()(
       trackers: [],
       celebratingAchievement: null,
       deletedReports: [],
+      focusTimer: DEFAULT_FOCUS_TIMER,
 
       deleteReport: (reportKey) => {
         set(state => ({
           deletedReports: [...state.deletedReports, reportKey]
+        }));
+      },
+
+      setFocusTimerState: (updates) => {
+        set(state => ({
+          focusTimer: { ...state.focusTimer, ...updates }
         }));
       },
 
@@ -919,10 +956,37 @@ export const useAppStore = create<AppStore>()(
     }),
     {
       name: 'dashboard-storage',
+      version: 2,
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => {
         const { lastAction, ...rest } = state;
         return rest;
+      },
+      migrate: (persistedState: any, version: number) => {
+        if (version < 2) {
+          console.log(`Migrating dashboard store schema from version ${version} to 2`);
+          const defaultFocusTimer = {
+            timeLeft: 25 * 60,
+            isRunning: false,
+            mode: 'focus',
+            taskName: '',
+            mood: '',
+            currentSession: null,
+            endTime: null,
+            growthProgress: 0,
+            sessionFailed: false,
+            sessionCount: 0,
+            isZen: false,
+          };
+          
+          return {
+            ...persistedState,
+            focusTimer: persistedState && persistedState.focusTimer 
+              ? { ...defaultFocusTimer, ...persistedState.focusTimer } 
+              : defaultFocusTimer,
+          };
+        }
+        return persistedState;
       }
     }
   )

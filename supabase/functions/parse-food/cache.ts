@@ -1,6 +1,6 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
-export async function getCachedParseResult(supabase: any, hash: string): Promise<any | null> {
+export async function getCachedParseResult(supabase: SupabaseClient, hash: string): Promise<unknown | null> {
     try {
         const { data, error } = await supabase
             .from('meal_logs')
