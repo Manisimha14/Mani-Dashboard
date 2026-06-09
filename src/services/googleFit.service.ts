@@ -71,36 +71,36 @@ export function getGoogleFitSyncFeedback(error: unknown): GoogleFitSyncFeedback 
     case 'auth':
       return {
         code,
-        message: 'Google Fit authorization is unavailable or expired. No health data was synced.',
+        message: 'Google Fit authorization is unavailable or expired.\nClick "Reconnect Google Fit" below to re-grant fitness permissions.',
         canReconnect: true,
         canTroubleshoot: false,
       };
     case 'csp':
       return {
         code,
-        message: 'The browser blocked the Google Fit request due to site security policy (CSP). No health data was synced.',
-        canReconnect: false,
+        message: 'The browser blocked the Google Fit request (CSP). Try reconnecting your account.',
+        canReconnect: true,
         canTroubleshoot: true,
       };
     case 'network':
       return {
         code,
-        message: 'The sync request could not reach the server or Google Fit. No health data was synced.',
+        message: 'Could not reach the sync server. Check your connection and try again.',
         canReconnect: false,
         canTroubleshoot: true,
       };
     case 'api':
       return {
         code,
-        message: 'Google Fit returned an error while syncing today\'s data. No health data was synced.',
-        canReconnect: false,
+        message: 'Google Fit returned an error. Your fitness token may have expired — reconnect to fix this.',
+        canReconnect: true,
         canTroubleshoot: true,
       };
     default:
       return {
         code,
-        message: 'Google Fit sync failed. No health data was synced.',
-        canReconnect: false,
+        message: 'Google Fit sync failed. Click "Reconnect Google Fit" to re-authorize fitness permissions.',
+        canReconnect: true,
         canTroubleshoot: true,
       };
   }

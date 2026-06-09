@@ -302,6 +302,13 @@ export default function CalorieTracker({ today }: { today: string }) {
           >
             🔄 Sync from Google Fit
           </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+            onClick={() => { play('click'); reconnectGoogleFit(); }}
+            className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 flex items-center gap-1.5 hover:bg-emerald-500/20 transition-all cursor-pointer"
+          >
+            ⚡ Reconnect Google Fit
+          </motion.button>
         </div>
       </div>
 
