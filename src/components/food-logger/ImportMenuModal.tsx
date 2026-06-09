@@ -161,6 +161,53 @@ export function ImportMenuModal({ onClose, onLogDay }: ImportMenuModalProps) {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Load menu from localStorage on mount
+  useEffect(() => {
+    const stored = localStorage.getItem('weekly_menu');
+    if (stored) {
+      try {
+        const { days: storedDays, fileName: storedFileName, uploadedAt } = JSON.parse(stored);
+        const uploadDate = new Date(uploadedAt);
+        const now = new Date();
+        const diffMs = now.getTime() - uploadDate.getTime();
+        const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
+        if (diffMs < oneWeekMs && storedDays && storedDays.length > 0) {
+          setDays(storedDays);
+          setFileName(storedFileName || 'Stored Weekly Menu');
+          setPhase('ready');
+        } else {
+          localStorage.removeItem('weekly_menu');
+        }
+      } catch (e) {
+        console.error('Error loading stored menu:', e);
+      }
+    }
+  }, []);
+
+  // Save/sync menu to localStorage when ready
+  useEffect(() => {
+    if (phase === 'ready' && days.length > 0) {
+      const stored = localStorage.getItem('weekly_menu');
+      let uploadedAt = new Date().toISOString();
+      if (stored) {
+        try {
+          const parsedStored = JSON.parse(stored);
+          if (parsedStored.uploadedAt) {
+            uploadedAt = parsedStored.uploadedAt;
+          }
+        } catch (e) {}
+      }
+      localStorage.setItem(
+        'weekly_menu',
+        JSON.stringify({
+          days,
+          fileName,
+          uploadedAt,
+        })
+      );
+    }
+  }, [days, phase, fileName]);
+
   // Auto-scroll to current day card when analysis completes
   useEffect(() => {
     if (phase === 'ready' && days.length > 0) {
@@ -208,6 +255,15 @@ export function ImportMenuModal({ onClose, onLogDay }: ImportMenuModalProps) {
       setPhase('analyzing');
       const parsed = await parseWeeklyMenuWithAI(rawText);
       if (!parsed.length) throw new Error('No meals were detected. Please check the file format.');
+      
+      // Save to localStorage immediately upon successful AI parse
+      const payload = {
+        days: parsed,
+        fileName: file.name,
+        uploadedAt: new Date().toISOString()
+      };
+      localStorage.setItem('weekly_menu', JSON.stringify(payload));
+      
       setDays(parsed);
       setPhase('ready');
     } catch (err: any) {
@@ -528,7 +584,12 @@ export function ImportMenuModal({ onClose, onLogDay }: ImportMenuModalProps) {
                     <span className="text-xs text-zinc-300 font-medium truncate max-w-[200px]">{fileName}</span>
                   </div>
                   <button
-                    onClick={() => { setPhase('idle'); setDays([]); setFileName(''); }}
+                    onClick={() => {
+                      localStorage.removeItem('weekly_menu');
+                      setPhase('idle');
+                      setDays([]);
+                      setFileName('');
+                    }}
                     className="text-xs text-zinc-500 hover:text-white transition-colors flex items-center gap-1"
                   >
                     <Upload size={10} /> Change file
