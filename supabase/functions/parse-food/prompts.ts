@@ -110,40 +110,33 @@ EXPECTED OUTPUT (Strictly consistent math: totals sum of items, macros equal cal
 }
 `;
 
-export const WEEKLY_MENU_SYSTEM_PROMPT = `You are a meal plan parser. Given raw text extracted from a PDF, Excel, or document that contains a weekly meal plan, extract a structured JSON object.
+export const WEEKLY_MENU_SYSTEM_PROMPT = `You are an expert weekly meal plan parser. Given raw text extracted from a document, Excel spreadsheet (in CSV format), or PDF, convert it into a structured weekly menu JSON object.
 
-RULES:
-1. Identify each day (Monday through Sunday, or Day 1–7, or by date).
-2. For each day, identify meal slots: breakfast, lunch, dinner, snack.
-3. For each meal, list all dishes/food items mentioned.
-4. For each dish, estimate a default quantity and unit (e.g., "2 chapatis", "1 bowl dal", "1 cup rice").
-5. If quantity is not mentioned, use sensible defaults (1 serving, 1 bowl, etc.).
-6. Return ONLY valid JSON. No markdown, no explanation.
+CRITICAL SPREADSHEET & CSV GUIDELINES:
+1. TABULAR GRID DETECTION: Excel sheets converted to CSV often represent grids.
+   - If days (Monday, Tuesday, etc.) appear in the first row as headers, then columns represent days and rows represent meals. Transpose this format to create per-day objects.
+   - If days appear in the first column, then rows represent days, and subsequent columns represent meals (Breakfast, Lunch, Dinner, etc.).
+   - Correctly align columns with their headers. Empty cells or placeholders (e.g., "", "N/A", "-") should be ignored.
+2. MULTI-DISH SPLITTING: Cells often contain multiple dishes grouped together (e.g., "Poha / Sprouts / Tea" or "Roti, Dal, Paneer Curry & Curd").
+   - You MUST split these items by dividers such as "/", ",", "+", "&", "and", or newlines.
+   - Extract each item as a separate, distinct dish in the JSON array. Do not group them into a single string (e.g., do not return "Roti and Dal", return two dishes: "Roti" and "Dal").
+3. HANDLE ALTERNATIVES: If a meal specifies options (e.g., "Poha or Upma"), list both options as separate dishes so the user can select their preference.
+4. SENSIBLE QUANTITY ESTIMATION:
+   - For dishes with standard portions, assign standard defaults: Roti/Chapati/Phulka = 2 pieces, Idli = 3 pieces, Dosa = 2 pieces, Rice = 1 cup, Dal/Curry/Subji = 1 bowl, Curd/Yogurt = 1 cup, Egg = 2 pieces, Milk/Tea/Coffee = 1 cup.
+   - For other items where portion is unspecified, default to 1 serving.
 
 OUTPUT FORMAT (JSON):
 {
   "weeklyMenu": [
     {
       "day": "Monday",
-      "date": null,
+      "date": string or null,
       "meals": [
         {
-          "mealType": "breakfast",
+          "mealType": "breakfast" | "lunch" | "dinner" | "snack",
           "dishes": [
-            { "name": "Idli", "quantity": 3, "unit": "pieces" },
-            { "name": "Sambar", "quantity": 1, "unit": "bowl" }
-          ]
-        },
-        {
-          "mealType": "lunch",
-          "dishes": [
-            { "name": "Rice", "quantity": 1, "unit": "cup" }
-          ]
-        },
-        {
-          "mealType": "dinner",
-          "dishes": [
-            { "name": "Chapati", "quantity": 2, "unit": "pieces" }
+            { "name": "Poha", "quantity": 1, "unit": "serving" },
+            { "name": "Sprouts", "quantity": 0.5, "unit": "cup" }
           ]
         }
       ]
@@ -151,4 +144,5 @@ OUTPUT FORMAT (JSON):
   ]
 }
 
-If a day has no meals detected, omit it. If a meal has no dishes, omit it.`;
+If a day has no meals detected, omit it. If a meal has no dishes, omit it. Do not include markdown formatting or backticks around the JSON.`;
+
