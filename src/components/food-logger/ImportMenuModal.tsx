@@ -102,33 +102,15 @@ async function extractTextFromFile(file: File): Promise<string> {
   return await file.text();
 }
 
-// ─── Read image file as base64 ───────────────────────────────────────────────
-
-async function readImageAsBase64(file: File): Promise<{ data: string; mimeType: string }> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      // result is "data:image/png;base64,XXXXXXX"
-      const base64 = result.split(',')[1];
-      resolve({ data: base64, mimeType: file.type || 'image/jpeg' });
-    };
-    reader.onerror = () => reject(new Error('Failed to read image file.'));
-    reader.readAsDataURL(file);
-  });
-}
-
 // ─── Call AI to parse weekly menu ────────────────────────────────────────────
 
 async function parseWeeklyMenuWithAI(
-  rawText: string,
-  image?: { data: string; mimeType: string }
+  rawText: string
 ): Promise<ImportedDay[]> {
   const { data, error } = await supabase.functions.invoke('parse-food', {
     body: {
-      input: rawText || 'Parse this weekly meal plan image.',
+      input: rawText,
       importMode: 'weekly_menu',
-      ...(image ? { menuImage: image } : {}),
     },
   });
 
@@ -168,14 +150,12 @@ export function ImportMenuModal({ onClose, onLogDay }: ImportMenuModalProps) {
   // ── File processing ──────────────────────────────────────────────────────
 
   const processFile = async (file: File) => {
-    const IMAGE_TYPES = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
-    const DOC_TYPES   = ['pdf', 'xlsx', 'xls', 'csv', 'txt'];
-    const ext = (file.name.split('.').pop()?.toLowerCase() || '').replace('jpeg','jpg');
-    const isImage = IMAGE_TYPES.includes(ext) || file.type.startsWith('image/');
-    const isDoc   = DOC_TYPES.includes(ext);
+    const DOC_TYPES = ['pdf', 'xlsx', 'xls', 'csv', 'txt'];
+    const ext = (file.name.split('.').pop()?.toLowerCase() || '');
+    const isDoc = DOC_TYPES.includes(ext);
 
-    if (!isImage && !isDoc) {
-      toast.error('Unsupported file. Upload a photo (PNG/JPG), PDF, Excel, CSV, or TXT.');
+    if (!isDoc) {
+      toast.error('Unsupported file. Upload a PDF, Excel, CSV, or TXT.');
       return;
     }
     if (file.size > 20 * 1024 * 1024) {
@@ -188,24 +168,14 @@ export function ImportMenuModal({ onClose, onLogDay }: ImportMenuModalProps) {
     setPhase('reading');
 
     try {
-      if (isImage) {
-        // Image path: read as base64 and send directly to Gemini Vision
-        const imageData = await readImageAsBase64(file);
-        setPhase('analyzing');
-        const parsed = await parseWeeklyMenuWithAI('', imageData);
-        if (!parsed.length) throw new Error('No meals detected in the image. Make sure the photo shows a meal plan table with day and meal labels.');
-        setDays(parsed);
-        setPhase('ready');
-      } else {
-        // Document path: extract text first, then AI
-        const rawText = await extractTextFromFile(file);
-        if (!rawText.trim()) throw new Error('File appears to be empty or unreadable.');
-        setPhase('analyzing');
-        const parsed = await parseWeeklyMenuWithAI(rawText);
-        if (!parsed.length) throw new Error('No meals were detected. Please check the file format.');
-        setDays(parsed);
-        setPhase('ready');
-      }
+      // Document path: extract text first, then AI
+      const rawText = await extractTextFromFile(file);
+      if (!rawText.trim()) throw new Error('File appears to be empty or unreadable.');
+      setPhase('analyzing');
+      const parsed = await parseWeeklyMenuWithAI(rawText);
+      if (!parsed.length) throw new Error('No meals were detected. Please check the file format.');
+      setDays(parsed);
+      setPhase('ready');
     } catch (err: any) {
       console.error('Menu import error:', err);
       setErrorMsg(err.message || 'Failed to analyze menu.');
@@ -383,7 +353,7 @@ export function ImportMenuModal({ onClose, onLogDay }: ImportMenuModalProps) {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".pdf,.xlsx,.xls,.csv,.txt,.png,.jpg,.jpeg,.webp,image/*"
+                  accept=".pdf,.xlsx,.xls,.csv,.txt"
                   onChange={handleFileChange}
                   className="hidden"
                 />
@@ -403,12 +373,10 @@ export function ImportMenuModal({ onClose, onLogDay }: ImportMenuModalProps) {
                   </div>
                   <div className="text-center">
                     <p className="text-white font-bold text-sm">Drop your weekly menu here</p>
-                    <p className="text-zinc-500 text-xs mt-1">Photo, PDF, Excel (.xlsx), CSV, or plain text</p>
+                    <p className="text-zinc-500 text-xs mt-1">PDF, Excel (.xlsx/.xls), CSV, or plain text</p>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap justify-center">
                     {[
-                      { label: 'PNG', icon: <Image size={9} /> },
-                      { label: 'JPG', icon: <Image size={9} /> },
                       { label: 'PDF', icon: null },
                       { label: 'XLSX', icon: null },
                       { label: 'CSV', icon: null },
@@ -437,7 +405,6 @@ export function ImportMenuModal({ onClose, onLogDay }: ImportMenuModalProps) {
                 <div className="mt-5 p-4 rounded-xl bg-zinc-900/60 border border-zinc-800/40">
                   <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold mb-2">💡 Tips for best results</p>
                   <ul className="space-y-1 text-xs text-zinc-500">
-                    <li>• <span className="text-cyan-400 font-semibold">Photo works great!</span> Take a clear photo of the menu board or printed sheet</li>
                     <li>• Include day names (Monday, Tuesday…) or dates in the menu</li>
                     <li>• Label meals as Breakfast / Lunch / Dinner</li>
                     <li>• Quantities like "2 chapatis", "1 bowl dal" help the AI</li>

@@ -2,7 +2,7 @@ import { PARSE_SYSTEM_PROMPT } from "../prompts.ts";
 
 const GEMINI_TIMEOUT_MS = 3000;
 const MENU_PARSE_TIMEOUT_MS = 25000;  // Menus need more time
-const MODEL = "gemini-1.5-flash";
+const MODEL = "gemini-1.5-flash-latest";
 
 export async function parseWithGemini(
     input: string, 
