@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { normalizeInput, generateInputHash } from "./normalizer.ts";
 import { getCachedParseResult } from "./cache.ts";
-import { parseWithGroq } from "./providers/groq.ts";
+import { parseWithGroq, parseWeeklyMenuWithGroq } from "./providers/groq.ts";
 import { parseWithGemini, parseWeeklyMenuWithGemini } from "./providers/gemini.ts";
 import { validateNutrition } from "./validators/nutrition.ts";
 
@@ -36,20 +36,39 @@ serve(async (req) => {
             }
 
             const geminiKey = Deno.env.get('GEMINI_API_KEY');
-            if (!geminiKey) {
-                return new Response(JSON.stringify({ error: 'GEMINI_API_KEY not configured' }), {
+            const groqKey = Deno.env.get('GROQ_API_KEY');
+
+            if (!geminiKey && !groqKey) {
+                return new Response(JSON.stringify({ error: 'Neither GEMINI_API_KEY nor GROQ_API_KEY is configured' }), {
                     status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
                 });
             }
 
-            const result = await parseWeeklyMenuWithGemini(menuText, geminiKey, menuImage);
-            if (result.error || !result.weeklyMenu) {
-                return new Response(JSON.stringify({ error: result.error || 'Menu parsing failed' }), {
+            let result;
+            let usedFallback = false;
+
+            // Try Gemini first
+            if (geminiKey) {
+                result = await parseWeeklyMenuWithGemini(menuText, geminiKey, menuImage);
+            }
+
+            // Fallback to Groq if Gemini fails/isn't configured and we have a text menu
+            if ((!result || result.error || !result.weeklyMenu) && groqKey && !menuImage) {
+                console.log(`Weekly menu parsing failed on Gemini. Falling back to Groq. Gemini Error: ${result?.error}`);
+                result = await parseWeeklyMenuWithGroq(menuText, groqKey);
+                usedFallback = true;
+            }
+
+            if (!result || result.error || !result.weeklyMenu) {
+                return new Response(JSON.stringify({ error: result?.error || 'Menu parsing failed on all providers' }), {
                     status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
                 });
             }
 
-            return new Response(JSON.stringify({ weeklyMenu: result.weeklyMenu }), {
+            return new Response(JSON.stringify({ 
+                weeklyMenu: result.weeklyMenu,
+                meta: { provider: usedFallback ? 'groq' : 'gemini' }
+            }), {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' }
             });
         }

@@ -110,3 +110,45 @@ EXPECTED OUTPUT (Strictly consistent math: totals sum of items, macros equal cal
 }
 `;
 
+export const WEEKLY_MENU_SYSTEM_PROMPT = `You are a meal plan parser. Given raw text extracted from a PDF, Excel, or document that contains a weekly meal plan, extract a structured JSON object.
+
+RULES:
+1. Identify each day (Monday through Sunday, or Day 1–7, or by date).
+2. For each day, identify meal slots: breakfast, lunch, dinner, snack.
+3. For each meal, list all dishes/food items mentioned.
+4. For each dish, estimate a default quantity and unit (e.g., "2 chapatis", "1 bowl dal", "1 cup rice").
+5. If quantity is not mentioned, use sensible defaults (1 serving, 1 bowl, etc.).
+6. Return ONLY valid JSON. No markdown, no explanation.
+
+OUTPUT FORMAT (JSON):
+{
+  "weeklyMenu": [
+    {
+      "day": "Monday",
+      "date": null,
+      "meals": [
+        {
+          "mealType": "breakfast",
+          "dishes": [
+            { "name": "Idli", "quantity": 3, "unit": "pieces" },
+            { "name": "Sambar", "quantity": 1, "unit": "bowl" }
+          ]
+        },
+        {
+          "mealType": "lunch",
+          "dishes": [
+            { "name": "Rice", "quantity": 1, "unit": "cup" }
+          ]
+        },
+        {
+          "mealType": "dinner",
+          "dishes": [
+            { "name": "Chapati", "quantity": 2, "unit": "pieces" }
+          ]
+        }
+      ]
+    }
+  ]
+}
+
+If a day has no meals detected, omit it. If a meal has no dishes, omit it.`;
