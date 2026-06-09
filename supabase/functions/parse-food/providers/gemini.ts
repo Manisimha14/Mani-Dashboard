@@ -125,7 +125,8 @@ If a day has no meals detected, omit it. If a meal has no dishes, omit it.`;
 
 export async function parseWeeklyMenuWithGemini(
     menuText: string,
-    apiKey: string
+    apiKey: string,
+    image?: { data: string; mimeType: string }
 ): Promise<{ weeklyMenu?: unknown[]; latency: number; error?: string }> {
     const startTime = Date.now();
     const controller = new AbortController();
@@ -134,6 +135,25 @@ export async function parseWeeklyMenuWithGemini(
     try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${apiKey}`;
 
+        // Build the content parts — image takes priority, text is supplementary
+        const userParts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [];
+
+        if (image) {
+            userParts.push({
+                inlineData: {
+                    mimeType: image.mimeType,
+                    data: image.data
+                }
+            });
+            userParts.push({
+                text: menuText || 'This is a weekly meal plan. Extract all days, meals (breakfast/lunch/dinner), and dishes with quantities.'
+            });
+        } else {
+            userParts.push({
+                text: `Parse the following weekly meal plan:\n\n${menuText.slice(0, 15000)}`
+            });
+        }
+
         const response = await fetch(url, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -141,11 +161,7 @@ export async function parseWeeklyMenuWithGemini(
                 system_instruction: {
                     parts: [{ text: WEEKLY_MENU_SYSTEM_PROMPT }]
                 },
-                contents: [{
-                    parts: [{
-                        text: `Parse the following weekly meal plan:\n\n${menuText.slice(0, 15000)}`
-                    }]
-                }],
+                contents: [{ parts: userParts }],
                 generationConfig: {
                     responseMimeType: "application/json",
                     temperature: 0.1,
@@ -186,3 +202,4 @@ export async function parseWeeklyMenuWithGemini(
         };
     }
 }
+

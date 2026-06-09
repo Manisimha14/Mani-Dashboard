@@ -24,11 +24,13 @@ serve(async (req) => {
             });
         }
 
-        // ── Weekly Menu Import Mode ────────────────────────────────────────────
+        // ── Weekly Menu Import Mode ────────────────────────────────────────────────
         if (body.importMode === 'weekly_menu') {
             const menuText = typeof body.input === 'string' ? body.input : '';
-            if (!menuText.trim()) {
-                return new Response(JSON.stringify({ error: 'No menu text provided for weekly import' }), {
+            const menuImage = body.menuImage as { data: string; mimeType: string } | undefined;
+
+            if (!menuText.trim() && !menuImage) {
+                return new Response(JSON.stringify({ error: 'No menu text or image provided for weekly import' }), {
                     status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
                 });
             }
@@ -40,7 +42,7 @@ serve(async (req) => {
                 });
             }
 
-            const result = await parseWeeklyMenuWithGemini(menuText, geminiKey);
+            const result = await parseWeeklyMenuWithGemini(menuText, geminiKey, menuImage);
             if (result.error || !result.weeklyMenu) {
                 return new Response(JSON.stringify({ error: result.error || 'Menu parsing failed' }), {
                     status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -51,7 +53,7 @@ serve(async (req) => {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' }
             });
         }
-        // ── End Weekly Menu Import Mode ───────────────────────────────────────
+        // ── End Weekly Menu Import Mode ───────────────────────────────────────────────
 
         const { input, image, mealTypeHint } = body;
         const hasImage = !!(image && image.data && image.mimeType);
