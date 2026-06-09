@@ -23,7 +23,7 @@ export default function CalorieTracker({ today }: { today: string }) {
   const deleteMealMut          = useDeleteMeal();
   const toggleFavMut           = useToggleMealFavorite();
 
-  const { user, signInWithGoogle } = useAuth();
+  const { user, reconnectGoogleFit } = useAuth();
   const { play } = useSoundFX();
   const logStepsMut = useLogSteps();
   const addWorkoutMut = useAddWorkout();
@@ -55,7 +55,10 @@ export default function CalorieTracker({ today }: { today: string }) {
     play('click');
 
     try {
+      setSyncStepIndex(1); play('click');
       const data = await fetchTodayGoogleFitData();
+
+      setSyncStepIndex(2); play('click');
       logStepsMut.mutate({ date: today, steps: data.steps });
 
       const existingSync = workouts.find(w =>
@@ -63,10 +66,9 @@ export default function CalorieTracker({ today }: { today: string }) {
         w.name === 'Google Fit Synced Walk' ||
         w.name === 'Google Fit Synced Walk (Simulated)'
       );
-      if (existingSync) {
-        deleteWorkoutMut.mutate(existingSync.id);
-      }
+      if (existingSync) deleteWorkoutMut.mutate(existingSync.id);
 
+      setSyncStepIndex(3); play('click');
       addWorkoutMut.mutate({
         date: today,
         startTime: '08:30',
@@ -76,37 +78,16 @@ export default function CalorieTracker({ today }: { today: string }) {
         caloriesBurned: data.calories,
         notes: `Synced from Google Fit — ${data.steps.toLocaleString()} steps, ${data.activeMinutes} active minutes.`
       });
+
+      setSyncStepIndex(4);
+      setTimeout(() => { setIsSyncingFit(false); play('success'); }, 600);
     } catch (err: any) {
       console.error('Failed to fetch Google Fit data:', err);
-      setTimeout(() => {
-        setIsSyncingFit(false);
-        setSyncError(getGoogleFitSyncFeedback(err));
-        play('click');
-      }, 1200);
+      setIsSyncingFit(false);
+      setSyncError(getGoogleFitSyncFeedback(err));
+      play('click');
     }
   };
-
-  // Sync step sequencer animation
-  React.useEffect(() => {
-    if (!isSyncingFit) return;
-    const timer = setInterval(() => {
-      setSyncStepIndex(prev => {
-        if (prev >= 3) {
-          clearInterval(timer);
-          
-          setTimeout(() => {
-            setIsSyncingFit(false);
-            play('success');
-          }, 300);
-          return prev;
-        }
-        play('click');
-        return prev + 1;
-      });
-    }, 250); // High performance, snappy 250ms transition intervals
-
-    return () => clearInterval(timer);
-  }, [isSyncingFit]);
 
   const [expandedMeal, setExpandedMeal] = useState<MealType | null>('breakfast');
 
@@ -249,13 +230,10 @@ export default function CalorieTracker({ today }: { today: string }) {
               </button>
               {syncError.canReconnect && (
                 <button
-                  onClick={() => {
-                    play('click');
-                    signInWithGoogle();
-                  }}
+                  onClick={() => { play('click'); reconnectGoogleFit(); }}
                   className="px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/35 border border-rose-500/30 text-white font-bold transition-all text-[11px] flex items-center gap-1.5 cursor-pointer"
                 >
-                  Reconnect Google
+                  ⚡ Reconnect Google Fit
                 </button>
               )}
               {syncError.canTroubleshoot && (

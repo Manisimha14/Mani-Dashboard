@@ -1,0 +1,670 @@
+import React, { useState, useRef, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  X, FileText, Upload, Sparkles, ChevronDown, ChevronUp,
+  Check, Minus, Plus, Calendar, Coffee, Sun, Moon,
+  AlertTriangle, Loader2, FileSpreadsheet
+} from 'lucide-react';
+import { supabase } from '../../lib/supabase';
+import { toast } from 'react-hot-toast';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export type ImportedDish = {
+  id: string;
+  name: string;
+  quantity: number;
+  unit: string;
+  selected: boolean;
+};
+
+export type ImportedMealSlot = {
+  mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+  dishes: ImportedDish[];
+};
+
+export type ImportedDay = {
+  dayName: string;       // e.g. "Monday"
+  dayDate?: string;      // e.g. "2024-06-10" if parseable
+  meals: ImportedMealSlot[];
+  expanded: boolean;
+};
+
+type ImportPhase = 'idle' | 'reading' | 'analyzing' | 'ready' | 'error';
+
+type ImportMenuModalProps = {
+  onClose: () => void;
+  onLogDay: (dayName: string, mealType: string, dishes: ImportedDish[]) => void;
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const MEAL_ICONS: Record<string, React.ReactNode> = {
+  breakfast: <Coffee size={14} className="text-amber-400" />,
+  lunch:     <Sun     size={14} className="text-yellow-400" />,
+  dinner:    <Moon    size={14} className="text-indigo-400" />,
+  snack:     <Sparkles size={14} className="text-pink-400" />,
+};
+
+const MEAL_COLORS: Record<string, string> = {
+  breakfast: 'from-amber-500/10 to-orange-500/5 border-amber-500/20',
+  lunch:     'from-yellow-500/10 to-green-500/5 border-yellow-500/20',
+  dinner:    'from-indigo-500/10 to-purple-500/5 border-indigo-500/20',
+  snack:     'from-pink-500/10 to-rose-500/5 border-pink-500/20',
+};
+
+const MEAL_BADGE: Record<string, string> = {
+  breakfast: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+  lunch:     'bg-yellow-500/20 text-yellow-300 border-yellow-500/30',
+  dinner:    'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
+  snack:     'bg-pink-500/20 text-pink-300 border-pink-500/30',
+};
+
+// ─── Extract text from uploaded file ─────────────────────────────────────────
+
+async function extractTextFromFile(file: File): Promise<string> {
+  const ext = file.name.split('.').pop()?.toLowerCase();
+
+  if (ext === 'pdf') {
+    // Lazy-import pdfjs-dist
+    const pdfjsLib = await import('pdfjs-dist');
+    // Use the bundled worker
+    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+      'pdfjs-dist/build/pdf.worker.min.mjs',
+      import.meta.url
+    ).toString();
+
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let fullText = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      fullText += content.items.map((item: any) => item.str).join(' ') + '\n';
+    }
+    return fullText;
+  }
+
+  if (ext === 'xlsx' || ext === 'xls' || ext === 'csv') {
+    const XLSX = await import('xlsx');
+    const arrayBuffer = await file.arrayBuffer();
+    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+    let text = '';
+    workbook.SheetNames.forEach(sheetName => {
+      const sheet = workbook.Sheets[sheetName];
+      text += `Sheet: ${sheetName}\n`;
+      text += XLSX.utils.sheet_to_csv(sheet) + '\n\n';
+    });
+    return text;
+  }
+
+  // Plain text / CSV fallback
+  return await file.text();
+}
+
+// ─── Call AI to parse weekly menu ────────────────────────────────────────────
+
+async function parseWeeklyMenuWithAI(rawText: string): Promise<ImportedDay[]> {
+  const { data, error } = await supabase.functions.invoke('parse-food', {
+    body: {
+      input: rawText,
+      importMode: 'weekly_menu',
+    },
+  });
+
+  if (error) throw new Error(error.message || 'AI parsing failed');
+  if (data?.error) throw new Error(data.error);
+  if (!data?.weeklyMenu) throw new Error('No weekly menu returned from AI');
+
+  // Map AI response to our typed structure
+  return (data.weeklyMenu as any[]).map((day: any, di: number): ImportedDay => ({
+    dayName: day.day || `Day ${di + 1}`,
+    dayDate: day.date,
+    expanded: di === 0,
+    meals: (day.meals || []).map((meal: any): ImportedMealSlot => ({
+      mealType: meal.mealType || 'snack',
+      dishes: (meal.dishes || []).map((dish: any, idx: number): ImportedDish => ({
+        id: `${di}-${meal.mealType}-${idx}`,
+        name: dish.name || 'Unknown dish',
+        quantity: Number(dish.quantity) || 1,
+        unit: dish.unit || 'serving',
+        selected: true,
+      })),
+    })).filter((m: ImportedMealSlot) => m.dishes.length > 0),
+  }));
+}
+
+// ─── Main Modal Component ─────────────────────────────────────────────────────
+
+export function ImportMenuModal({ onClose, onLogDay }: ImportMenuModalProps) {
+  const [phase, setPhase] = useState<ImportPhase>('idle');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [days, setDays] = useState<ImportedDay[]>([]);
+  const [fileName, setFileName] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ── File processing ──────────────────────────────────────────────────────
+
+  const processFile = async (file: File) => {
+    const allowedExts = ['pdf', 'xlsx', 'xls', 'csv', 'txt'];
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    if (!allowedExts.includes(ext)) {
+      toast.error('Unsupported file. Upload PDF, Excel (xlsx/xls), CSV, or TXT.');
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      toast.error('File too large. Maximum is 20MB.');
+      return;
+    }
+
+    setFileName(file.name);
+    setErrorMsg('');
+    setPhase('reading');
+
+    try {
+      const rawText = await extractTextFromFile(file);
+      if (!rawText.trim()) throw new Error('File appears to be empty or unreadable.');
+
+      setPhase('analyzing');
+      const parsed = await parseWeeklyMenuWithAI(rawText);
+      if (!parsed.length) throw new Error('No meals were detected. Please check the file format.');
+
+      setDays(parsed);
+      setPhase('ready');
+    } catch (err: any) {
+      console.error('Menu import error:', err);
+      setErrorMsg(err.message || 'Failed to analyze menu.');
+      setPhase('error');
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processFile(file);
+    e.target.value = '';
+  };
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) processFile(file);
+  }, []);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => setIsDragging(false);
+
+  // ── Day/dish state manipulation ──────────────────────────────────────────
+
+  const toggleDay = (di: number) => {
+    setDays(prev => prev.map((d, i) => i === di ? { ...d, expanded: !d.expanded } : d));
+  };
+
+  const toggleDish = (di: number, mi: number, idx: number) => {
+    setDays(prev => prev.map((d, i) => {
+      if (i !== di) return d;
+      return {
+        ...d,
+        meals: d.meals.map((m, j) => {
+          if (j !== mi) return m;
+          return {
+            ...m,
+            dishes: m.dishes.map((dish, k) =>
+              k === idx ? { ...dish, selected: !dish.selected } : dish
+            ),
+          };
+        }),
+      };
+    }));
+  };
+
+  const updateQuantity = (di: number, mi: number, idx: number, delta: number) => {
+    setDays(prev => prev.map((d, i) => {
+      if (i !== di) return d;
+      return {
+        ...d,
+        meals: d.meals.map((m, j) => {
+          if (j !== mi) return m;
+          return {
+            ...m,
+            dishes: m.dishes.map((dish, k) => {
+              if (k !== idx) return dish;
+              return { ...dish, quantity: Math.max(0.5, Math.round((dish.quantity + delta) * 10) / 10) };
+            }),
+          };
+        }),
+      };
+    }));
+  };
+
+  const setQuantityDirect = (di: number, mi: number, idx: number, val: string) => {
+    const num = parseFloat(val);
+    if (!isNaN(num) && num > 0) {
+      setDays(prev => prev.map((d, i) => {
+        if (i !== di) return d;
+        return {
+          ...d,
+          meals: d.meals.map((m, j) => {
+            if (j !== mi) return m;
+            return {
+              ...m,
+              dishes: m.dishes.map((dish, k) =>
+                k === idx ? { ...dish, quantity: num } : dish
+              ),
+            };
+          }),
+        };
+      }));
+    }
+  };
+
+  const selectAllInMeal = (di: number, mi: number, selected: boolean) => {
+    setDays(prev => prev.map((d, i) => {
+      if (i !== di) return d;
+      return {
+        ...d,
+        meals: d.meals.map((m, j) => {
+          if (j !== mi) return m;
+          return { ...m, dishes: m.dishes.map(dish => ({ ...dish, selected })) };
+        }),
+      };
+    }));
+  };
+
+  const logMeal = (day: ImportedDay, meal: ImportedMealSlot) => {
+    const selected = meal.dishes.filter(d => d.selected);
+    if (!selected.length) {
+      toast.error('No dishes selected for this meal.');
+      return;
+    }
+    onLogDay(day.dayName, meal.mealType, selected);
+    toast.success(`${day.dayName} ${meal.mealType} logged! 🎉`);
+    // Mark as logged by deselecting all
+    setDays(prev => prev.map(d => {
+      if (d.dayName !== day.dayName) return d;
+      return {
+        ...d,
+        meals: d.meals.map(m => {
+          if (m.mealType !== meal.mealType) return m;
+          return { ...m, dishes: m.dishes.map(dish => ({ ...dish, selected: false })) };
+        }),
+      };
+    }));
+  };
+
+  // ─── Render ────────────────────────────────────────────────────────────────
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <motion.div
+        initial={{ scale: 0.93, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.93, y: 20 }}
+        transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+        className="w-full max-w-2xl max-h-[90vh] flex flex-col bg-[#141417] border border-zinc-800 rounded-3xl shadow-[0_30px_80px_rgba(0,0,0,0.6)] overflow-hidden"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800/60 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-500/20 to-purple-500/20 border border-cyan-500/20 flex items-center justify-center">
+              <FileText size={18} className="text-cyan-400" />
+            </div>
+            <div>
+              <h2 className="text-sm font-black text-white tracking-tight">Import Weekly Menu</h2>
+              <p className="text-[10px] text-zinc-500 mt-0.5">Upload PDF or Excel — AI detects days &amp; meals</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-xl text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto">
+
+          {/* ── Upload Zone (idle / error) ── */}
+          <AnimatePresence mode="wait">
+            {(phase === 'idle' || phase === 'error') && (
+              <motion.div
+                key="upload"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="p-6"
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.xlsx,.xls,.csv,.txt"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  onDrop={handleDrop}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  className={`relative border-2 border-dashed rounded-2xl p-10 flex flex-col items-center justify-center gap-4 cursor-pointer transition-all duration-200
+                    ${isDragging
+                      ? 'border-cyan-400/60 bg-cyan-500/5 scale-[1.01]'
+                      : 'border-zinc-700/60 hover:border-cyan-500/40 hover:bg-cyan-500/3'
+                    }`}
+                >
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-cyan-500/10 to-purple-500/10 border border-cyan-500/20 flex items-center justify-center">
+                    <Upload size={28} className="text-cyan-400" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-white font-bold text-sm">Drop your weekly menu here</p>
+                    <p className="text-zinc-500 text-xs mt-1">Supports PDF, Excel (.xlsx), CSV, or plain text</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {['PDF', 'XLSX', 'XLS', 'CSV'].map(fmt => (
+                      <span key={fmt} className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-400">
+                        {fmt}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {phase === 'error' && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-4 p-4 rounded-xl bg-rose-500/10 border border-rose-500/25 flex items-start gap-3"
+                  >
+                    <AlertTriangle size={16} className="text-rose-400 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-rose-300 text-xs font-bold">Analysis Failed</p>
+                      <p className="text-rose-400/70 text-xs mt-0.5">{errorMsg}</p>
+                    </div>
+                  </motion.div>
+                )}
+
+                <div className="mt-5 p-4 rounded-xl bg-zinc-900/60 border border-zinc-800/40">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold mb-2">💡 Tips for best results</p>
+                  <ul className="space-y-1 text-xs text-zinc-500">
+                    <li>• Include day names (Monday, Tuesday…) or dates in the menu</li>
+                    <li>• Label meals as Breakfast / Lunch / Dinner</li>
+                    <li>• Quantities like "2 chapatis", "1 bowl dal" help the AI</li>
+                  </ul>
+                </div>
+              </motion.div>
+            )}
+
+            {/* ── Reading / Analyzing Phase ── */}
+            {(phase === 'reading' || phase === 'analyzing') && (
+              <motion.div
+                key="loading"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="p-6 flex flex-col items-center justify-center gap-6 min-h-[300px]"
+              >
+                <div className="relative w-20 h-20">
+                  <div className="absolute inset-0 rounded-full bg-gradient-to-br from-cyan-500/20 to-purple-500/20 animate-pulse" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    {phase === 'reading' ? (
+                      <FileSpreadsheet size={32} className="text-cyan-400" />
+                    ) : (
+                      <Sparkles size={32} className="text-purple-400 animate-spin-slow" />
+                    )}
+                  </div>
+                  <svg className="absolute inset-0 w-full h-full animate-spin" viewBox="0 0 80 80">
+                    <circle cx="40" cy="40" r="36" fill="none" stroke="url(#importGrad)" strokeWidth="3"
+                      strokeDasharray="150" strokeDashoffset="100" strokeLinecap="round" />
+                    <defs>
+                      <linearGradient id="importGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stopColor="#22d3ee" />
+                        <stop offset="100%" stopColor="#a855f7" />
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                </div>
+
+                <div className="text-center">
+                  <p className="text-white font-black text-sm">
+                    {phase === 'reading' ? `Reading "${fileName}"…` : 'AI is analyzing your menu…'}
+                  </p>
+                  <p className="text-zinc-500 text-xs mt-1">
+                    {phase === 'reading'
+                      ? 'Extracting text from file'
+                      : 'Identifying days, meals, and dishes'}
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-2 w-full max-w-sm">
+                  {[
+                    { label: 'Reading file', done: true },
+                    { label: 'Extracting text content', done: phase === 'analyzing' },
+                    { label: 'AI detecting daily meal structure', done: false, active: phase === 'analyzing' },
+                    { label: 'Mapping dishes to nutrition data', done: false },
+                  ].map((step, i) => (
+                    <div key={i} className={`flex items-center gap-2.5 text-xs transition-opacity duration-300 ${step.done ? 'opacity-100' : step.active ? 'opacity-100' : 'opacity-25'}`}>
+                      <div className={`w-4 h-4 rounded-full flex items-center justify-center border text-[8px] font-black shrink-0
+                        ${step.done ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400'
+                          : step.active ? 'bg-cyan-500/20 border-cyan-500/30 text-cyan-400'
+                            : 'bg-white/5 border-white/10 text-white/20'}`}
+                      >
+                        {step.done ? '✓' : step.active ? <Loader2 size={8} className="animate-spin" /> : i + 1}
+                      </div>
+                      <span className={step.done ? 'text-emerald-400 font-semibold' : step.active ? 'text-white font-semibold' : 'text-white/30'}>
+                        {step.label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+
+            {/* ── Ready — Day/Meal Breakdown ── */}
+            {phase === 'ready' && (
+              <motion.div
+                key="ready"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="p-4 space-y-3"
+              >
+                {/* File pill */}
+                <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-zinc-900/60 border border-zinc-800/40">
+                  <div className="flex items-center gap-2">
+                    <FileText size={13} className="text-cyan-400" />
+                    <span className="text-xs text-zinc-300 font-medium truncate max-w-[200px]">{fileName}</span>
+                  </div>
+                  <button
+                    onClick={() => { setPhase('idle'); setDays([]); setFileName(''); }}
+                    className="text-xs text-zinc-500 hover:text-white transition-colors flex items-center gap-1"
+                  >
+                    <Upload size={10} /> Change file
+                  </button>
+                </div>
+
+                {/* Summary bar */}
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { label: 'Days', value: days.length, icon: '📅' },
+                    { label: 'Meals', value: days.reduce((a, d) => a + d.meals.length, 0), icon: '🍽️' },
+                    { label: 'Dishes', value: days.reduce((a, d) => a + d.meals.reduce((b, m) => b + m.dishes.length, 0), 0), icon: '🥘' },
+                  ].map(stat => (
+                    <div key={stat.label} className="flex flex-col items-center gap-1 py-3 rounded-xl bg-zinc-900/50 border border-zinc-800/40">
+                      <span className="text-lg">{stat.icon}</span>
+                      <span className="text-lg font-black text-white">{stat.value}</span>
+                      <span className="text-[9px] text-zinc-500 uppercase tracking-widest font-bold">{stat.label}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Day-by-Day Breakdown */}
+                {days.map((day, di) => (
+                  <div key={di} className="rounded-2xl border border-zinc-800/60 overflow-hidden bg-zinc-900/30">
+                    {/* Day Header */}
+                    <button
+                      onClick={() => toggleDay(di)}
+                      className="w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-800/30 transition-colors group"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-cyan-500/20 to-purple-500/10 border border-cyan-500/20 flex items-center justify-center">
+                          <Calendar size={14} className="text-cyan-400" />
+                        </div>
+                        <div className="text-left">
+                          <p className="text-sm font-black text-white">{day.dayName}</p>
+                          <p className="text-[10px] text-zinc-500">
+                            {day.meals.length} meal slot{day.meals.length !== 1 ? 's' : ''} · {' '}
+                            {day.meals.reduce((a, m) => a + m.dishes.filter(d => d.selected).length, 0)} selected
+                          </p>
+                        </div>
+                      </div>
+                      <motion.div
+                        animate={{ rotate: day.expanded ? 180 : 0 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <ChevronDown size={16} className="text-zinc-500 group-hover:text-white transition-colors" />
+                      </motion.div>
+                    </button>
+
+                    {/* Meal Slots */}
+                    <AnimatePresence>
+                      {day.expanded && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="px-3 pb-3 space-y-2.5">
+                            {day.meals.map((meal, mi) => {
+                              const selectedCount = meal.dishes.filter(d => d.selected).length;
+                              const allSelected = selectedCount === meal.dishes.length;
+
+                              return (
+                                <div
+                                  key={mi}
+                                  className={`rounded-xl border bg-gradient-to-br ${MEAL_COLORS[meal.mealType] || MEAL_COLORS.snack} overflow-hidden`}
+                                >
+                                  {/* Meal type header */}
+                                  <div className="flex items-center justify-between px-3 py-2 border-b border-white/5">
+                                    <div className="flex items-center gap-2">
+                                      {MEAL_ICONS[meal.mealType]}
+                                      <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${MEAL_BADGE[meal.mealType] || MEAL_BADGE.snack}`}>
+                                        {meal.mealType}
+                                      </span>
+                                      <span className="text-[10px] text-zinc-500">{meal.dishes.length} item{meal.dishes.length !== 1 ? 's' : ''}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        onClick={() => selectAllInMeal(di, mi, !allSelected)}
+                                        className="text-[10px] text-zinc-500 hover:text-white transition-colors"
+                                      >
+                                        {allSelected ? 'Deselect all' : 'Select all'}
+                                      </button>
+                                      <button
+                                        onClick={() => logMeal(day, meal)}
+                                        disabled={selectedCount === 0}
+                                        className="px-3 py-1 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[10px] font-bold hover:bg-cyan-500/35 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                                      >
+                                        Log {selectedCount > 0 ? `(${selectedCount})` : ''}
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  {/* Dishes */}
+                                  <div className="p-2 space-y-1.5">
+                                    {meal.dishes.map((dish, idx) => (
+                                      <div
+                                        key={dish.id}
+                                        className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all duration-150
+                                          ${dish.selected
+                                            ? 'bg-white/5 border border-white/10'
+                                            : 'bg-transparent border border-transparent opacity-50'
+                                          }`}
+                                      >
+                                        {/* Checkbox */}
+                                        <button
+                                          onClick={() => toggleDish(di, mi, idx)}
+                                          className={`w-4 h-4 rounded shrink-0 border flex items-center justify-center transition-all
+                                            ${dish.selected
+                                              ? 'bg-cyan-500 border-cyan-500'
+                                              : 'bg-transparent border-zinc-600 hover:border-zinc-400'
+                                            }`}
+                                        >
+                                          {dish.selected && <Check size={9} className="text-white font-black" />}
+                                        </button>
+
+                                        {/* Dish name */}
+                                        <span className="flex-1 text-xs text-white font-medium truncate">{dish.name}</span>
+
+                                        {/* Quantity stepper */}
+                                        <div className="flex items-center gap-1 shrink-0">
+                                          <button
+                                            onClick={() => updateQuantity(di, mi, idx, -0.5)}
+                                            className="w-5 h-5 rounded flex items-center justify-center bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-all"
+                                          >
+                                            <Minus size={9} />
+                                          </button>
+                                          <input
+                                            type="number"
+                                            value={dish.quantity}
+                                            onChange={e => setQuantityDirect(di, mi, idx, e.target.value)}
+                                            className="w-10 text-center text-xs bg-zinc-900 border border-zinc-700 rounded text-white font-bold py-0.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                            min="0.5"
+                                            step="0.5"
+                                          />
+                                          <button
+                                            onClick={() => updateQuantity(di, mi, idx, 0.5)}
+                                            className="w-5 h-5 rounded flex items-center justify-center bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-all"
+                                          >
+                                            <Plus size={9} />
+                                          </button>
+                                          <span className="text-[10px] text-zinc-500 w-12 text-left truncate">{dish.unit}</span>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Footer (only in ready state) */}
+        {phase === 'ready' && (
+          <div className="shrink-0 px-6 py-4 border-t border-zinc-800/60 bg-zinc-900/50 flex items-center justify-between gap-3">
+            <p className="text-xs text-zinc-500">
+              Click <span className="text-cyan-400 font-bold">Log</span> on each meal to add to your tracker
+            </p>
+            <button
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl border border-zinc-700 text-zinc-300 text-xs font-bold hover:bg-zinc-800 transition-colors"
+            >
+              Done
+            </button>
+          </div>
+        )}
+      </motion.div>
+    </motion.div>
+  );
+}

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Mic, Camera, Send, Sparkles, Clock, Plus, Flame } from 'lucide-react';
+import { Mic, Camera, Send, Sparkles, Clock, Plus, Flame, FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { useAutocomplete } from '../../hooks/useAutocomplete';
@@ -10,6 +10,7 @@ type FoodInputProps = {
   isParsing: boolean;
   loadingMessage: string;
   onStateChange?: (state: 'idle' | 'compressing' | 'uploading' | 'analyzing' | 'refining' | 'done' | 'error') => void;
+  onImportMenu?: () => void;
 };
 
 const placeholderExamples = [
@@ -19,7 +20,7 @@ const placeholderExamples = [
   "poha and chai..."
 ];
 
-export function FoodInput({ onParse, isParsing, loadingMessage, onStateChange }: FoodInputProps) {
+export function FoodInput({ onParse, isParsing, loadingMessage, onStateChange, onImportMenu }: FoodInputProps) {
   const [input, setInput] = useState('');
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [isFocused, setIsFocused] = useState(false);
@@ -439,6 +440,16 @@ export function FoodInput({ onParse, isParsing, loadingMessage, onStateChange }:
             >
               <Camera size={20} />
             </button>
+            {onImportMenu && (
+              <button
+                type="button"
+                onClick={onImportMenu}
+                className="p-2 rounded-xl text-zinc-400 hover:text-purple-400 hover:bg-zinc-800 transition-colors"
+                title="Import Weekly Menu (PDF/Excel)"
+              >
+                <FileText size={20} />
+              </button>
+            )}
           </div>
 
           <div className="flex items-center space-x-3">

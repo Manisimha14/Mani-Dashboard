@@ -5,9 +5,10 @@ import { useSteps, useLogSteps, useHealthGoals, useAddGoal, useUpdateGoal, useAd
 import { useSoundFX } from '../../hooks/useSoundFX';
 import { useAuth } from '../../contexts/AuthContext';
 import { fetchTodayGoogleFitData, getGoogleFitSyncFeedback, type GoogleFitSyncFeedback } from '../../services/googleFit.service';
+import { Zap } from 'lucide-react';
 
 export default function StepsTracker({ today }: { today: string }) {
-  const { user, signInWithGoogle } = useAuth();
+  const { user, signInWithGoogle, reconnectGoogleFit } = useAuth();
   const { data: stepsData = {} } = useSteps();
   const { data: goals = [] } = useHealthGoals();
   const logStepsMut = useLogSteps();
@@ -62,8 +63,20 @@ export default function StepsTracker({ today }: { today: string }) {
     play('click');
 
     try {
+      // Step 1: Auth verified
+      setSyncStepIndex(1);
+      play('click');
+
       const data = await fetchTodayGoogleFitData();
+
+      // Step 2: Steps received
+      setSyncStepIndex(2);
+      play('click');
       logStepsMut.mutate({ date: today, steps: data.steps });
+
+      // Step 3: Active minutes received  
+      setSyncStepIndex(3);
+      play('click');
       addWorkoutMut.mutate({
         date: today,
         startTime: '08:30',
@@ -73,37 +86,20 @@ export default function StepsTracker({ today }: { today: string }) {
         caloriesBurned: data.calories,
         notes: `Synced from Google Fit — ${data.steps.toLocaleString()} steps, ${data.activeMinutes} active minutes.`
       });
-    } catch (err: any) {
-      console.error('Failed to fetch Google Fit data:', err);
+
+      // Step 4: Done
+      setSyncStepIndex(4);
       setTimeout(() => {
         setIsSyncingFit(false);
-        setSyncError(getGoogleFitSyncFeedback(err));
-        play('click');
-      }, 1200);
+        play('success');
+      }, 600);
+    } catch (err: any) {
+      console.error('Failed to fetch Google Fit data:', err);
+      setIsSyncingFit(false);
+      setSyncError(getGoogleFitSyncFeedback(err));
+      play('click');
     }
   };
-
-  // Sync step sequencer animation
-  useEffect(() => {
-    if (!isSyncingFit) return;
-    const timer = setInterval(() => {
-      setSyncStepIndex(prev => {
-        if (prev >= 3) {
-          clearInterval(timer);
-          
-          setTimeout(() => {
-            setIsSyncingFit(false);
-            play('success');
-          }, 300);
-          return prev;
-        }
-        play('click');
-        return prev + 1;
-      });
-    }, 250); // High performance, snappy 250ms transition intervals
-
-    return () => clearInterval(timer);
-  }, [isSyncingFit]);
 
   const handleLogSteps = (amount: number) => {
     if (amount < 0) return;
@@ -154,11 +150,11 @@ export default function StepsTracker({ today }: { today: string }) {
                 <button
                   onClick={() => {
                     play('click');
-                    signInWithGoogle();
+                    reconnectGoogleFit();
                   }}
                   className="px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/35 border border-rose-500/30 text-white font-bold transition-all text-[11px] flex items-center gap-1.5 cursor-pointer"
                 >
-                  Reconnect Google
+                  <Zap size={10} /> Reconnect Google Fit
                 </button>
               )}
               {syncError.canTroubleshoot && (

@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { normalizeInput, generateInputHash } from "./normalizer.ts";
 import { getCachedParseResult } from "./cache.ts";
 import { parseWithGroq } from "./providers/groq.ts";
-import { parseWithGemini } from "./providers/gemini.ts";
+import { parseWithGemini, parseWeeklyMenuWithGemini } from "./providers/gemini.ts";
 import { validateNutrition } from "./validators/nutrition.ts";
 
 const corsHeaders = {
@@ -23,6 +23,36 @@ serve(async (req) => {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' }
             });
         }
+
+        // ── Weekly Menu Import Mode ────────────────────────────────────────────
+        if (body.importMode === 'weekly_menu') {
+            const menuText = typeof body.input === 'string' ? body.input : '';
+            if (!menuText.trim()) {
+                return new Response(JSON.stringify({ error: 'No menu text provided for weekly import' }), {
+                    status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                });
+            }
+
+            const geminiKey = Deno.env.get('GEMINI_API_KEY');
+            if (!geminiKey) {
+                return new Response(JSON.stringify({ error: 'GEMINI_API_KEY not configured' }), {
+                    status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                });
+            }
+
+            const result = await parseWeeklyMenuWithGemini(menuText, geminiKey);
+            if (result.error || !result.weeklyMenu) {
+                return new Response(JSON.stringify({ error: result.error || 'Menu parsing failed' }), {
+                    status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                });
+            }
+
+            return new Response(JSON.stringify({ weeklyMenu: result.weeklyMenu }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+        }
+        // ── End Weekly Menu Import Mode ───────────────────────────────────────
+
         const { input, image, mealTypeHint } = body;
         const hasImage = !!(image && image.data && image.mimeType);
         

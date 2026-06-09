@@ -90,7 +90,34 @@ serve(async (req: Request) => {
       throw new Error(`Failed to load stored Google refresh token: ${tokenError.message}`);
     }
 
-    const providerRefreshToken = tokenRow?.refresh_token;
+    let providerRefreshToken = tokenRow?.refresh_token;
+    if (!providerRefreshToken) {
+      // Fallback 1: Try to retrieve from identities (default schema)
+      const { data: identities, error: identityError } = await supabaseClient
+        .from('identities')
+        .select('identity_data')
+        .eq('user_id', user.id)
+        .eq('provider', 'google');
+
+      if (!identityError && identities && identities.length > 0) {
+        providerRefreshToken = identities[0].identity_data?.provider_refresh_token;
+      }
+
+      // Fallback 2: Try to retrieve from auth.identities explicitly
+      if (!providerRefreshToken) {
+        const { data: authIdentities, error: authIdentityError } = await supabaseClient
+          .schema('auth')
+          .from('identities')
+          .select('identity_data')
+          .eq('user_id', user.id)
+          .eq('provider', 'google');
+
+        if (!authIdentityError && authIdentities && authIdentities.length > 0) {
+          providerRefreshToken = authIdentities[0].identity_data?.provider_refresh_token;
+        }
+      }
+    }
+
     if (!providerRefreshToken) {
       throw new Error('Google refresh token not stored for this account. Sign out, sign in with Google again, and complete the reconnect flow.');
     }

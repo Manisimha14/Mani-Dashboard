@@ -129,7 +129,19 @@ export async function fetchTodayGoogleFitData(): Promise<GoogleFitData> {
     });
 
     if (error) {
-      throw new GoogleFitSyncError(classifyGoogleFitError(error.message), error.message);
+      let detailedMessage = error.message;
+      try {
+        const errObj = error as any;
+        if (errObj.context && typeof errObj.context.json === 'function') {
+          const body = await errObj.context.json().catch(() => null);
+          if (body && typeof body.error === 'string') {
+            detailedMessage = body.error;
+          }
+        }
+      } catch (e) {
+        console.error('Failed to parse Edge Function error response:', e);
+      }
+      throw new GoogleFitSyncError(classifyGoogleFitError(detailedMessage), detailedMessage);
     }
 
     if (data?.error) {

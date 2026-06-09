@@ -13,6 +13,7 @@ interface AuthContextValue {
   signInWithGoogle: () => Promise<void>;
   signInWithMagicLink: (email: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
+  reconnectGoogleFit: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -38,6 +39,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (error) {
         console.error('Failed to persist Google refresh token for Fit sync:', error);
+      } else {
+        console.log('[GoogleFit] Refresh token stored successfully.');
       }
     };
 
@@ -62,6 +65,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setLoading(false);
+      // provider_refresh_token is only present on the initial OAuth callback — try to persist it
       if (data.session?.provider_refresh_token) {
         void persistGoogleRefreshToken(data.session);
       }
@@ -76,7 +80,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (newSession) {
         setAuthError(null); // clear error once successfully signed in
-        if (newSession.provider_refresh_token) {
+
+        // SIGNED_IN is the only event where provider_refresh_token is reliably available.
+        // This captures the token immediately after OAuth redirect.
+        if (event === 'SIGNED_IN' && newSession.provider_refresh_token) {
           void persistGoogleRefreshToken(newSession);
         }
       }
@@ -120,6 +127,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Force re-auth specifically for Google Fit fitness scopes.
+  // This ensures the provider_refresh_token with fitness scopes is freshly issued.
+  const reconnectGoogleFit = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin,
+        scopes: 'https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.body.read https://www.googleapis.com/auth/fitness.body.temperature.read',
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',  // Force consent screen to get fresh refresh token
+          include_granted_scopes: 'true',
+        },
+      },
+    });
+    if (error) {
+      setAuthError(`Google Fit reconnect failed: ${error.message}`);
+    }
+  };
+
   const signInWithMagicLink = async (email: string): Promise<{ error: string | null }> => {
     const { error } = await supabase.auth.signInWithOtp({
       email,
@@ -153,6 +180,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signInWithGoogle,
         signInWithMagicLink,
         signOut,
+        reconnectGoogleFit,
       }}
     >
       {children}
