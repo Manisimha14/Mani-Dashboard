@@ -31,21 +31,21 @@ serve(async (req) => {
 
             if (!menuText.trim() && !menuImage) {
                 return new Response(JSON.stringify({ error: 'No menu text or image provided for weekly import' }), {
-                    status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                    status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
                 });
             }
 
             const geminiKey = Deno.env.get('GEMINI_API_KEY');
             if (!geminiKey) {
                 return new Response(JSON.stringify({ error: 'GEMINI_API_KEY not configured' }), {
-                    status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                    status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
                 });
             }
 
             const result = await parseWeeklyMenuWithGemini(menuText, geminiKey, menuImage);
             if (result.error || !result.weeklyMenu) {
                 return new Response(JSON.stringify({ error: result.error || 'Menu parsing failed' }), {
-                    status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                    status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
                 });
             }
 
@@ -147,7 +147,7 @@ serve(async (req) => {
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         return new Response(JSON.stringify({ error: message }), {
-            status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
     }
 });
