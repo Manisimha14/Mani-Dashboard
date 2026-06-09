@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, FileText, Upload, Sparkles, ChevronDown, ChevronUp,
@@ -119,10 +119,10 @@ async function parseWeeklyMenuWithAI(
   if (!data?.weeklyMenu) throw new Error('No weekly menu returned from AI');
 
   // Map AI response to our typed structure
-  return (data.weeklyMenu as any[]).map((day: any, di: number): ImportedDay => ({
+  const mappedDays = (data.weeklyMenu as any[]).map((day: any, di: number): ImportedDay => ({
     dayName: day.day || `Day ${di + 1}`,
     dayDate: day.date,
-    expanded: di === 0,
+    expanded: false,
     meals: (day.meals || []).map((meal: any): ImportedMealSlot => ({
       mealType: meal.mealType || 'snack',
       dishes: (meal.dishes || []).map((dish: any, idx: number): ImportedDish => ({
@@ -134,6 +134,20 @@ async function parseWeeklyMenuWithAI(
       })),
     })).filter((m: ImportedMealSlot) => m.dishes.length > 0),
   }));
+
+  // Auto-expand today's day of the week
+  const todayDayStr = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+  const todayDayShort = todayDayStr.slice(0, 3);
+  let todayIndex = mappedDays.findIndex(d => {
+    const name = d.dayName.toLowerCase();
+    return name.includes(todayDayStr) || name.startsWith(todayDayShort);
+  });
+  if (todayIndex === -1) todayIndex = 0; // Fallback to first day
+  if (mappedDays[todayIndex]) {
+    mappedDays[todayIndex].expanded = true;
+  }
+
+  return mappedDays;
 }
 
 // ─── Main Modal Component ─────────────────────────────────────────────────────
@@ -146,6 +160,26 @@ export function ImportMenuModal({ onClose, onLogDay }: ImportMenuModalProps) {
   const [isDragging, setIsDragging] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-scroll to current day card when analysis completes
+  useEffect(() => {
+    if (phase === 'ready' && days.length > 0) {
+      const todayDayStr = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+      const todayDayShort = todayDayStr.slice(0, 3);
+      const todayIndex = days.findIndex(d => {
+        const name = d.dayName.toLowerCase();
+        return name.includes(todayDayStr) || name.startsWith(todayDayShort);
+      });
+      const activeIndex = todayIndex !== -1 ? todayIndex : 0;
+      
+      setTimeout(() => {
+        const el = document.getElementById(`day-card-${activeIndex}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 300);
+    }
+  }, [phase, days]);
 
   // ── File processing ──────────────────────────────────────────────────────
 
@@ -518,7 +552,7 @@ export function ImportMenuModal({ onClose, onLogDay }: ImportMenuModalProps) {
 
                 {/* Day-by-Day Breakdown */}
                 {days.map((day, di) => (
-                  <div key={di} className="rounded-2xl border border-zinc-800/60 overflow-hidden bg-zinc-900/30">
+                  <div key={di} id={`day-card-${di}`} className="rounded-2xl border border-zinc-800/60 overflow-hidden bg-zinc-900/30">
                     {/* Day Header */}
                     <button
                       onClick={() => toggleDay(di)}
