@@ -2,7 +2,7 @@ import { PARSE_SYSTEM_PROMPT } from "../prompts.ts";
 
 const GEMINI_TIMEOUT_MS = 3000;
 const MENU_PARSE_TIMEOUT_MS = 25000;  // Menus need more time
-const MODEL = "gemini-1.5-flash-latest";
+const MODEL = "gemini-1.5-flash";
 
 export async function parseWithGemini(
     input: string, 
@@ -14,7 +14,7 @@ export async function parseWithGemini(
     const timeoutId = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
 
     try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${apiKey}`;
+        const url = `https://generativelanguage.googleapis.com/v1/models/${MODEL}:generateContent?key=${apiKey}`;
         
         const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
             { text: input || "Identify the food in this image and estimate the nutritional content." }
@@ -133,7 +133,7 @@ export async function parseWeeklyMenuWithGemini(
     const timeoutId = setTimeout(() => controller.abort(), MENU_PARSE_TIMEOUT_MS);
 
     try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${apiKey}`;
+        const url = `https://generativelanguage.googleapis.com/v1/models/${MODEL}:generateContent?key=${apiKey}`;
 
         // Build the content parts — image takes priority, text is supplementary
         const userParts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [];
