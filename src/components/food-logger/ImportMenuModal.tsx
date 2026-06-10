@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, FileText, Upload, Sparkles, ChevronDown, ChevronUp,
   Check, Minus, Plus, Calendar, Coffee, Sun, Moon,
-  AlertTriangle, Loader2, FileSpreadsheet, Image
+  AlertTriangle, Loader2, FileSpreadsheet, Image, Copy
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-hot-toast';
@@ -161,6 +161,13 @@ const getStepAndMinForUnit = (unit: string) => {
     return { step: 1, min: 0.5 };
   }
   return { step: 0.5, min: 0.25 };
+};
+
+const getFallbackForUnit = (unit: string) => {
+  const u = unit.toLowerCase();
+  if (u === 'g' || u === 'ml') return 100;
+  if (u === 'piece' || u === 'packet') return 1;
+  return 1;
 };
 
 export function ImportMenuModal({ onClose, onLogDay }: ImportMenuModalProps) {
@@ -405,10 +412,13 @@ export function ImportMenuModal({ onClose, onLogDay }: ImportMenuModalProps) {
       toast.error('No dishes selected for this meal.');
       return;
     }
-    const cleanSelected = selected.map(d => ({
-      ...d,
-      quantity: typeof d.quantity === 'number' ? d.quantity : parseFloat(d.quantity) || 1
-    }));
+    const cleanSelected = selected.map(d => {
+      const q = typeof d.quantity === 'number' ? d.quantity : parseFloat(d.quantity);
+      return {
+        ...d,
+        quantity: isNaN(q) || q <= 0 ? getFallbackForUnit(d.unit) : q
+      };
+    });
     onLogDay(day.dayName, meal.mealType, cleanSelected);
     toast.success(`${day.dayName} ${meal.mealType} logged! 🎉`);
     // Mark as logged by deselecting all
@@ -422,6 +432,63 @@ export function ImportMenuModal({ onClose, onLogDay }: ImportMenuModalProps) {
         }),
       };
     }));
+  };
+
+  const handleCopySelected = () => {
+    const lines: string[] = [];
+    days.forEach(day => {
+      const dayLines: string[] = [];
+      day.meals.forEach(meal => {
+        const selectedDishes = meal.dishes.filter(d => d.selected);
+        if (selectedDishes.length > 0) {
+          const dishStr = selectedDishes
+            .map(d => `${d.quantity} ${d.unit} ${d.name}`)
+            .join(', ');
+          const mealLabel = meal.mealType.charAt(0).toUpperCase() + meal.mealType.slice(1);
+          dayLines.push(`  * ${mealLabel}: ${dishStr}`);
+        }
+      });
+      
+      if (dayLines.length > 0) {
+        lines.push(`--- ${day.dayName} ---`);
+        lines.push(...dayLines);
+        lines.push('');
+      }
+    });
+
+    if (lines.length === 0) {
+      toast.error('No dishes are currently selected to copy.');
+      return;
+    }
+
+    const textToCopy = lines.join('\n').trim();
+    navigator.clipboard.writeText(textToCopy)
+      .then(() => toast.success('Selected menu copied to clipboard! 📋'))
+      .catch(() => toast.error('Failed to copy to clipboard.'));
+  };
+
+  const handleCopyDay = (day: ImportedDay) => {
+    const lines: string[] = [];
+    day.meals.forEach(meal => {
+      const selectedDishes = meal.dishes.filter(d => d.selected);
+      if (selectedDishes.length > 0) {
+        const dishStr = selectedDishes
+          .map(d => `${d.quantity} ${d.unit} ${d.name}`)
+          .join(', ');
+        const mealLabel = meal.mealType.charAt(0).toUpperCase() + meal.mealType.slice(1);
+        lines.push(`${mealLabel}: ${dishStr}`);
+      }
+    });
+
+    if (lines.length === 0) {
+      toast.error(`No dishes are selected for ${day.dayName}.`);
+      return;
+    }
+
+    const textToCopy = lines.join('\n');
+    navigator.clipboard.writeText(textToCopy)
+      .then(() => toast.success(`Selected dishes for ${day.dayName} copied! 📋`))
+      .catch(() => toast.error('Failed to copy.'));
   };
 
   // ─── Render ────────────────────────────────────────────────────────────────
@@ -664,12 +731,25 @@ export function ImportMenuModal({ onClose, onLogDay }: ImportMenuModalProps) {
                           </p>
                         </div>
                       </div>
-                      <motion.div
-                        animate={{ rotate: day.expanded ? 180 : 0 }}
-                        transition={{ duration: 0.2 }}
-                      >
-                        <ChevronDown size={16} className="text-zinc-500 group-hover:text-white transition-colors" />
-                      </motion.div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCopyDay(day);
+                          }}
+                          className="p-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors"
+                          title="Copy this day's selections"
+                        >
+                          <Copy size={13} />
+                        </button>
+                        <motion.div
+                          animate={{ rotate: day.expanded ? 180 : 0 }}
+                          transition={{ duration: 0.2 }}
+                        >
+                          <ChevronDown size={16} className="text-zinc-500 group-hover:text-white transition-colors" />
+                        </motion.div>
+                      </div>
                     </button>
 
                     {/* Meal Slots */}
@@ -792,15 +872,25 @@ export function ImportMenuModal({ onClose, onLogDay }: ImportMenuModalProps) {
         {/* Footer (only in ready state) */}
         {phase === 'ready' && (
           <div className="shrink-0 px-6 py-4 border-t border-zinc-800/60 bg-zinc-900/50 flex items-center justify-between gap-3">
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-zinc-500 hidden sm:block">
               Click <span className="text-cyan-400 font-bold">Log</span> on each meal to add to your tracker
             </p>
-            <button
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl border border-zinc-700 text-zinc-300 text-xs font-bold hover:bg-zinc-800 transition-colors"
-            >
-              Done
-            </button>
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+              <button
+                type="button"
+                onClick={handleCopySelected}
+                className="px-4 py-2 rounded-xl border border-zinc-700 text-zinc-300 text-xs font-bold hover:bg-zinc-800 transition-colors flex items-center gap-1.5"
+              >
+                <Copy size={13} /> Copy Selected
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold transition-colors"
+              >
+                Done
+              </button>
+            </div>
           </div>
         )}
       </motion.div>
