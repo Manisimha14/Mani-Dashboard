@@ -13,7 +13,7 @@ import { toast } from 'react-hot-toast';
 export type ImportedDish = {
   id: string;
   name: string;
-  quantity: number;
+  quantity: number | string;
   unit: string;
   selected: boolean;
 };
@@ -152,6 +152,17 @@ async function parseWeeklyMenuWithAI(
 
 // ─── Main Modal Component ─────────────────────────────────────────────────────
 
+const getStepAndMinForUnit = (unit: string) => {
+  const u = unit.toLowerCase();
+  if (u === 'g' || u === 'ml') {
+    return { step: 50, min: 10 };
+  }
+  if (u === 'piece' || u === 'packet') {
+    return { step: 1, min: 0.5 };
+  }
+  return { step: 0.5, min: 0.25 };
+};
+
 export function ImportMenuModal({ onClose, onLogDay }: ImportMenuModalProps) {
   const [phase, setPhase] = useState<ImportPhase>('idle');
   const [errorMsg, setErrorMsg] = useState('');
@@ -160,6 +171,8 @@ export function ImportMenuModal({ onClose, onLogDay }: ImportMenuModalProps) {
   const [isDragging, setIsDragging] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const hasScrolledRef = useRef(false);
 
   // Load menu from localStorage on mount
   useEffect(() => {
@@ -208,9 +221,9 @@ export function ImportMenuModal({ onClose, onLogDay }: ImportMenuModalProps) {
     }
   }, [days, phase, fileName]);
 
-  // Auto-scroll to current day card when analysis completes
+  // Auto-scroll to current day card when analysis completes (only once per upload/load)
   useEffect(() => {
-    if (phase === 'ready' && days.length > 0) {
+    if (phase === 'ready' && days.length > 0 && !hasScrolledRef.current) {
       const todayDayStr = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
       const todayDayShort = todayDayStr.slice(0, 3);
       const todayIndex = days.findIndex(d => {
@@ -220,13 +233,29 @@ export function ImportMenuModal({ onClose, onLogDay }: ImportMenuModalProps) {
       const activeIndex = todayIndex !== -1 ? todayIndex : 0;
       
       setTimeout(() => {
+        const container = bodyRef.current;
         const el = document.getElementById(`day-card-${activeIndex}`);
-        if (el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (container && el) {
+          const containerTop = container.getBoundingClientRect().top;
+          const elTop = el.getBoundingClientRect().top;
+          const scrollTop = container.scrollTop;
+          const targetScrollTop = scrollTop + (elTop - containerTop) - (container.clientHeight / 2) + (el.clientHeight / 2);
+          
+          container.scrollTo({
+            top: targetScrollTop,
+            behavior: 'smooth'
+          });
+          hasScrolledRef.current = true;
         }
       }, 300);
     }
   }, [phase, days]);
+
+  useEffect(() => {
+    if (phase !== 'ready') {
+      hasScrolledRef.current = false;
+    }
+  }, [phase]);
 
   // ── File processing ──────────────────────────────────────────────────────
 
@@ -317,7 +346,7 @@ export function ImportMenuModal({ onClose, onLogDay }: ImportMenuModalProps) {
     }));
   };
 
-  const updateQuantity = (di: number, mi: number, idx: number, delta: number) => {
+  const updateQuantity = (di: number, mi: number, idx: number, deltaDirection: number) => {
     setDays(prev => prev.map((d, i) => {
       if (i !== di) return d;
       return {
@@ -328,7 +357,10 @@ export function ImportMenuModal({ onClose, onLogDay }: ImportMenuModalProps) {
             ...m,
             dishes: m.dishes.map((dish, k) => {
               if (k !== idx) return dish;
-              return { ...dish, quantity: Math.max(0.5, Math.round((dish.quantity + delta) * 10) / 10) };
+              const { step, min } = getStepAndMinForUnit(dish.unit);
+              const delta = deltaDirection * step;
+              const currentQty = typeof dish.quantity === 'number' ? dish.quantity : parseFloat(dish.quantity) || 0;
+              return { ...dish, quantity: Math.max(min, Math.round((currentQty + delta) * 100) / 100) };
             }),
           };
         }),
@@ -337,24 +369,21 @@ export function ImportMenuModal({ onClose, onLogDay }: ImportMenuModalProps) {
   };
 
   const setQuantityDirect = (di: number, mi: number, idx: number, val: string) => {
-    const num = parseFloat(val);
-    if (!isNaN(num) && num > 0) {
-      setDays(prev => prev.map((d, i) => {
-        if (i !== di) return d;
-        return {
-          ...d,
-          meals: d.meals.map((m, j) => {
-            if (j !== mi) return m;
-            return {
-              ...m,
-              dishes: m.dishes.map((dish, k) =>
-                k === idx ? { ...dish, quantity: num } : dish
-              ),
-            };
-          }),
-        };
-      }));
-    }
+    setDays(prev => prev.map((d, i) => {
+      if (i !== di) return d;
+      return {
+        ...d,
+        meals: d.meals.map((m, j) => {
+          if (j !== mi) return m;
+          return {
+            ...m,
+            dishes: m.dishes.map((dish, k) =>
+              k === idx ? { ...dish, quantity: val } : dish
+            ),
+          };
+        }),
+      };
+    }));
   };
 
   const selectAllInMeal = (di: number, mi: number, selected: boolean) => {
@@ -376,7 +405,11 @@ export function ImportMenuModal({ onClose, onLogDay }: ImportMenuModalProps) {
       toast.error('No dishes selected for this meal.');
       return;
     }
-    onLogDay(day.dayName, meal.mealType, selected);
+    const cleanSelected = selected.map(d => ({
+      ...d,
+      quantity: typeof d.quantity === 'number' ? d.quantity : parseFloat(d.quantity) || 1
+    }));
+    onLogDay(day.dayName, meal.mealType, cleanSelected);
     toast.success(`${day.dayName} ${meal.mealType} logged! 🎉`);
     // Mark as logged by deselecting all
     setDays(prev => prev.map(d => {
@@ -406,7 +439,7 @@ export function ImportMenuModal({ onClose, onLogDay }: ImportMenuModalProps) {
         animate={{ scale: 1, y: 0 }}
         exit={{ scale: 0.93, y: 20 }}
         transition={{ type: 'spring', stiffness: 320, damping: 28 }}
-        className="w-full max-w-2xl max-h-[90vh] flex flex-col bg-[#141417] border border-zinc-800 rounded-3xl shadow-[0_30px_80px_rgba(0,0,0,0.6)] overflow-hidden"
+        className="w-full max-w-2xl h-[95vh] sm:h-auto sm:max-h-[90vh] flex flex-col bg-[#141417] border border-zinc-800 rounded-2xl sm:rounded-3xl shadow-[0_30px_80px_rgba(0,0,0,0.6)] overflow-hidden"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800/60 shrink-0">
@@ -428,7 +461,7 @@ export function ImportMenuModal({ onClose, onLogDay }: ImportMenuModalProps) {
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto">
+        <div ref={bodyRef} className="flex-1 overflow-y-auto">
 
           {/* ── Upload Zone (idle / error) ── */}
           <AnimatePresence mode="wait">
@@ -603,10 +636,10 @@ export function ImportMenuModal({ onClose, onLogDay }: ImportMenuModalProps) {
                     { label: 'Meals', value: days.reduce((a, d) => a + d.meals.length, 0), icon: '🍽️' },
                     { label: 'Dishes', value: days.reduce((a, d) => a + d.meals.reduce((b, m) => b + m.dishes.length, 0), 0), icon: '🥘' },
                   ].map(stat => (
-                    <div key={stat.label} className="flex flex-col items-center gap-1 py-3 rounded-xl bg-zinc-900/50 border border-zinc-800/40">
-                      <span className="text-lg">{stat.icon}</span>
-                      <span className="text-lg font-black text-white">{stat.value}</span>
-                      <span className="text-[9px] text-zinc-500 uppercase tracking-widest font-bold">{stat.label}</span>
+                    <div key={stat.label} className="flex flex-col items-center gap-0.5 sm:gap-1 py-2 sm:py-3 rounded-xl bg-zinc-900/50 border border-zinc-800/40">
+                      <span className="text-base sm:text-lg">{stat.icon}</span>
+                      <span className="text-base sm:text-lg font-black text-white">{stat.value}</span>
+                      <span className="text-[8px] sm:text-[9px] text-zinc-500 uppercase tracking-widest font-bold">{stat.label}</span>
                     </div>
                   ))}
                 </div>
@@ -617,7 +650,7 @@ export function ImportMenuModal({ onClose, onLogDay }: ImportMenuModalProps) {
                     {/* Day Header */}
                     <button
                       onClick={() => toggleDay(di)}
-                      className="w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-800/30 transition-colors group"
+                      className="w-full flex items-center justify-between px-3 py-2.5 sm:px-4 sm:py-3 hover:bg-zinc-800/30 transition-colors group"
                     >
                       <div className="flex items-center gap-2.5">
                         <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-cyan-500/20 to-purple-500/10 border border-cyan-500/20 flex items-center justify-center">
@@ -661,24 +694,25 @@ export function ImportMenuModal({ onClose, onLogDay }: ImportMenuModalProps) {
                                 >
                                   {/* Meal type header */}
                                   <div className="flex items-center justify-between px-3 py-2 border-b border-white/5">
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-1.5 min-w-0">
                                       {MEAL_ICONS[meal.mealType]}
-                                      <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${MEAL_BADGE[meal.mealType] || MEAL_BADGE.snack}`}>
+                                      <span className={`text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-1.5 sm:px-2 py-0.5 rounded-full border ${MEAL_BADGE[meal.mealType] || MEAL_BADGE.snack} truncate`}>
                                         {meal.mealType}
                                       </span>
-                                      <span className="text-[10px] text-zinc-500">{meal.dishes.length} item{meal.dishes.length !== 1 ? 's' : ''}</span>
                                     </div>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 shrink-0">
                                       <button
+                                        type="button"
                                         onClick={() => selectAllInMeal(di, mi, !allSelected)}
-                                        className="text-[10px] text-zinc-500 hover:text-white transition-colors"
+                                        className="text-[9px] sm:text-[10px] text-zinc-500 hover:text-white transition-colors"
                                       >
-                                        {allSelected ? 'Deselect all' : 'Select all'}
+                                        {allSelected ? 'Deselect' : 'Select All'}
                                       </button>
                                       <button
+                                        type="button"
                                         onClick={() => logMeal(day, meal)}
                                         disabled={selectedCount === 0}
-                                        className="px-3 py-1 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[10px] font-bold hover:bg-cyan-500/35 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                                        className="px-2.5 sm:px-3 py-1 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[9px] sm:text-[10px] font-bold hover:bg-cyan-500/35 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                                       >
                                         Log {selectedCount > 0 ? `(${selectedCount})` : ''}
                                       </button>
@@ -690,51 +724,54 @@ export function ImportMenuModal({ onClose, onLogDay }: ImportMenuModalProps) {
                                     {meal.dishes.map((dish, idx) => (
                                       <div
                                         key={dish.id}
-                                        className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all duration-150
+                                        className={`flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all duration-150
                                           ${dish.selected
                                             ? 'bg-white/5 border border-white/10'
-                                            : 'bg-transparent border border-transparent opacity-50'
+                                            : 'bg-transparent border border-transparent opacity-40'
                                           }`}
                                       >
                                         {/* Checkbox */}
                                         <button
+                                          type="button"
                                           onClick={() => toggleDish(di, mi, idx)}
-                                          className={`w-4 h-4 rounded shrink-0 border flex items-center justify-center transition-all
+                                          className={`w-5 h-5 rounded-lg shrink-0 border flex items-center justify-center transition-all touch-manipulation
                                             ${dish.selected
-                                              ? 'bg-cyan-500 border-cyan-500'
-                                              : 'bg-transparent border-zinc-600 hover:border-zinc-400'
+                                              ? 'bg-cyan-500 border-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.3)]'
+                                              : 'bg-transparent border-zinc-700 hover:border-zinc-500'
                                             }`}
                                         >
-                                          {dish.selected && <Check size={9} className="text-white font-black" />}
+                                          {dish.selected && <Check size={11} className="text-white font-black" />}
                                         </button>
 
                                         {/* Dish name */}
-                                        <span className="flex-1 text-xs text-white font-medium truncate">{dish.name}</span>
+                                        <span className="flex-1 text-xs text-zinc-200 font-medium truncate pr-1">{dish.name}</span>
 
                                         {/* Quantity stepper */}
-                                        <div className="flex items-center gap-1 shrink-0">
+                                        <div className="flex items-center gap-1 shrink-0 ml-auto bg-zinc-950/60 p-0.5 rounded-xl border border-zinc-800/80">
                                           <button
-                                            onClick={() => updateQuantity(di, mi, idx, -0.5)}
-                                            className="w-5 h-5 rounded flex items-center justify-center bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-all"
+                                            type="button"
+                                            onClick={() => updateQuantity(di, mi, idx, -1)}
+                                            className="w-7 h-7 rounded-lg flex items-center justify-center bg-zinc-800/80 hover:bg-zinc-700 active:scale-95 text-zinc-300 hover:text-white transition-all touch-manipulation"
                                           >
-                                            <Minus size={9} />
+                                            <Minus size={11} />
                                           </button>
                                           <input
                                             type="number"
                                             value={dish.quantity}
                                             onChange={e => setQuantityDirect(di, mi, idx, e.target.value)}
-                                            className="w-10 text-center text-xs bg-zinc-900 border border-zinc-700 rounded text-white font-bold py-0.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                            min="0.5"
-                                            step="0.5"
+                                            className="w-11 text-center text-xs bg-transparent border-0 text-white font-bold py-0.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none focus:outline-none"
+                                            min={getStepAndMinForUnit(dish.unit).min}
+                                            step={getStepAndMinForUnit(dish.unit).step}
                                           />
                                           <button
-                                            onClick={() => updateQuantity(di, mi, idx, 0.5)}
-                                            className="w-5 h-5 rounded flex items-center justify-center bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-all"
+                                            type="button"
+                                            onClick={() => updateQuantity(di, mi, idx, 1)}
+                                            className="w-7 h-7 rounded-lg flex items-center justify-center bg-zinc-800/80 hover:bg-zinc-700 active:scale-95 text-zinc-300 hover:text-white transition-all touch-manipulation"
                                           >
-                                            <Plus size={9} />
+                                            <Plus size={11} />
                                           </button>
-                                          <span className="text-[10px] text-zinc-500 w-12 text-left truncate">{dish.unit}</span>
                                         </div>
+                                        <span className="text-[10px] text-zinc-400 w-10 text-left truncate font-semibold shrink-0 select-none">{dish.unit}</span>
                                       </div>
                                     ))}
                                   </div>
