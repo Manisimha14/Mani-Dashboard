@@ -102,6 +102,64 @@ async function extractTextFromFile(file: File): Promise<string> {
   return await file.text();
 }
 
+const normalizeDishToMetric = (dishName: string, quantity: number, unit: string): { quantity: number, unit: string } => {
+  const name = dishName.toLowerCase();
+  const u = unit.toLowerCase().trim();
+  
+  if (u === 'g' || u === 'ml') {
+    return { quantity, unit: u };
+  }
+
+  // Countable items that should remain as "piece" (or piece equivalents)
+  const isCountableItem = 
+    name.includes('roti') || 
+    name.includes('chapati') || 
+    name.includes('phulka') || 
+    name.includes('bread') || 
+    name.includes('toast') ||
+    name.includes('idli') || 
+    name.includes('dosa') || 
+    name.includes('egg') || 
+    name.includes('omelette') || 
+    name.includes('banana') ||
+    name.includes('apple') ||
+    name.includes('fruit') ||
+    name.includes('orange') ||
+    name.includes('pear') ||
+    name.includes('peach') ||
+    name.includes('guava');
+
+  if (isCountableItem) {
+    // Keep as piece. Map units like 'pieces', 'slice', 'slices', 'serving' to 'piece'
+    return { quantity, unit: 'piece' };
+  }
+
+  // Liquid/Volume/Bowl/Cup/Serving for non-countable items (Dal, Curry, Rice, Curd, Chutney, etc.)
+  if (u.includes('bowl') || u.includes('cup') || u.includes('glass') || u.includes('serving') || u.includes('plate') || u.includes('portion')) {
+    if (name.includes('dal') || name.includes('sambar') || name.includes('curry') || name.includes('subji') || name.includes('sabzi') || name.includes('gravy') || name.includes('soup') || name.includes('rasam')) {
+      return { quantity: quantity * 150, unit: 'ml' };
+    }
+    if (name.includes('rice') || name.includes('biryani') || name.includes('poha') || name.includes('upma') || name.includes('khichdi')) {
+      return { quantity: quantity * 150, unit: 'g' };
+    }
+    if (name.includes('curd') || name.includes('yogurt') || name.includes('raita')) {
+      return { quantity: quantity * 100, unit: 'g' };
+    }
+    if (name.includes('milk') || name.includes('tea') || name.includes('coffee') || name.includes('juice') || name.includes('shake') || name.includes('water')) {
+      return { quantity: quantity * 150, unit: 'ml' };
+    }
+    if (name.includes('chutney') || name.includes('pickle') || name.includes('sauce') || name.includes('butter') || name.includes('ghee')) {
+      return { quantity: quantity * 30, unit: 'g' };
+    }
+    if (name.includes('salad')) {
+      return { quantity: quantity * 100, unit: 'g' };
+    }
+    return { quantity: quantity * 100, unit: 'g' };
+  }
+
+  return { quantity, unit: u };
+};
+
 // ─── Call AI to parse weekly menu ────────────────────────────────────────────
 
 async function parseWeeklyMenuWithAI(
@@ -125,13 +183,17 @@ async function parseWeeklyMenuWithAI(
     expanded: false,
     meals: (day.meals || []).map((meal: any): ImportedMealSlot => ({
       mealType: meal.mealType || 'snack',
-      dishes: (meal.dishes || []).map((dish: any, idx: number): ImportedDish => ({
-        id: `${di}-${meal.mealType}-${idx}`,
-        name: dish.name || 'Unknown dish',
-        quantity: Number(dish.quantity) || 1,
-        unit: dish.unit || 'serving',
-        selected: true,
-      })),
+      dishes: (meal.dishes || []).map((dish: any, idx: number): ImportedDish => {
+        const rawQty = Number(dish.quantity) || 1;
+        const { quantity, unit } = normalizeDishToMetric(dish.name || '', rawQty, dish.unit || 'serving');
+        return {
+          id: `${di}-${meal.mealType}-${idx}`,
+          name: dish.name || 'Unknown dish',
+          quantity,
+          unit,
+          selected: true,
+        };
+      }),
     })).filter((m: ImportedMealSlot) => m.dishes.length > 0),
   }));
 
@@ -188,7 +250,23 @@ export function ImportMenuModal({ onClose, onLogDay }: ImportMenuModalProps) {
         const diffMs = now.getTime() - uploadDate.getTime();
         const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
         if (diffMs < oneWeekMs && storedDays && storedDays.length > 0) {
-          setDays(storedDays);
+          // Normalize loaded days to ensure legacy cache is instantly converted to g/ml
+          const normalizedDays = storedDays.map((d: ImportedDay) => ({
+            ...d,
+            meals: d.meals.map((m: ImportedMealSlot) => ({
+              ...m,
+              dishes: m.dishes.map((dish: ImportedDish) => {
+                const qtyNum = typeof dish.quantity === 'number' ? dish.quantity : parseFloat(dish.quantity) || 1;
+                const { quantity, unit } = normalizeDishToMetric(dish.name, qtyNum, dish.unit);
+                return {
+                  ...dish,
+                  quantity,
+                  unit
+                };
+              })
+            }))
+          }));
+          setDays(normalizedDays);
           setFileName(storedFileName || 'Stored Weekly Menu');
           setPhase('ready');
         } else {
