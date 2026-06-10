@@ -97,7 +97,8 @@ export function useFoodLogger() {
     input: string, 
     image?: { data: string; mimeType: string }, 
     previewUrl?: string,
-    rawBlob?: Blob
+    rawBlob?: Blob,
+    mealTypeOverride?: string
   ) => {
     if (!input.trim() && !image) return;
 
@@ -156,13 +157,16 @@ export function useFoodLogger() {
     setLoggerState('analyzing');
     setLoadingStateMessage(image ? 'AI identifying food...' : 'Analyzing your meal...');
 
-    // Calculate timezone-agnostic meal pre-selection hint
-    const hour = new Date().getHours();
-    let mealTypeHint = 'snack';
-    if (hour >= 5 && hour < 11) mealTypeHint = 'breakfast';
-    else if (hour >= 11 && hour < 16) mealTypeHint = 'lunch';
-    else if (hour >= 16 && hour < 19) mealTypeHint = 'snack';
-    else if (hour >= 19 && hour < 23) mealTypeHint = 'dinner';
+    // Calculate timezone-agnostic meal pre-selection hint (respecting explicit override if provided)
+    let mealTypeHint = mealTypeOverride;
+    if (!mealTypeHint) {
+      const hour = new Date().getHours();
+      mealTypeHint = 'snack';
+      if (hour >= 5 && hour < 11) mealTypeHint = 'breakfast';
+      else if (hour >= 11 && hour < 16) mealTypeHint = 'lunch';
+      else if (hour >= 16 && hour < 19) mealTypeHint = 'snack';
+      else if (hour >= 19 && hour < 23) mealTypeHint = 'dinner';
+    }
 
     if (timerRef.current) clearTimeout(timerRef.current);
     

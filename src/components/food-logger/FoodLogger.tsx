@@ -25,13 +25,14 @@ export function FoodLogger() {
 
   // Called when user clicks "Log" on a meal slot inside the import modal
   const handleImportLog = (_dayName: string, mealType: string, dishes: ImportedDish[]) => {
+    setShowImportModal(false); // Close modal immediately so user can see scanner and loading state
     // Build a text description and pass through the existing AI food parse pipeline
     // The AI will resolve portion sizes and calculate nutrition
     const dishText = dishes
       .map(d => `${d.quantity} ${d.unit} ${d.name}`)
       .join(', ');
     const fullInput = `${mealType}: ${dishText}`;
-    parseFood(fullInput);
+    parseFood(fullInput, undefined, undefined, undefined, mealType);
   };
 
   return (
