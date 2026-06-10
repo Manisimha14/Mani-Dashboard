@@ -121,9 +121,21 @@ CRITICAL SPREADSHEET & CSV GUIDELINES:
    - You MUST split these items by dividers such as "/", ",", "+", "&", "and", or newlines.
    - Extract each item as a separate, distinct dish in the JSON array. Do not group them into a single string (e.g., do not return "Roti and Dal", return two dishes: "Roti" and "Dal").
 3. HANDLE ALTERNATIVES: If a meal specifies options (e.g., "Poha or Upma"), list both options as separate dishes so the user can select their preference.
-4. SENSIBLE QUANTITY ESTIMATION:
-   - For dishes with standard portions, assign standard defaults: Roti/Chapati/Phulka = 2 pieces, Idli = 3 pieces, Dosa = 2 pieces, Rice = 1 cup, Dal/Curry/Subji = 1 bowl, Curd/Yogurt = 1 cup, Egg = 2 pieces, Milk/Tea/Coffee = 1 cup.
-   - For other items where portion is unspecified, default to 1 serving.
+4. STRICT METRIC PORTIONS & UNITS:
+   - You MUST output all dish portions STRICTLY in grams ("g") or milliliters ("ml"). DO NOT output "cup", "bowl", "serving", "piece", "packet", "slice", or any countable/qualitative units.
+   - Estimate standard portions using these baseline weights/volumes:
+     - Roti / Chapati / Phulka / Bread slice: 30g per piece (e.g., 2 rotis = 60g)
+     - Idli / Dosa: 50g per piece (e.g., 3 idlis = 150g, 2 dosas = 100g)
+     - Rice: 150g (equivalent to a cup of cooked rice)
+     - Dal / Curries / Subjis / Sambar: 150ml
+     - Curd / Yogurt: 100g
+     - Milk / Tea / Coffee: 150ml
+     - Butter / Ghee: 10g
+     - Jam: 15g
+     - Chutney: 30g
+     - Eggs: 50g per egg
+     - Fruit servings: 100g
+     - For other unspecified dishes, assign a realistic weight in grams (typically 100g or 150g depending on food density).
 
 OUTPUT FORMAT (JSON):
 {
@@ -135,8 +147,8 @@ OUTPUT FORMAT (JSON):
         {
           "mealType": "breakfast" | "lunch" | "dinner" | "snack",
           "dishes": [
-            { "name": "Poha", "quantity": 1, "unit": "serving" },
-            { "name": "Sprouts", "quantity": 0.5, "unit": "cup" }
+            { "name": "Poha", "quantity": 150, "unit": "g" },
+            { "name": "Sprouts", "quantity": 50, "unit": "g" }
           ]
         }
       ]

@@ -153,20 +153,16 @@ async function parseWeeklyMenuWithAI(
 // ─── Main Modal Component ─────────────────────────────────────────────────────
 
 const getStepAndMinForUnit = (unit: string) => {
-  const u = unit.toLowerCase();
+  const u = unit.toLowerCase().trim();
   if (u === 'g' || u === 'ml') {
     return { step: 50, min: 10 };
   }
-  if (u === 'piece' || u === 'packet') {
-    return { step: 1, min: 0.5 };
-  }
-  return { step: 0.5, min: 0.25 };
+  return { step: 1, min: 0.5 };
 };
 
 const getFallbackForUnit = (unit: string) => {
-  const u = unit.toLowerCase();
+  const u = unit.toLowerCase().trim();
   if (u === 'g' || u === 'ml') return 100;
-  if (u === 'piece' || u === 'packet') return 1;
   return 1;
 };
 
