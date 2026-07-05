@@ -95,8 +95,8 @@ export default function LoginPage() {
               <Zap size={20} className="text-white" />
             </div>
             <div>
-              <h1 className="text-white font-bold text-xl leading-none">Life OS</h1>
-              <p className="text-white/40 text-xs mt-0.5">Elite Productivity Dashboard</p>
+              <h1 className="text-white font-bold text-xl leading-none">Mani OS</h1>
+              <p className="text-white/40 text-xs mt-0.5">Your Personal Operating System</p>
             </div>
           </div>
 
@@ -129,19 +129,19 @@ export default function LoginPage() {
               <motion.div key="form" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                 {!isSupabaseConfigured ? (
                   <div className="space-y-5">
-                    <h2 className="text-white text-2xl font-bold mb-1">Local Workspace Active</h2>
+                    <h2 className="text-white text-2xl font-bold mb-1">Mani OS Ready</h2>
                     <p className="text-white/40 text-sm leading-relaxed">
-                      Your life productivity dashboard is running in high-performance local mode. All metrics and focus tools are ready to use!
+                      Mani OS is running in high-performance offline mode. All metrics, focus tools, and mission modules are ready.
                     </p>
 
                     {/* Amber Warning Box */}
                     <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-200/90 text-xs space-y-2">
                       <div className="flex items-center gap-1.5 font-bold">
                         <ShieldAlert size={14} className="text-amber-400" />
-                        Supabase Offline Mode Active
+                        Offline Sandbox Mode
                       </div>
                       <p className="leading-relaxed font-mono opacity-80 text-[10px]">
-                        No database environment variables detected on the host. Telemetry and goals will be saved locally on this browser.
+                        No database variables detected. Telemetry and missions will be saved locally on this browser sandbox.
                       </p>
                     </div>
 
@@ -149,11 +149,11 @@ export default function LoginPage() {
                     <button
                       onClick={() => {
                         navigate('/');
-                        toast.success('Entering workspace in secure offline mode!');
+                        toast.success('Booting Mani OS in secure offline mode!');
                       }}
                       className="w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-sm transition-all duration-200 shadow-lg shadow-amber-500/25 uppercase tracking-wider"
                     >
-                      Enter Workspace as Guest
+                      Boot Mani OS
                       <ArrowRight size={16} />
                     </button>
 

@@ -147,7 +147,7 @@ export default function QuickScratchpad() {
       {/* Header and Tab Selector */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-4 mb-4">
         <div>
-          <h3 className="text-xs font-black text-white/40 uppercase tracking-[0.25em]">Dashboard Console</h3>
+          <h3 className="text-xs font-black text-white/40 uppercase tracking-[0.25em]">System Console</h3>
           <p className="text-[10px] text-white/20 uppercase tracking-widest mt-1">Synced Scratchpad &amp; Sticky Tasks</p>
         </div>
 

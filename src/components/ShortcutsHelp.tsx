@@ -8,12 +8,12 @@ interface ShortcutsHelpProps {
 }
 
 const SHORTCUTS = [
-  { keys: ['Ctrl', 'K'], desc: 'Open Command Palette' },
+  { keys: ['Ctrl', 'K'], desc: 'Open Command Console' },
   { keys: ['Ctrl', 'Shift', 'R'], desc: 'Quick Schedule Reminder' },
-  { keys: ['G', 'D'], desc: 'Go to Dashboard' },
-  { keys: ['G', 'F'], desc: 'Go to Focus Mode' },
-  { keys: ['G', 'L'], desc: 'Go to LeetCode' },
-  { keys: ['G', 'S'], desc: 'Go to Settings' },
+  { keys: ['G', 'D'], desc: 'Go to Home' },
+  { keys: ['G', 'F'], desc: 'Go to Focus Hub' },
+  { keys: ['G', 'L'], desc: 'Go to Coding Console' },
+  { keys: ['G', 'S'], desc: 'Go to System Settings' },
   { keys: ['Esc'], desc: 'Close Modals / Clear Search' },
 ];
 

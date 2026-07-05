@@ -208,3 +208,14 @@ export interface AppState {
   xpLedger: XpLedgerEntry[];
 }
 
+export interface TimetableEvent {
+  id: string;
+  title: string;
+  startTime: string; // "HH:MM"
+  endTime: string;   // "HH:MM"
+  date: string;      // "YYYY-MM-DD"
+  completed: boolean;
+  recurrence: 'none' | 'daily' | 'weekdays' | 'weekends';
+  category: 'focus' | 'reading' | 'leetcode' | 'health' | 'custom';
+}
+

@@ -29,7 +29,7 @@ export default function ActiveGoalConsole() {
     <div className="glass-card p-6 border-white/5 relative overflow-hidden group">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h3 className="text-sm font-black text-white uppercase tracking-[0.2em]">Mission Control</h3>
+          <h3 className="text-sm font-black text-white uppercase tracking-[0.2em]">Today's Missions</h3>
           <p className="text-[10px] text-white/30 font-bold uppercase mt-1">Live Objective Tracking</p>
         </div>
         <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center">

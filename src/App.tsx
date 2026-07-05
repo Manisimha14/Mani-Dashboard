@@ -16,6 +16,7 @@ const Dashboard = lazyWithRetry(() => import('./pages/Dashboard'));
 const Reading = lazyWithRetry(() => import('./pages/Reading'));
 const FocusMode = lazyWithRetry(() => import('./pages/FocusMode'));
 const Trackers = lazyWithRetry(() => import('./pages/Trackers'));
+const Timetable = lazyWithRetry(() => import('./pages/Timetable'));
 
 const LeetCode = lazyWithRetry(() => import('./pages/LeetCode'));
 const Health = lazyWithRetry(() => import('./pages/Health'));
@@ -90,6 +91,7 @@ export default function App() {
                   <Route path="/" element={<Layout />}>
                     <Route index element={<Dashboard />} />
                     <Route path="focus" element={<FocusMode />} />
+                    <Route path="timetable" element={<Timetable />} />
                     <Route path="reading" element={<Reading />} />
                     <Route path="leetcode" element={<LeetCode />} />
                     <Route path="trackers" element={<Trackers />} />

@@ -4,7 +4,7 @@ import type {
   Book, LeetCodeProblem, FocusSession, Achievement,
   PomodoroSettings, UserSettings, StreakData, DailyActivity,
   Tracker, TrackerItem, LeetCodeStatus,
-  AppLink, LauncherState, PomodoroMode
+  AppLink, LauncherState, PomodoroMode, TimetableEvent
 } from '../types';
 import type { Reminder, AppNotification, ReminderSettings, ISODateString, HHMMString } from '../types/reminder';
 import { DEFAULT_ACHIEVEMENTS, BOOK_CHAPTERS } from '../lib/data';
@@ -38,6 +38,12 @@ interface AppStore {
   xp: number;
   level: number;
   xpLedger: XpLedgerEntry[];
+  timetableEvents: TimetableEvent[];
+
+  // Timetable actions
+  addTimetableEvent: (event: Omit<TimetableEvent, 'id' | 'completed'> & { id?: string }) => void;
+  updateTimetableEvent: (id: string, updates: Partial<TimetableEvent>) => void;
+  deleteTimetableEvent: (id: string) => void;
 
   // Tracker actions
   addTracker: (tracker: Omit<Tracker, 'id' | 'createdAt'> & { id?: string }) => void;
@@ -231,9 +237,31 @@ export const useAppStore = create<AppStore>()(
         backupReminderEnabled: true,
       },
       trackers: [],
+      timetableEvents: [],
       celebratingAchievement: null,
       deletedReports: [],
       focusTimer: DEFAULT_FOCUS_TIMER,
+
+      addTimetableEvent: (event) => {
+        set(state => ({
+          timetableEvents: [
+            ...state.timetableEvents,
+            { ...event, id: generateId(), completed: false } as TimetableEvent
+          ]
+        }));
+      },
+      updateTimetableEvent: (id, updates) => {
+        set(state => ({
+          timetableEvents: state.timetableEvents.map(e =>
+            e.id === id ? { ...e, ...updates } : e
+          )
+        }));
+      },
+      deleteTimetableEvent: (id) => {
+        set(state => ({
+          timetableEvents: state.timetableEvents.filter(e => e.id !== id)
+        }));
+      },
 
       deleteReport: (reportKey) => {
         set(state => ({
@@ -926,6 +954,7 @@ export const useAppStore = create<AppStore>()(
           userSettings: d.userSettings || DEFAULT_USER_SETTINGS,
           dailyActivity: d.dailyActivity || [],
           trackers: d.trackers || [],
+          timetableEvents: d.timetableEvents || [],
           reminders: d.reminders || [],
           notifications: d.notifications || [],
           reminderSettings: d.reminderSettings || get().reminderSettings,
@@ -945,6 +974,7 @@ export const useAppStore = create<AppStore>()(
           focusStreak: DEFAULT_STREAK,
           dailyActivity: [],
           trackers: [],
+          timetableEvents: [],
           reminders: [],
           notifications: [],
           pomodoroSettings: DEFAULT_POMODORO,

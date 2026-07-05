@@ -3,7 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, BookOpen, Code2, Timer, BarChart3, FileText,
-  Trophy, Settings, Flame, Target, Sparkles, Heart, X, Bug
+  Trophy, Settings, Flame, Target, Sparkles, Heart, X, Bug, Calendar
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { todayString, getProductivityScore } from '../lib/utils';
@@ -29,6 +29,7 @@ const navGroups: Array<{
     items: [
       { to: '/', icon: LayoutDashboard, label: 'Home', end: true },
       { to: '/focus', icon: Timer, label: 'Focus Hub' },
+      { to: '/timetable', icon: Calendar, label: 'Time Orbit' },
       { to: '/analytics', icon: BarChart3, label: 'Intelligence' },
       { to: '/trackers', icon: Target, label: 'Missions' },
     ],

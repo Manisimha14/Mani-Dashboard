@@ -17,7 +17,7 @@ import { useSoundFX } from '../hooks/useSoundFX';
 import {
   BookOpen, Code2, Timer, Flame, Trophy, TrendingUp,
   Target, Zap, ChevronRight, Star, CheckCircle2, Clock, Sparkles, BarChart3,
-  Heart, Droplets, Dumbbell, Moon, Plus, Info, CalendarRange, Eye, Download, X, Bug
+  Heart, Droplets, Dumbbell, Moon, Plus, Info, CalendarRange, Eye, Download, X, Bug, Calendar
 } from 'lucide-react';
 import { formatDuration, todayString, getProductivityScore } from '../lib/utils';
 import { format, parseISO } from 'date-fns';
@@ -65,6 +65,75 @@ const item: Variants = {
     } 
   },
 };
+
+function TimeOrbitPreview() {
+  const navigate = useNavigate();
+  const { timetableEvents } = useAppStore();
+  const { play } = useSoundFX();
+
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const todayDayOfWeek = useMemo(() => new Date().getDay(), []);
+
+  const todayMissions = useMemo(() => {
+    return timetableEvents.filter(evt => {
+      if (evt.date === todayStr) return true;
+      if (evt.recurrence === 'daily') return true;
+      if (evt.recurrence === 'weekdays' && todayDayOfWeek >= 1 && todayDayOfWeek <= 5) return true;
+      if (evt.recurrence === 'weekends' && (todayDayOfWeek === 0 || todayDayOfWeek === 6)) return true;
+      return false;
+    }).sort((a, b) => a.startTime.localeCompare(b.startTime));
+  }, [timetableEvents, todayStr, todayDayOfWeek]);
+
+  const upcomingMissions = useMemo(() => {
+    return todayMissions
+      .filter(m => !m.completed)
+      .slice(0, 3);
+  }, [todayMissions]);
+
+  const percent = useMemo(() => {
+    if (todayMissions.length === 0) return 0;
+    const completed = todayMissions.filter(e => e.completed).length;
+    return Math.round((completed / todayMissions.length) * 100);
+  }, [todayMissions]);
+
+  return (
+    <div 
+      onClick={() => { play('click'); navigate('/timetable'); }}
+      className="glass-card p-5 border border-white/5 relative overflow-hidden group cursor-pointer hover:border-violet-500/20 transition-all duration-300 font-mono"
+    >
+      <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-cyan-500/30 to-transparent" />
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <span className="text-[9px] text-white/20 uppercase tracking-[0.2em] font-black">Time Orbit</span>
+          <h4 className="text-xs font-bold text-white uppercase mt-0.5 tracking-wider">Today's Schedule</h4>
+        </div>
+        <div className="flex items-center gap-1.5 bg-cyan-500/10 text-cyan-400 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider">
+          <Zap size={10} />
+          <span>{percent}% Done</span>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {todayMissions.length === 0 ? (
+          <div className="text-[10px] text-white/30 italic py-2 text-center">
+            No missions scheduled for today. Tap to plan.
+          </div>
+        ) : (
+          upcomingMissions.map(m => (
+            <div key={m.id} className="flex items-center justify-between text-xs py-1 border-b border-white/[0.02] last:border-0">
+              <span className="text-white/60 font-medium truncate max-w-[150px]">{m.title}</span>
+              <span className="text-white/30 text-[10px] font-mono shrink-0">{m.startTime}</span>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="flex items-center justify-end text-[9px] font-black uppercase tracking-wider text-violet-400 mt-4 group-hover:text-violet-300 transition-colors">
+        Manage Timetable <ChevronRight size={10} className="group-hover:translate-x-1 transition-transform" />
+      </div>
+    </div>
+  );
+}
 
 export default function Dashboard() {
   const { data: book = { id: 'main-book', title: 'My Book', author: 'Author', chapters: [], startDate: todayString(), coverColor: '#7c3aed' } } = useBook();
@@ -338,16 +407,23 @@ export default function Dashboard() {
     });
   }, [activityMap]);
 
+  const hourOfDay = new Date().getHours();
+  const timeBasedGreeting = React.useMemo(() => {
+    if (hourOfDay < 12) return 'Good Morning';
+    if (hourOfDay < 18) return 'Good Afternoon';
+    return 'Good Evening';
+  }, [hourOfDay]);
+
   return (
     <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-8 max-w-7xl pb-12">
-      <Helmet>
-        <title>Dashboard | MANI OS</title>
-      </Helmet>
       {/* Header */}
       <motion.div variants={item} className="flex flex-col md:flex-row md:items-start justify-between gap-6">
         <div className="space-y-1">
+          <div className="text-[10px] font-black uppercase tracking-[0.24em] text-violet-400 font-mono">
+            Mani OS • System Status
+          </div>
           <h1 className="text-3xl md:text-4xl font-black tracking-tight text-white flex items-center gap-3">
-            {userSettings.name ? `Hey, ${userSettings.name}` : 'Dashboard'}
+            {userSettings.name ? `${timeBasedGreeting}, ${userSettings.name}` : 'Mani OS'}
             <motion.span
               animate={{ rotate: [0, 20, 0] }}
               transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
@@ -355,8 +431,8 @@ export default function Dashboard() {
               👋
             </motion.span>
           </h1>
-          <p className="text-white/40 font-medium flex items-center gap-2">
-            <Clock size={14} className="text-violet-400" />
+          <p className="text-white/40 font-medium flex items-center gap-2 text-xs">
+            <Clock size={12} className="text-violet-400" />
             {format(new Date(), 'EEEE, MMMM d, yyyy')}
           </p>
         </div>
@@ -748,6 +824,10 @@ export default function Dashboard() {
           {/* Mission Control (Goal Console) */}
           <motion.div variants={item}>
             <MissionControl />
+          </motion.div>
+
+          <motion.div variants={item}>
+            <TimeOrbitPreview />
           </motion.div>
 
           {/* Recent achievements */}
