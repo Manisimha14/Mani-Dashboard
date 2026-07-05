@@ -39,6 +39,7 @@ import { lazyWithRetry } from '../lib/lazyWithRetry';
 const SpaceClock = lazyWithRetry(() => import('../components/dashboard/SpaceClock'));
 const QuickScratchpad = lazyWithRetry(() => import('../components/QuickScratchpad'));
 const DashboardActivityChart = lazyWithRetry(() => import('../components/dashboard/DashboardActivityChart'));
+const AdaptiveConsole = lazyWithRetry(() => import('../components/dashboard/AdaptiveConsole'));
 
 const stagger: Variants = {
   hidden: { opacity: 0 },
@@ -505,6 +506,13 @@ export default function Dashboard() {
             </div>
           </div>
         </TiltCard>
+      </motion.div>
+
+      {/* Adaptive Intelligence Console */}
+      <motion.div variants={item}>
+        <Suspense fallback={null}>
+          <AdaptiveConsole />
+        </Suspense>
       </motion.div>
 
       {/* Real-time System Space Clock */}

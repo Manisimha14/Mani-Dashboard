@@ -32,6 +32,7 @@ const QuickLauncherModal = lazy(() => import('./QuickLauncherModal'));
 const CompanionTerminal = lazy(() => import('./analytics/CompanionTerminal'));
 const Confetti = lazy(() => import('react-confetti'));
 const BugReportModal = lazy(() => import('./BugReportModal'));
+const SystemHudOverlay = lazy(() => import('./dashboard/SystemHudOverlay'));
 
 function MobileTabButton({ to, icon: Icon, label, isActive, onClick }: {
   to: string;
@@ -74,6 +75,7 @@ export default function Layout() {
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [hudOpen, setHudOpen] = useState(false);
   
   const { requestPermission } = useReminderEngine();
   const weather = useWeather();
@@ -241,6 +243,25 @@ export default function Layout() {
     };
     window.addEventListener('toggle-bug-report', handleToggle);
     return () => window.removeEventListener('toggle-bug-report', handleToggle);
+  }, []);
+
+  React.useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'h') {
+        e.preventDefault();
+        setHudOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  React.useEffect(() => {
+    const handleToggle = () => {
+      setHudOpen(prev => !prev);
+    };
+    window.addEventListener('toggle-system-hud', handleToggle);
+    return () => window.removeEventListener('toggle-system-hud', handleToggle);
   }, []);
 
   const dailyActivity = useAppStore(s => s.dailyActivity);
@@ -440,6 +461,16 @@ export default function Layout() {
         <kbd className="border border-white/10 rounded px-1.5 py-0.5 text-white/30">Ctrl `</kbd>
         <span>Command Console</span>
       </div>
+
+      {/* Global HUD toggle hint */}
+      <div className="hidden lg:flex fixed bottom-6 left-[560px] text-xs text-white/20 items-center gap-1.5 pointer-events-none z-40">
+        <kbd className="border border-white/10 rounded px-1.5 py-0.5 text-white/30">Ctrl+Shift+H</kbd>
+        <span>System HUD</span>
+      </div>
+
+      <Suspense fallback={null}>
+        {hudOpen && <SystemHudOverlay isOpen={hudOpen} onClose={() => setHudOpen(false)} />}
+      </Suspense>
 
       <Suspense fallback={null}>
         <ProductivityPet />

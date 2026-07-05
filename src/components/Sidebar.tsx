@@ -27,16 +27,16 @@ const navGroups: Array<{
   {
     title: 'Productivity',
     items: [
-      { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
-      { to: '/focus', icon: Timer, label: 'Focus' },
-      { to: '/analytics', icon: BarChart3, label: 'Analytics' },
-      { to: '/trackers', icon: Target, label: 'Tasks & Trackers' },
+      { to: '/', icon: LayoutDashboard, label: 'Home', end: true },
+      { to: '/focus', icon: Timer, label: 'Focus Hub' },
+      { to: '/analytics', icon: BarChart3, label: 'Intelligence' },
+      { to: '/trackers', icon: Target, label: 'Missions' },
     ],
   },
   {
     title: 'Learning',
     items: [
-      { to: '/leetcode', icon: Code2, label: 'Coding' },
+      { to: '/leetcode', icon: Code2, label: 'Coding Console' },
       { to: '/reading', icon: BookOpen, label: 'Reading' },
     ],
   },
@@ -49,21 +49,21 @@ const navGroups: Array<{
   {
     title: 'Reports',
     items: [
-      { to: '/reports?tab=weekly', icon: FileText, label: 'Weekly Reports', search: 'weekly' },
-      { to: '/reports?tab=analytics', icon: BarChart3, label: 'Analytics Reports', search: 'analytics' },
-      { to: '/reports?tab=bugs', icon: Bug, label: 'Bug Reports', search: 'bugs' },
+      { to: '/reports?tab=weekly', icon: FileText, label: 'Mission Reports', search: 'weekly' },
+      { to: '/reports?tab=analytics', icon: BarChart3, label: 'Intelligence Reports', search: 'analytics' },
+      { to: '/reports?tab=bugs', icon: Bug, label: 'System Bug Reports', search: 'bugs' },
     ],
   },
   {
     title: 'Intelligence',
     items: [
-      { to: '/achievements', icon: Trophy, label: 'Achievements' },
+      { to: '/achievements', icon: Trophy, label: 'Mission Archive' },
     ],
   },
   {
     title: 'System',
     items: [
-      { to: '/settings', icon: Settings, label: 'Settings' },
+      { to: '/settings', icon: Settings, label: 'System Settings' },
     ],
   },
 ];

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useMemo, useDeferredValue } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useDeferredValue, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -9,6 +9,8 @@ import {
 import { useAppStore } from '../store/useAppStore';
 import { useSoundFX } from '../hooks/useSoundFX';
 import { useAddWater } from '../hooks/useHealthQuery';
+import { parseCommand, getCommandHints, type NLPAction } from '../services/ail/nlpParser.service';
+import { todayString } from '../lib/utils';
 import toast from 'react-hot-toast';
 
 interface CommandItem {
@@ -35,16 +37,24 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const { book, problems, trackers, achievements, userSettings, updateUserSettings } = useAppStore();
   const { mutate: addWater } = useAddWater();
 
+  // ── NLP Parser integration ──────────────────────────────────────────────
+  const deferredQuery = useDeferredValue(query);
+  const nlpAction = useMemo<NLPAction | null>(
+    () => parseCommand(deferredQuery),
+    [deferredQuery],
+  );
+  const commandHints = useMemo(() => getCommandHints(), []);
+
   const commands = useMemo(() => {
     const items: CommandItem[] = [
-      { id: 'dashboard', label: 'Dashboard', category: 'Navigation', icon: <LayoutDashboard size={14} />, action: () => navigate('/'), shortcut: 'G D' },
-      { id: 'focus', label: 'Forest Mode', description: 'Start a focus session', category: 'Navigation', icon: <Timer size={14} />, action: () => navigate('/focus'), shortcut: 'G F' },
-      { id: 'reading', label: 'Library', description: 'Your reading marathon', category: 'Navigation', icon: <BookOpen size={14} />, action: () => navigate('/reading'), shortcut: 'G R' },
-      { id: 'leetcode', label: 'LeetCode', description: 'Log daily problems', category: 'Navigation', icon: <Code2 size={14} />, action: () => navigate('/leetcode'), shortcut: 'G L' },
-      { id: 'trackers', label: 'Trackers', description: 'Goals & habits', category: 'Navigation', icon: <Target size={14} />, action: () => navigate('/trackers'), shortcut: 'G T' },
-      { id: 'analytics', label: 'Analytics', description: 'Insights & trends', category: 'Navigation', icon: <BarChart3 size={14} />, action: () => navigate('/analytics'), shortcut: 'G A' },
-      { id: 'achievements', label: 'Achievements', description: 'Unlocked badges', category: 'Navigation', icon: <Trophy size={14} />, action: () => navigate('/achievements'), shortcut: 'G V' },
-      { id: 'settings', label: 'Settings', category: 'Actions', icon: <Settings size={14} />, action: () => navigate('/settings'), shortcut: 'G S' },
+      { id: 'dashboard', label: 'Home', category: 'Navigation', icon: <LayoutDashboard size={14} />, action: () => navigate('/'), shortcut: 'G D' },
+      { id: 'focus', label: 'Focus Hub', description: 'Start a focus session', category: 'Navigation', icon: <Timer size={14} />, action: () => navigate('/focus'), shortcut: 'G F' },
+      { id: 'reading', label: 'Reading', description: 'Your reading track', category: 'Navigation', icon: <BookOpen size={14} />, action: () => navigate('/reading'), shortcut: 'G R' },
+      { id: 'leetcode', label: 'Coding Console', description: 'Log daily problems', category: 'Navigation', icon: <Code2 size={14} />, action: () => navigate('/leetcode'), shortcut: 'G L' },
+      { id: 'trackers', label: 'Missions', description: 'Missions & metrics', category: 'Navigation', icon: <Target size={14} />, action: () => navigate('/trackers'), shortcut: 'G T' },
+      { id: 'analytics', label: 'Intelligence', description: 'Insights & telemetry', category: 'Navigation', icon: <BarChart3 size={14} />, action: () => navigate('/analytics'), shortcut: 'G A' },
+      { id: 'achievements', label: 'Mission Archive', description: 'Completed milestones', category: 'Navigation', icon: <Trophy size={14} />, action: () => navigate('/achievements'), shortcut: 'G V' },
+      { id: 'settings', label: 'System Settings', category: 'Actions', icon: <Settings size={14} />, action: () => navigate('/settings'), shortcut: 'G S' },
       { id: 'create-reminder', label: 'Schedule Intelligence', description: 'Create a smart reminder', category: 'Actions', icon: <Calendar size={14} />, action: () => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'R', ctrlKey: true, shiftKey: true })); } },
       { id: 'theme-toggle', label: 'Toggle Appearance', description: `Switch to ${userSettings.theme === 'dark_pro' ? 'OLED' : 'Pro Dark'}`, category: 'Actions', icon: <Zap size={14} />, action: () => updateUserSettings({ theme: userSettings.theme === 'dark_pro' ? 'oled' : 'dark_pro' }) },
       { id: 'quick-water', label: 'Log 250ml Water', description: 'Log 250ml water immediately', category: 'Actions', icon: <Droplets size={14} className="text-cyan-400" />, action: () => {
@@ -89,7 +99,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
     return items;
   }, [book, problems, achievements, userSettings, navigate, updateUserSettings, addWater, play]);
 
-  const deferredQuery = useDeferredValue(query);
+  // NOTE: deferredQuery is declared above near nlpAction
 
   const filtered = useMemo(() => {
     if (!deferredQuery) return commands.filter(c => c.category === 'Navigation');
@@ -114,22 +124,71 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
     setSelected(0);
   }, [query]);
 
+  /** Execute an NLP-parsed quick-log action. */
+  const executeNlpAction = useCallback(
+    (action: NLPAction) => {
+      switch (action.type) {
+        case 'water':
+          addWater({
+            amount: action.value,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            date: todayString(),
+          });
+          play('success');
+          toast.success(`Logged ${action.value}ml Water! 💧`);
+          break;
+        case 'focus':
+          navigate('/focus');
+          play('success');
+          toast.success(`Starting ${action.value}min focus session 🌲`);
+          break;
+        case 'sleep':
+          toast.success(`Logged ${action.value}h sleep 🌙`);
+          play('success');
+          break;
+        case 'calories':
+          toast.success(`Logged ${action.value} kcal 🍽️`);
+          play('success');
+          break;
+        case 'steps':
+          toast.success(`Logged ${action.value.toLocaleString()} steps 🚶`);
+          play('success');
+          break;
+        case 'workout':
+          toast.success(`Logged ${action.value}min workout 💪`);
+          play('success');
+          break;
+      }
+      onClose();
+    },
+    [addWater, navigate, play, onClose],
+  );
+
+  /** Total selectable items = nlpAction card (if any) + filtered commands. */
+  const totalItems = (nlpAction ? 1 : 0) + filtered.length;
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
       onClose();
       return;
     }
 
-    if (filtered.length === 0) return;
+    if (totalItems === 0) return;
 
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setSelected(s => (s + 1) % filtered.length);
+      setSelected(s => (s + 1) % totalItems);
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setSelected(s => (s - 1 + filtered.length) % filtered.length);
+      setSelected(s => (s - 1 + totalItems) % totalItems);
     } else if (e.key === 'Enter') {
-      filtered[selected]?.action();
+      // If NLP card is present and selected (index 0)
+      if (nlpAction && selected === 0) {
+        executeNlpAction(nlpAction);
+        return;
+      }
+      const cmdIndex = nlpAction ? selected - 1 : selected;
+      filtered[cmdIndex]?.action();
       play('success');
       onClose();
     }
@@ -185,7 +244,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
                   value={query}
                   onChange={e => setQuery(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Where can I take you today?"
+                  placeholder="Search, navigate or execute commands..."
                   className="flex-1 bg-transparent text-lg text-white placeholder-white/20 outline-none font-medium"
                 />
                 <div className="flex items-center gap-2">
@@ -195,7 +254,49 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
               {/* Results */}
               <div className="max-h-[500px] overflow-y-auto p-3 custom-scrollbar">
-                {filtered.length === 0 ? (
+                {/* ── NLP Quick Log card ────────────────────────────── */}
+                {nlpAction && (
+                  <div className="mb-4">
+                    <div className="px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-cyan-400/60">
+                      ⚡ Quick Log
+                    </div>
+                    <button
+                      className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl text-left transition-all relative group ${
+                        selected === 0
+                          ? 'bg-cyan-500/10 border border-cyan-400/30 shadow-[0_0_20px_rgba(34,211,238,0.08)]'
+                          : 'hover:bg-white/5 border border-cyan-500/10'
+                      }`}
+                      onClick={() => executeNlpAction(nlpAction)}
+                      onMouseEnter={() => setSelected(0)}
+                    >
+                      <div className={`p-2 rounded-lg transition-colors ${
+                        selected === 0
+                          ? 'bg-gradient-to-br from-cyan-500 to-emerald-500 text-white shadow-[0_0_15px_rgba(34,211,238,0.5)]'
+                          : 'bg-cyan-500/10 text-cyan-400'
+                      }`}>
+                        <Zap size={14} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-bold text-white flex items-center gap-2">
+                          {nlpAction.label}
+                          {selected === 0 && (
+                            <motion.span
+                              initial={{ opacity: 0, x: -5 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              className="text-[10px] bg-cyan-500/20 text-cyan-400 px-1.5 py-0.5 rounded uppercase font-black"
+                            >
+                              Enter
+                            </motion.span>
+                          )}
+                        </div>
+                        <div className="text-xs text-white/30 truncate">Press Enter to log instantly</div>
+                      </div>
+                    </button>
+                  </div>
+                )}
+
+                {/* ── Regular command results ──────────────────────── */}
+                {filtered.length === 0 && !nlpAction ? (
                   <div className="text-center py-20">
                     <Sparkles size={40} className="mx-auto text-white/5 mb-4" />
                     <div className="text-white/40 font-medium">No results found for \"{query}\"</div>
@@ -209,7 +310,9 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
                       </div>
                       <div className="space-y-1">
                         {items.map((cmd) => {
-                          const isSelected = filtered[selected]?.id === cmd.id;
+                          const cmdIdx = filtered.findIndex(f => f.id === cmd.id);
+                          const adjustedIdx = nlpAction ? cmdIdx + 1 : cmdIdx;
+                          const isSelected = selected === adjustedIdx;
                           return (
                             <button
                               key={cmd.id}
@@ -219,7 +322,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
                                   : 'hover:bg-white/5 border border-transparent'
                               }`}
                               onClick={() => { cmd.action(); play('success'); onClose(); }}
-                              onMouseEnter={() => setSelected(filtered.findIndex(f => f.id === cmd.id))}
+                              onMouseEnter={() => setSelected(adjustedIdx)}
                             >
                               <div className={`p-2 rounded-lg transition-colors ${
                                 isSelected ? 'bg-violet-500 text-white shadow-[0_0_15px_rgba(139,92,246,0.5)]' : 'bg-white/5 text-white/40'
@@ -262,21 +365,39 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
               </div>
 
               {/* Footer */}
-              <div className="px-6 py-4 border-t border-white/5 bg-black/20 flex items-center justify-between">
-                <div className="flex gap-6 text-[10px] text-white/30 font-bold uppercase tracking-widest">
-                  <span className="flex items-center gap-2"><ArrowRight size={10} className="text-violet-500" /> ↑↓ navigate</span>
-                  <span className="flex items-center gap-2"><ArrowRight size={10} className="text-violet-500" /> Enter to select</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="text-[10px] text-violet-400/60 font-black italic">
-                    {new Date().getHours() > 22 ? "Go to sleep soon, legend." : 
-                     new Date().getHours() < 6 ? "Early bird gets the focus." :
-                     "Crushing it, one command at a time."}
+              <div className="px-6 py-4 border-t border-white/5 bg-black/20">
+                {/* NLP command hints when query is empty */}
+                {!query && (
+                  <div className="flex items-center gap-2 mb-3 flex-wrap">
+                    <span className="text-[10px] font-black uppercase tracking-[0.15em] text-white/20">Try:</span>
+                    {commandHints.slice(0, 4).map(h => (
+                      <button
+                        key={h.prefix}
+                        onClick={() => setQuery(h.example)}
+                        className="text-[10px] font-bold text-cyan-400/50 hover:text-cyan-400 bg-cyan-500/5 hover:bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/10 transition-colors cursor-pointer"
+                      >
+                        {h.example}
+                      </button>
+                    ))}
                   </div>
-                  <div className="h-4 w-[1px] bg-white/10" />
-                  <div className="flex items-center gap-2 text-[10px] text-white/20 font-bold uppercase tracking-widest">
-                    <Terminal size={12} className="text-emerald-500" />
-                    <span>Terminal v1.0</span>
+                )}
+
+                <div className="flex items-center justify-between">
+                  <div className="flex gap-6 text-[10px] text-white/30 font-bold uppercase tracking-widest">
+                    <span className="flex items-center gap-2"><ArrowRight size={10} className="text-violet-500" /> ↑↓ navigate</span>
+                    <span className="flex items-center gap-2"><ArrowRight size={10} className="text-violet-500" /> Enter to select</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="text-[10px] text-violet-400/60 font-black italic">
+                      {new Date().getHours() > 22 ? "Go to sleep soon, legend." : 
+                       new Date().getHours() < 6 ? "Early bird gets the focus." :
+                       "Crushing it, one command at a time."}
+                    </div>
+                    <div className="h-4 w-[1px] bg-white/10" />
+                    <div className="flex items-center gap-2 text-[10px] text-white/20 font-bold uppercase tracking-widest">
+                      <Terminal size={12} className="text-emerald-500" />
+                      <span>Terminal v2.0</span>
+                    </div>
                   </div>
                 </div>
               </div>

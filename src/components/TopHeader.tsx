@@ -12,21 +12,21 @@ import { useIsMobile } from '../hooks/useIsMobile';
 const getPageTitle = (pathname: string, search?: string) => {
   const tab = search ? new URLSearchParams(search).get('tab') : null;
   switch (pathname) {
-    case '/': return 'MANI OS';
+    case '/': return 'Home';
     case '/focus': return 'Focus Hub';
     case '/reading': return 'Reading';
-    case '/leetcode': return 'Coding Forge';
-    case '/trackers': return 'Tasks & Trackers';
+    case '/leetcode': return 'Coding Console';
+    case '/trackers': return 'Missions';
     case '/health': return 'Health Hub';
     case '/ambient': return 'Flowscape';
-    case '/analytics': return 'Aura Analytics';
+    case '/analytics': return 'Intelligence';
     case '/reports':
-      if (tab === 'bugs') return 'Bug Reports';
-      if (tab === 'analytics') return 'Analytics Reports';
-      return 'Weekly Reports';
-    case '/achievements': return 'Achievements';
-    case '/settings': return 'Settings';
-    default: return 'MANI OS';
+      if (tab === 'bugs') return 'System Bug Reports';
+      if (tab === 'analytics') return 'Intelligence Reports';
+      return 'Mission Reports';
+    case '/achievements': return 'Mission Archive';
+    case '/settings': return 'System Settings';
+    default: return 'Home';
   }
 };
 
@@ -40,6 +40,11 @@ function TopHeader({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
   const isOnline = useNetworkStatus();
   const [showProfile, setShowProfile] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+
+  React.useEffect(() => {
+    const title = getPageTitle(location.pathname, location.search);
+    document.title = `Mani OS • ${title}`;
+  }, [location.pathname, location.search]);
   
   const unreadCount = React.useMemo(() => {
     return notifications.filter(n => !n.read).length;
